@@ -46,7 +46,7 @@ export const getPhysiqueScans = async (req: Request, res: Response, next: NextFu
       return res.status(400).json({ error: 'user_id is required' });
     }
 
-    const scans = await getPhysiqueScansForUser(userId);
+    const scans = await getPhysiqueScansForUser(Array.isArray(userId) ? userId[0] : userId);
     res.json({ scans });
   } catch (error) {
     next(error);
@@ -61,7 +61,7 @@ export const getLatestPhysiqueScanHandler = async (req: Request, res: Response, 
       return res.status(400).json({ error: 'user_id is required' });
     }
 
-    const scan = await getLatestPhysiqueScan(userId);
+    const scan = await getLatestPhysiqueScan(Array.isArray(userId) ? userId[0] : userId);
     res.json({ scan });
   } catch (error) {
     next(error);

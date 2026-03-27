@@ -1,0 +1,57 @@
+{
+  "userId": "workout-validation-user",
+  "documentType": "manual_entry",
+  "programStartDate": "2026-01-01",
+  "notes": "Validation test workout document",
+  "manualWorkoutData": {
+    "programName": "Push-Pull-Legs Hypertrophy Program",
+    "splitName": "6-Day PPL Split",
+    "workoutDaysPerWeek": 6,
+    "restDaysPerWeek": 1,
+    "trainingStyle": "Hypertrophy and Strength",
+    "programNotes": "Progressive overload focus with compound movements first, isolation accessories after",
+    
+    "mondayPlan": "Push - Chest, Shoulders, Triceps",
+    "tuesdayPlan": "Pull - Back, Biceps",
+    "wednesdayPlan": "Legs - Quads, Hamstrings, Glutes",
+    "thursdayPlan": "Push - Chest, Shoulders, Triceps (different exercises)",
+    "fridayPlan": "Pull - Back, Biceps (different exercises)",
+    "saturdayPlan": "Legs - Focus on posterior chain",
+    "sundayPlan": "Rest Day - Active recovery",
+    
+    "muscleGroupFocus": ["Chest", "Back", "Legs", "Shoulders", "Arms"],
+    "frequencyByMuscleGroup": {
+      "Chest": 2,
+      "Back": 2,
+      "Legs": 2,
+      "Shoulders": 2,
+      "Biceps": 2,
+      "Triceps": 2
+    },
+    "plannedVolumeNotes": "3-4 working sets per exercise, 8-12 reps for hypertrophy, 6-8 for strength compounds",
+    "plannedIntensityNotes": "RPE 7-8 on main lifts, RPE 8-9 on accessories. Progressive overload weekly.",
+    "cardioOrConditioningNotes": "20 min LISS cardio 3x per week post-workout",
+    "mobilityOrRecoveryNotes": "10 min stretching daily, foam rolling 3x per week",
+    
+    "exercises": [
+      {
+        "name": "Bench Press",
+        "dayAssociation": "Monday",
+        "setRepLoadNotes": "4 sets x 6-8 reps, progressive overload",
+        "grouping": "Compound Push"
+      },
+      {
+        "name": "Squat",
+        "dayAssociation": "Wednesday",
+        "setRepLoadNotes": "4 sets x 6-8 reps, progressive overload",
+        "grouping": "Compound Legs"
+      },
+      {
+        "name": "Deadlift",
+        "dayAssociation": "Friday",
+        "setRepLoadNotes": "3 sets x 5-6 reps, progressive overload",
+        "grouping": "Compound Pull"
+      }
+    ]
+  }
+}

@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import 'dotenv/config';
 
 import { createClient, type PostgrestError } from '@supabase/supabase-js';

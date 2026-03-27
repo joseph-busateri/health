@@ -1,5 +1,9 @@
+import type { StackNavigationProp } from '@react-navigation/stack';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
+import type { BaselineProfile } from './baselineDocument';
+import type { WorkoutBaseline } from './workoutDocument';
+import type { SupplementBaseline, SupplementItem } from './supplementDocument';
 
 export type RootStackParamList = {
   Dashboard: undefined;
@@ -7,6 +11,13 @@ export type RootStackParamList = {
   DailyCheckIn: undefined;
   MealPhoto: undefined;
   PhysiqueScan: undefined;
+  BaselineUpload: undefined;
+  BaselineSummary: { profile: BaselineProfile };
+  WorkoutUpload: undefined;
+  WorkoutSummary: { baseline: WorkoutBaseline };
+  SupplementUpload: undefined;
+  SupplementSummary: { baseline: SupplementBaseline; items: SupplementItem[] };
+  PointInTimeState: undefined;
   // Future routes: set to undefined for now to keep extension lightweight.
   Reminders?: undefined;
   Nutrition?: undefined;

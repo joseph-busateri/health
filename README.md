@@ -155,8 +155,9 @@ health/
 
 
 # terminal 1
-cd server
-npm run dev
+select * 
+from public.supplement_baseline
+limit 1;
 
 # terminal 2
 cd mobile

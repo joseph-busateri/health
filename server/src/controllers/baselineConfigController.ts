@@ -10,7 +10,7 @@ export const getBaseline = async (req: Request, res: Response, next: NextFunctio
       return res.status(400).json({ error: 'user_id is required' });
     }
 
-    const config = await getBaselineConfig(userId);
+    const config = await getBaselineConfig(Array.isArray(userId) ? userId[0] : userId);
     res.json({ config });
   } catch (error) {
     next(error);

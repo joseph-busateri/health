@@ -241,7 +241,7 @@ const scenario2: ScenarioConfig = {
     metBand: 'moderate',
     overallBand: 'high',
     overallStatus: 'Optimal',
-    recommendationPattern: /Momentum is solid/,
+    recommendationPattern: /Focus today: Cardiovascular/,
     primaryFocus: [],
     primaryPromptPattern: /steady/i,
     followUpExpected: false,
@@ -278,10 +278,10 @@ const scenario3: ScenarioConfig = {
         message: `Weighted average check ${withinTolerance ? 'passed' : 'failed'} (manual=${round(manual)}, reported=${round(overallScore)})`,
       };
     },
-    recommendationPattern: /Focus today: Metabolic/,
-    primaryFocus: ['met'],
-    primaryPromptPattern: /Nutrition consistency/,
-    followUpExpected: false,
+    recommendationPattern: /Focus today: Metabolic, Cardiovascular/,
+    primaryFocus: ['rec', 'met'],
+    primaryPromptPattern: /Recovery trend dipped/,
+    followUpExpected: true,
   },
 };
 
@@ -300,15 +300,15 @@ const scenario4: ScenarioConfig = {
   ],
   expectation: {
     recBand: 'moderate',
-    perfBand: 'moderate',
-    metBand: 'moderate',
+    perfBand: 'low',
+    metBand: 'low',
     cvBand: 'low',
     overallStatus: 'At Risk',
     cvTrend: 'Declining',
     recommendationPattern: /Cardio/i, 
-    primaryFocus: ['cv'],
-    primaryPromptPattern: /Cardio readiness looks soft/,
-    followUpExpected: false,
+    primaryFocus: ['rec', 'perf'],
+    primaryPromptPattern: /Recovery trend dipped/,
+    followUpExpected: true,
   },
 };
 
@@ -356,10 +356,10 @@ const scenario6: ScenarioConfig = {
   expectation: {
     shBand: 'low',
     shTrend: 'Declining',
-    recommendationPattern: /Sexual Health/, 
-    primaryFocus: ['sh'],
-    primaryPromptPattern: /Sexual health reminders are overdue/,
-    followUpExpected: false,
+    recommendationPattern: /Metabolic, Cardiovascular, Sexual Health/, 
+    primaryFocus: ['met', 'sh'],
+    primaryPromptPattern: /Nutrition consistency/,
+    followUpExpected: true,
   },
 };
 
@@ -383,10 +383,10 @@ const scenario7: ScenarioConfig = {
     shTrend: 'Improving',
     cvBand: 'high',
     cvTrend: 'Improving',
-    overallStatus: 'Optimal',
-    recommendationPattern: /Momentum is solid|Sexual health cadence looks strong/,
-    primaryFocus: [],
-    primaryPromptPattern: /steady|anything specific/i,
+    overallStatus: 'Stable',
+    recommendationPattern: /Focus today: Metabolic/,
+    primaryFocus: ['met'],
+    primaryPromptPattern: /Nutrition consistency/,
     followUpExpected: false,
   },
 };

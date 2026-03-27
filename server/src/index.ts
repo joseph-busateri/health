@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -8,6 +9,11 @@ import reminderRoutes from './routes/reminderRoutes';
 import mealLogRoutes from './routes/mealLogRoutes';
 import physiqueScanRoutes from './routes/physiqueScanRoutes';
 import baselineConfigRoutes from './routes/baselineConfigRoutes';
+import baselineDocumentRoutes from './routes/baselineDocumentRoutes';
+import workoutDocumentRoutes from './routes/workoutDocumentRoutes';
+import supplementDocumentRoutes from './routes/supplementDocumentRoutes';
+import pointInTimeRoutes from './routes/pointInTimeRoutes';
+import bloodworkRoutes from './routes/bloodworkRoutes';
 
 dotenv.config();
 
@@ -32,6 +38,11 @@ app.use('/', mealLogRoutes);
 app.use('/', physiqueScanRoutes);
 app.use('/', baselineConfigRoutes);
 app.use('/', structuredDailyLogRoutes);
+app.use('/', baselineDocumentRoutes);
+app.use('/', workoutDocumentRoutes);
+app.use('/', supplementDocumentRoutes);
+app.use('/', pointInTimeRoutes);
+app.use('/bloodwork', bloodworkRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Health API Server is running!' });

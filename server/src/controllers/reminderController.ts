@@ -21,7 +21,7 @@ export const getReminders = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ error: 'user_id is required' });
     }
 
-    const reminders = await getRemindersForUser(userId);
+    const reminders = await getRemindersForUser(Array.isArray(userId) ? userId[0] : userId);
     res.json(reminders);
   } catch (error) {
     next(error);
