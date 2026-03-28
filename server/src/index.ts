@@ -14,13 +14,21 @@ import workoutDocumentRoutes from './routes/workoutDocumentRoutes';
 import supplementDocumentRoutes from './routes/supplementDocumentRoutes';
 import pointInTimeRoutes from './routes/pointInTimeRoutes';
 import bloodworkRoutes from './routes/bloodworkRoutes';
+import bloodworkResultsRoutes from './routes/bloodworkResultsRoutes';
+import bloodworkTrendsRoutes from './routes/bloodworkTrendsRoutes';
+import bloodworkRecommendationsRoutes from './routes/bloodworkRecommendationsRoutes';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+app.use(cors({
+  origin: '*', // Allow all origins for development
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 app.use(express.json());
 
 app.get('/health', (_req, res) => {
@@ -43,6 +51,9 @@ app.use('/', workoutDocumentRoutes);
 app.use('/', supplementDocumentRoutes);
 app.use('/', pointInTimeRoutes);
 app.use('/bloodwork', bloodworkRoutes);
+app.use('/bloodwork', bloodworkResultsRoutes);
+app.use('/bloodwork', bloodworkTrendsRoutes);
+app.use('/bloodwork', bloodworkRecommendationsRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Health API Server is running!' });

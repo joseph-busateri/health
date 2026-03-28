@@ -9,7 +9,17 @@
     "build": "tsc",
     "watch": "tsc -w",
     "test:daily-logs": "ts-node src/scripts/testDailyLogs.ts",
-    "test:supabase": "ts-node src/scripts/testSupabaseConnection.ts"
+    "test:supabase": "ts-node src/scripts/testSupabaseConnection.ts",
+    "migrate": "ts-node src/scripts/runMigration.ts",
+    "validate:bloodwork": "ts-node src/scripts/validateBloodworkUpload.ts",
+    "validate:extraction": "ts-node src/scripts/validateBloodworkExtraction.ts",
+    "validate:e2e": "ts-node src/scripts/validateExtractionE2E.ts",
+    "validate:trends": "ts-node src/scripts/validateBloodworkTrends.ts",
+    "validate:trends:e2e": "ts-node src/scripts/validateTrendsE2E.ts",
+    "validate:recommendations": "ts-node src/scripts/validateBloodworkRecommendations.ts",
+    "validate:intelligence:e2e": "ts-node src/scripts/validateIntelligenceE2E.ts",
+    "validate:intelligence": "ts-node src/scripts/validateBloodworkIntelligence.ts",
+    "deploy:recommendations-schema": "ts-node src/scripts/deployRecommendationsSchema.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.43.4",
@@ -19,15 +29,25 @@
     "form-data": "^4.0.5",
     "multer": "^2.1.1",
     "openai": "^4.28.4",
+    "pdf-parse": "^1.1.1",
+    "tesseract.js": "^5.0.5",
     "uuid": "^13.0.0"
   },
   "devDependencies": {
+    "@types/body-parser": "^1.19.6",
+    "@types/connect": "^3.4.38",
     "@types/cors": "^2.8.19",
     "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.6",
+    "@types/http-errors": "^2.0.5",
     "@types/multer": "^2.1.0",
     "@types/node": "^25.5.0",
+    "@types/node-fetch": "^2.6.13",
+    "@types/qs": "^6.15.0",
+    "@types/range-parser": "^1.2.7",
+    "@types/send": "^1.2.1",
     "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.18.1",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"
   }

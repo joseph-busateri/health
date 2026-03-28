@@ -1,4 +1,8 @@
 import { Request, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import type { File as MulterFile } from 'multer';
 import {
   createWorkoutDocument,
   getLatestWorkoutDocument,
@@ -9,23 +13,63 @@ import {
   ManualWorkoutData,
 } from '../types/workoutDocument';
 import { logger } from '../utils/logger';
+import { uploadFileToStorage } from '../services/storageService';
 
-export const uploadWorkoutDocument = async (req: Request, res: Response) => {
+interface WorkoutUploadRequest extends Request {
+  file?: MulterFile;
+}
+
+const storage = multer.memoryStorage();
+export const uploadWorkoutMiddleware = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'image/png', 'image/jpeg', 'image/jpg'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Unsupported file type for workout document upload'));
+    }
+  },
+}).single('file');
+
+export const uploadWorkoutDocument = async (req: WorkoutUploadRequest, res: Response) => {
   try {
     const {
       userId,
       documentType,
-      fileReference,
-      storagePath,
       programStartDate,
       notes,
       manualWorkoutData,
     }: CreateWorkoutDocumentRequest = req.body;
+    const file = req.file;
 
     if (!userId || !documentType) {
       return res.status(400).json({
         error: 'Missing required fields: userId and documentType are required',
       });
+    }
+
+    let storagePath: string | undefined;
+    let fileReference: string | undefined;
+    let fileBuffer: Buffer | undefined;
+    let mimeType: string | undefined;
+    let originalFileName: string | undefined;
+
+    if (file) {
+      const fileExtension = path.extname(file.originalname) || '.bin';
+      storagePath = `workout/${userId}/${uuidv4()}${fileExtension}`;
+      const uploadResult = await uploadFileToStorage({
+        path: storagePath,
+        file: file.buffer,
+        contentType: file.mimetype,
+      });
+      fileReference = uploadResult.publicUrl ?? storagePath;
+      fileBuffer = file.buffer;
+      mimeType = file.mimetype;
+      originalFileName = file.originalname;
     }
 
     const result = await createWorkoutDocument({
@@ -36,6 +80,9 @@ export const uploadWorkoutDocument = async (req: Request, res: Response) => {
       programStartDate,
       notes,
       manualWorkoutData,
+      fileBuffer,
+      mimeType,
+      originalFileName,
     });
 
     logger.info('Workout document uploaded successfully', {

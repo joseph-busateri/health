@@ -18,6 +18,8 @@ import type {
   ChangeSource,
 } from '../types/baselineDocument';
 import { logger } from '../utils/logger';
+import { uploadFileToStorage, downloadFileFromStorage } from './storageService';
+import { extractTextFromBuffer } from './ocrService';
 
 const supabase = createClient<Database>(
   process.env.SUPABASE_URL!,
@@ -57,22 +59,180 @@ export interface BaselineUploadResult {
   extractedSections: BaselineExtractedSection[];
 }
 
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\r/g, '').replace(/\t/g, ' ').replace(/\s{2,}/g, ' ').trim();
+}
+
+function extractSection(lines: string[], header: string): string[] {
+  const start = lines.findIndex(line => line.toLowerCase().startsWith(header.toLowerCase()));
+  if (start === -1) return [];
+  const sectionLines: string[] = [];
+  for (let i = start + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
+    if (/^[A-Z][A-Za-z\s]+:$/.test(line)) break;
+    sectionLines.push(line);
+  }
+  return sectionLines;
+}
+
+function parseKeyValue(line: string): { key: string; value: string } | null {
+  const separatorIndex = line.indexOf(':');
+  if (separatorIndex === -1) {
+    return null;
+  }
+  const key = line.slice(0, separatorIndex).trim();
+  const value = line.slice(separatorIndex + 1).trim();
+  if (!key || !value) {
+    return null;
+  }
+  return { key, value };
+}
+
+function parseJsonBlock(lines: string[]): Record<string, unknown> | null {
+  const joined = lines.join(' ');
+  const jsonStart = joined.indexOf('{');
+  if (jsonStart === -1) return null;
+  const jsonEnd = joined.lastIndexOf('}');
+  if (jsonEnd === -1) return null;
+  try {
+    return JSON.parse(joined.slice(jsonStart, jsonEnd + 1));
+  } catch (error) {
+    logger.warn('Failed to parse JSON block from baseline OCR', { error: (error as Error).message, joined });
+    return null;
+  }
+}
+
+function parseBaselineText(ocrText: string): ManualBaselineProfileData | undefined {
+  const cleaned = normalizeWhitespace(ocrText);
+  if (!cleaned) return undefined;
+
+  const lines = cleaned.split(/\n|\. /).map(line => line.trim()).filter(Boolean);
+  if (lines.length === 0) {
+    return undefined;
+  }
+
+  const data: ManualBaselineProfileData = {};
+
+  const demographicsBlock = extractSection(lines, 'Demographics:');
+  if (demographicsBlock.length) {
+    const parsed = parseJsonBlock(demographicsBlock);
+    if (parsed) {
+      data.demographics = parsed as Demographics;
+    }
+  }
+
+  const trainingBlock = extractSection(lines, 'Training Context:');
+  if (trainingBlock.length) {
+    const parsed = parseJsonBlock(trainingBlock);
+    if (parsed) {
+      data.trainingContext = parsed as TrainingContext;
+    }
+  }
+
+  const lifestyleBlock = extractSection(lines, 'Lifestyle Context:');
+  if (lifestyleBlock.length) {
+    const parsed = parseJsonBlock(lifestyleBlock);
+    if (parsed) {
+      data.lifestyleContext = parsed as LifestyleContext;
+    }
+  }
+
+  const overallGoalsBlock = extractSection(lines, 'Overall Health Goals:');
+  if (overallGoalsBlock.length) {
+    const parsed = parseJsonBlock(overallGoalsBlock);
+    if (parsed) {
+      data.overallHealthGoals = parsed as OverallHealthGoals;
+    }
+  }
+
+  const sexualGoalsBlock = extractSection(lines, 'Sexual Performance Goals:');
+  if (sexualGoalsBlock.length) {
+    const parsed = parseJsonBlock(sexualGoalsBlock);
+    if (parsed) {
+      data.sexualPerformanceGoals = parsed as SexualPerformanceGoals;
+    }
+  }
+
+  const workoutGoalsBlock = extractSection(lines, 'Workout Goals:');
+  if (workoutGoalsBlock.length) {
+    const parsed = parseJsonBlock(workoutGoalsBlock);
+    if (parsed) {
+      data.workoutGoals = parsed as WorkoutGoals;
+    }
+  }
+
+  const secondaryGoalsBlock = extractSection(lines, 'Secondary Goals:');
+  if (secondaryGoalsBlock.length) {
+    const parsed = parseJsonBlock(secondaryGoalsBlock);
+    if (parsed) {
+      data.secondaryGoals = parsed as SecondaryGoals;
+    }
+  }
+
+  const priorityBlock = extractSection(lines, 'Priority Order:');
+  if (priorityBlock.length) {
+    const parsed = parseJsonBlock(priorityBlock);
+    if (parsed) {
+      data.priorityOrder = parsed as PriorityOrder;
+    }
+  }
+
+  if (!data.demographics) {
+    const simpleDemographics: Record<string, string> = {};
+    for (const line of lines) {
+      const kv = parseKeyValue(line);
+      if (!kv) continue;
+      if (['age', 'gender', 'height', 'weight'].some(token => kv.key.toLowerCase().includes(token))) {
+        simpleDemographics[kv.key.toLowerCase()] = kv.value;
+      }
+    }
+    if (Object.keys(simpleDemographics).length > 0) {
+      data.demographics = simpleDemographics as Demographics;
+    }
+  }
+
+  const hasData = Object.values(data).some(value => value != null);
+  return hasData ? data : undefined;
+}
+
 export const createBaselineDocument = async (
-  request: CreateBaselineDocumentRequest,
+  request: CreateBaselineDocumentRequest & { fileBuffer?: Buffer; mimeType?: string; originalFileName?: string }
 ): Promise<BaselineUploadResult> => {
   const now = new Date().toISOString();
 
-  // Create baseline document record
+  let storagePath = request.storagePath;
+  let fileReference = request.fileReference;
+
+  if (request.fileBuffer && !storagePath) {
+    const fileExtension = request.originalFileName ? `.${request.originalFileName.split('.').pop()}` : '.bin';
+    storagePath = `baseline/${request.userId}/${Date.now()}${fileExtension}`;
+    const uploadResult = await uploadFileToStorage({
+      path: storagePath,
+      file: request.fileBuffer,
+      contentType: request.mimeType,
+    });
+    fileReference = uploadResult.publicUrl ?? storagePath;
+  }
+
+  let manualProfileData = request.manualProfileData;
+
+  if (!manualProfileData && storagePath) {
+    const fileBuffer = await downloadFileFromStorage(storagePath);
+    const { text } = await extractTextFromBuffer(fileBuffer, request.mimeType);
+    manualProfileData = parseBaselineText(text);
+  }
+
   const { data: document, error: documentError } = await supabase
     .from(TABLES.BASELINE_DOCUMENTS)
     .insert({
       user_id: request.userId,
-      file_reference: request.fileReference,
-      storage_path: request.storagePath,
+      file_reference: fileReference,
+      storage_path: storagePath,
       upload_date: now.split('T')[0],
       document_type: request.documentType,
-      parse_status: 'completed' as ParseStatus,
-      extraction_confidence: request.manualProfileData ? 1.0 : null,
+      parse_status: manualProfileData ? 'completed' : ('processing' as ParseStatus),
+      extraction_confidence: manualProfileData ? 1.0 : null,
       notes: request.notes,
       created_at: now,
       updated_at: now,
@@ -94,18 +254,17 @@ export const createBaselineDocument = async (
     updated_at: now,
   };
 
-  if (request.manualProfileData) {
-    // Flatten the structured data into JSON fields
+  if (manualProfileData) {
     profileData = {
       ...profileData,
-      demographics: request.manualProfileData.demographics || null,
-      training_context: request.manualProfileData.trainingContext || null,
-      lifestyle_context: request.manualProfileData.lifestyleContext || null,
-      overall_health_goals: request.manualProfileData.overallHealthGoals || null,
-      sexual_performance_goals: request.manualProfileData.sexualPerformanceGoals || null,
-      workout_goals: request.manualProfileData.workoutGoals || null,
-      secondary_goals: request.manualProfileData.secondaryGoals || null,
-      priority_order: request.manualProfileData.priorityOrder || null,
+      demographics: manualProfileData.demographics || null,
+      training_context: manualProfileData.trainingContext || null,
+      lifestyle_context: manualProfileData.lifestyleContext || null,
+      overall_health_goals: manualProfileData.overallHealthGoals || null,
+      sexual_performance_goals: manualProfileData.sexualPerformanceGoals || null,
+      workout_goals: manualProfileData.workoutGoals || null,
+      secondary_goals: manualProfileData.secondaryGoals || null,
+      priority_order: manualProfileData.priorityOrder || null,
     };
   }
 
@@ -122,16 +281,16 @@ export const createBaselineDocument = async (
 
   // Create extracted sections (placeholder for manual entry)
   const extractedSections: BaselineExtractedSection[] = [];
-  if (request.manualProfileData) {
+  if (manualProfileData) {
     const sections = [
-      { name: 'demographics', data: request.manualProfileData.demographics },
-      { name: 'training_context', data: request.manualProfileData.trainingContext },
-      { name: 'lifestyle_context', data: request.manualProfileData.lifestyleContext },
-      { name: 'overall_health_goals', data: request.manualProfileData.overallHealthGoals },
-      { name: 'sexual_performance_goals', data: request.manualProfileData.sexualPerformanceGoals },
-      { name: 'workout_goals', data: request.manualProfileData.workoutGoals },
-      { name: 'secondary_goals', data: request.manualProfileData.secondaryGoals },
-      { name: 'priority_order', data: request.manualProfileData.priorityOrder },
+      { name: 'demographics', data: manualProfileData.demographics },
+      { name: 'training_context', data: manualProfileData.trainingContext },
+      { name: 'lifestyle_context', data: manualProfileData.lifestyleContext },
+      { name: 'overall_health_goals', data: manualProfileData.overallHealthGoals },
+      { name: 'sexual_performance_goals', data: manualProfileData.sexualPerformanceGoals },
+      { name: 'workout_goals', data: manualProfileData.workoutGoals },
+      { name: 'secondary_goals', data: manualProfileData.secondaryGoals },
+      { name: 'priority_order', data: manualProfileData.priorityOrder },
     ];
 
     for (const section of sections) {

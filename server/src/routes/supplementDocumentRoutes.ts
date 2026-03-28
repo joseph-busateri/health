@@ -3,12 +3,13 @@ import {
   uploadSupplementDocument,
   getSupplementBaselineHandler,
   getLatestSupplementDocumentHandler,
+  uploadSupplementMiddleware,
 } from '../controllers/supplementDocumentController';
 
 const router = Router();
 
 // POST /supplement-document - Upload supplement document and create baseline
-router.post('/supplement-document', uploadSupplementDocument);
+router.post('/supplement-document', uploadSupplementMiddleware, uploadSupplementDocument);
 
 // GET /supplement-baseline/:user_id - Get supplement baseline with items
 router.get('/supplement-baseline/:user_id', getSupplementBaselineHandler);

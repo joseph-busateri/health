@@ -18,6 +18,12 @@ import {
   getBloodworkStats,
   updateBloodworkParseStatus,
 } from '../services/bloodworkDocumentService';
+import {
+  processBloodworkDocument,
+  getDocumentProcessingStatus,
+  resetProcessingForRetry,
+} from '../services/bloodworkProcessingService';
+import { uploadFileToStorage } from '../services/storageService';
 import type {
   CreateBloodworkDocumentRequest,
   UpdateBloodworkDocumentRequest,
@@ -61,8 +67,7 @@ const upload = multer({
  */
 export const uploadBloodworkDocumentController = async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { user_id } = req.body;
-    const { document_type, source, test_date, notes } = req.body;
+    const { user_id, test_date, notes } = req.body;
     const file = req.file;
 
     if (!user_id) {
@@ -81,44 +86,28 @@ export const uploadBloodworkDocumentController = async (req: AuthenticatedReques
       });
     }
 
-    if (!document_type || !source) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields',
-        message: 'Document type and source are required',
-      });
-    }
+    // Set default values - AI will refine these during processing
+    const document_type = 'lab_panel';
+    const source = 'manual_upload';
 
-    // Validate document type and source
-    const validTypes: BloodworkDocumentType[] = [
-      'lab_panel', 'hormone', 'metabolic', 'cardiac', 'liver', 
-      'kidney', 'lipid', 'vitamin', 'comprehensive', 'other'
-    ];
-    
-    const validSources: BloodworkSource[] = [
-      'labcorp', 'quest', 'hospital', 'clinic', 'home_test', 'manual_upload', 'other'
-    ];
+    logger.info('Processing bloodwork upload', { 
+      user_id, 
+      file_name: file.originalname,
+      file_size: file.size,
+      document_type,
+      source
+    });
 
-    if (!validTypes.includes(document_type as BloodworkDocumentType)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid document type',
-        message: 'Please select a valid document type',
-      });
-    }
+    const fileExtension = path.extname(file.originalname) || '.bin';
+    const storagePath = `bloodwork/${user_id}/${uuidv4()}${fileExtension}`;
 
-    if (!validSources.includes(source as BloodworkSource)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid source',
-        message: 'Please select a valid source',
-      });
-    }
+    const uploadResult = await uploadFileToStorage({
+      path: storagePath,
+      file: file.buffer,
+      contentType: file.mimetype,
+    });
 
-    // Generate file URL (in production, this would upload to cloud storage)
-    const fileExtension = path.extname(file.originalname);
-    const fileName = `${uuidv4()}${fileExtension}`;
-    const fileUrl = `https://storage.example.com/bloodwork/${fileName}`;
+    const fileUrl = uploadResult.publicUrl ?? storagePath;
 
     // Create bloodwork document record
     const createRequest: CreateBloodworkDocumentRequest = {
@@ -134,6 +123,8 @@ export const uploadBloodworkDocumentController = async (req: AuthenticatedReques
       metadata: {
         upload_timestamp: new Date().toISOString(),
         original_filename: file.originalname,
+        storage_path: storagePath,
+        storage_bucket: uploadResult.bucket,
       },
     };
 
@@ -141,6 +132,22 @@ export const uploadBloodworkDocumentController = async (req: AuthenticatedReques
 
     if (!result.success) {
       return res.status(500).json(result);
+    }
+
+    // Kick off processing pipeline asynchronously
+    const documentId = result.data?.document.id;
+    if (documentId) {
+      // Fire and forget processing
+      setImmediate(async () => {
+        try {
+          await processBloodworkDocument(documentId, user_id);
+        } catch (processingError) {
+          logger.error('Failed to process bloodwork document', {
+            documentId,
+            error: processingError,
+          });
+        }
+      });
     }
 
     res.status(201).json({
@@ -495,6 +502,96 @@ export const updateBloodworkParseStatusController = async (req: Request, res: Re
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
       message: 'Failed to update bloodwork parse status',
+    });
+  }
+};
+
+/**
+ * Get processing status for a specific bloodwork document
+ */
+export const getBloodworkDocumentStatusController = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Document ID is required',
+        message: 'Document ID is required to retrieve processing status',
+      });
+    }
+
+    const status = await getDocumentProcessingStatus(Array.isArray(id) ? id[0] : id);
+
+    if (!status) {
+      return res.status(404).json({
+        success: false,
+        error: 'Document not found',
+        message: 'No processing status found for the provided document ID',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: status,
+    });
+  } catch (error) {
+    logger.error('Error in getBloodworkDocumentStatusController', { error });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      message: 'Failed to retrieve bloodwork processing status',
+    });
+  }
+};
+
+/**
+ * Retry bloodwork processing pipeline
+ */
+export const retryBloodworkProcessingController = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { user_id } = req.body;
+
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Document ID is required',
+        message: 'Document ID is required to retry processing',
+      });
+    }
+
+    if (!user_id) {
+      return res.status(400).json({
+        success: false,
+        error: 'User ID is required',
+        message: 'User ID is required to retry processing',
+      });
+    }
+
+    const { documentId } = await resetProcessingForRetry(Array.isArray(id) ? id[0] : id);
+
+    setImmediate(async () => {
+      try {
+        await processBloodworkDocument(documentId, Array.isArray(user_id) ? user_id[0] : user_id);
+      } catch (processingError) {
+        logger.error('Failed to retry bloodwork processing', {
+          documentId,
+          error: processingError,
+        });
+      }
+    });
+
+    res.json({
+      success: true,
+      message: 'Bloodwork processing retry started',
+    });
+  } catch (error) {
+    logger.error('Error in retryBloodworkProcessingController', { error });
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      message: 'Failed to retry bloodwork processing',
     });
   }
 };

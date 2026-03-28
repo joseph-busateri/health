@@ -12,30 +12,193 @@ import {
   WorkoutChangeSource,
   WORKOUT_TABLES,
 } from '../types/workoutDocument';
+import { uploadFileToStorage, downloadFileFromStorage, getPublicUrlForStoragePath } from './storageService';
+import { extractTextFromBuffer } from './ocrService';
 
 const supabase = createClient<Database>(
   process.env.SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-// Create workout document with structured data
+function normalizeWhitespace(text: string): string {
+  return text.replace(/\r/g, '').replace(/\t/g, ' ').replace(/\s{2,}/g, ' ').trim();
+}
+
+function parseListLines(lines: string[]): string[] {
+  return lines
+    .map(line => line.replace(/^[-*•]\s*/, '').trim())
+    .filter(line => line.length > 0);
+}
+
+function parseNamedSection(lines: string[], sectionName: string): string[] {
+  const startIndex = lines.findIndex(line => line.toLowerCase().startsWith(sectionName.toLowerCase()));
+  if (startIndex === -1) {
+    return [];
+  }
+
+  const sectionLines: string[] = [];
+  for (let i = startIndex + 1; i < lines.length; i++) {
+    const line = lines[i];
+    if (!line) continue;
+    if (/^[A-Z][A-Za-z\s]+:$/.test(line)) {
+      break;
+    }
+    sectionLines.push(line);
+  }
+  return sectionLines;
+}
+
+function parseKeyValue(line: string): { key: string; value: string } | null {
+  const separatorIndex = line.indexOf(':');
+  if (separatorIndex === -1) {
+    return null;
+  }
+  const key = line.slice(0, separatorIndex).trim();
+  const value = line.slice(separatorIndex + 1).trim();
+  if (!key || !value) {
+    return null;
+  }
+  return { key, value };
+}
+
+function parseWorkoutText(text: string): ManualWorkoutData | undefined {
+  const cleaned = normalizeWhitespace(text);
+  if (!cleaned) {
+    return undefined;
+  }
+
+  const lines = cleaned.split(/\n|\. /).map(line => line.trim()).filter(Boolean);
+
+  const data: ManualWorkoutData = {};
+
+  for (const line of lines) {
+    const kv = parseKeyValue(line);
+    if (!kv) {
+      continue;
+    }
+    const key = kv.key.toLowerCase();
+    const value = kv.value;
+
+    if (key.includes('program name')) {
+      data.programName = value;
+    } else if (key.includes('split')) {
+      data.splitName = value;
+    } else if (key.includes('days per week')) {
+      const numeric = Number(value);
+      if (!Number.isNaN(numeric)) {
+        data.workoutDaysPerWeek = numeric;
+      }
+    } else if (key.includes('rest days')) {
+      const numeric = Number(value);
+      if (!Number.isNaN(numeric)) {
+        data.restDaysPerWeek = numeric;
+      }
+    } else if (key.includes('training style')) {
+      data.trainingStyle = value;
+    } else if (key.includes('program notes')) {
+      data.programNotes = value;
+    }
+  }
+
+  const weeklySection = parseNamedSection(lines, 'Weekly Schedule:');
+  weeklySection.forEach(line => {
+    const kv = parseKeyValue(line);
+    if (!kv) return;
+    const day = kv.key.toLowerCase();
+    const value = kv.value;
+    if (day.includes('monday')) data.mondayPlan = value;
+    if (day.includes('tuesday')) data.tuesdayPlan = value;
+    if (day.includes('wednesday')) data.wednesdayPlan = value;
+    if (day.includes('thursday')) data.thursdayPlan = value;
+    if (day.includes('friday')) data.fridayPlan = value;
+    if (day.includes('saturday')) data.saturdayPlan = value;
+    if (day.includes('sunday')) data.sundayPlan = value;
+  });
+
+  const contextSection = parseNamedSection(lines, 'Workout Context:');
+  if (contextSection.length) {
+    const contextMap: Record<string, string> = {};
+    contextSection.forEach(line => {
+      const kv = parseKeyValue(line);
+      if (!kv) return;
+      contextMap[kv.key.toLowerCase()] = kv.value;
+    });
+    if (contextMap['muscle group focus']) {
+      data.muscleGroupFocus = contextMap['muscle group focus'].split(',').map(value => value.trim()).filter(Boolean);
+    }
+    if (contextMap['cardio']) {
+      data.cardioOrConditioningNotes = contextMap['cardio'];
+    }
+    if (contextMap['mobility']) {
+      data.mobilityOrRecoveryNotes = contextMap['mobility'];
+    }
+    if (contextMap['volume']) {
+      data.plannedVolumeNotes = contextMap['volume'];
+    }
+    if (contextMap['intensity']) {
+      data.plannedIntensityNotes = contextMap['intensity'];
+    }
+  }
+
+  const exerciseLines = parseNamedSection(lines, 'Exercises:');
+  if (exerciseLines.length) {
+    data.exercises = exerciseLines.map(line => {
+      const match = /^(?<day>[A-Za-z]+)\s*-\s*(?<name>[^-]+?)(?:\s*-\s*(?<notes>.+))?$/.exec(line);
+      if (!match?.groups) {
+        return {
+          name: line,
+          dayAssociation: 'unspecified',
+        };
+      }
+      return {
+        name: match.groups.name.trim(),
+        dayAssociation: match.groups.day.trim(),
+        setRepLoadNotes: match.groups.notes?.trim(),
+      };
+    });
+  }
+
+  const hasData = Object.values(data).some(value => {
+    if (Array.isArray(value)) return value.length > 0;
+    if (value && typeof value === 'object') return Object.keys(value as Record<string, unknown>).length > 0;
+    return value != null && value !== '';
+  });
+
+  return hasData ? data : undefined;
+}
+
 export const createWorkoutDocument = async (
-  request: CreateWorkoutDocumentRequest
+  request: CreateWorkoutDocumentRequest & { fileBuffer?: Buffer; mimeType?: string; originalFileName?: string }
 ): Promise<WorkoutDocumentResult> => {
   const now = new Date().toISOString();
 
-  // Create workout document record
+  let storagePath = request.storagePath;
+  let fileReference = request.fileReference;
+  let publicUrl: string | null = null;
+
+  if (request.fileBuffer && !storagePath) {
+    const fileExtension = request.originalFileName ? `.${request.originalFileName.split('.').pop()}` : '.bin';
+    storagePath = `workout/${request.userId}/${Date.now()}${fileExtension}`;
+    const uploadResult = await uploadFileToStorage({
+      path: storagePath,
+      file: request.fileBuffer,
+      contentType: request.mimeType,
+    });
+    publicUrl = uploadResult.publicUrl;
+    fileReference = publicUrl ?? storagePath;
+  }
+
   const { data: document, error: documentError } = await supabase
     .from(WORKOUT_TABLES.WORKOUT_DOCUMENTS)
     .insert({
       user_id: request.userId,
-      file_reference: request.fileReference,
-      storage_path: request.storagePath,
+      file_reference: fileReference,
+      storage_path: storagePath,
       upload_date: now.split('T')[0],
       document_type: request.documentType,
       program_start_date: request.programStartDate,
-      parse_status: 'completed' as any,
-      extraction_confidence: request.manualWorkoutData ? 1.0 : null,
+      parse_status: 'processing' as any,
+      extraction_confidence: null,
       notes: request.notes,
       created_at: now,
       updated_at: now,
@@ -48,41 +211,41 @@ export const createWorkoutDocument = async (
     throw new Error('Failed to create workout document');
   }
 
-  // Create workout baseline record
-  let baselineData: any = {
+  let manualData = request.manualWorkoutData;
+
+  if (!manualData && storagePath) {
+    const fileBuffer = await downloadFileFromStorage(storagePath);
+    const { text } = await extractTextFromBuffer(fileBuffer, request.mimeType);
+    manualData = parseWorkoutText(text);
+  }
+
+  const baselineData: any = {
     user_id: request.userId,
     document_id: (document as any).id,
     extracted_at: now,
     created_at: now,
     updated_at: now,
+    program_name: manualData?.programName || null,
+    split_name: manualData?.splitName || null,
+    workout_days_per_week: manualData?.workoutDaysPerWeek ?? null,
+    rest_days_per_week: manualData?.restDaysPerWeek ?? null,
+    training_style: manualData?.trainingStyle || null,
+    program_notes: manualData?.programNotes || null,
+    monday_plan: manualData?.mondayPlan || null,
+    tuesday_plan: manualData?.tuesdayPlan || null,
+    wednesday_plan: manualData?.wednesdayPlan || null,
+    thursday_plan: manualData?.thursdayPlan || null,
+    friday_plan: manualData?.fridayPlan || null,
+    saturday_plan: manualData?.saturdayPlan || null,
+    sunday_plan: manualData?.sundayPlan || null,
+    muscle_group_focus: manualData?.muscleGroupFocus || null,
+    frequency_by_muscle_group: manualData?.frequencyByMuscleGroup || null,
+    planned_volume_notes: manualData?.plannedVolumeNotes || null,
+    planned_intensity_notes: manualData?.plannedIntensityNotes || null,
+    cardio_or_conditioning_notes: manualData?.cardioOrConditioningNotes || null,
+    mobility_or_recovery_notes: manualData?.mobilityOrRecoveryNotes || null,
+    exercises: manualData?.exercises || null,
   };
-
-  if (request.manualWorkoutData) {
-    // Flatten the structured data into JSON fields
-    baselineData = {
-      ...baselineData,
-      program_name: request.manualWorkoutData.programName || null,
-      split_name: request.manualWorkoutData.splitName || null,
-      workout_days_per_week: request.manualWorkoutData.workoutDaysPerWeek || null,
-      rest_days_per_week: request.manualWorkoutData.restDaysPerWeek || null,
-      training_style: request.manualWorkoutData.trainingStyle || null,
-      program_notes: request.manualWorkoutData.programNotes || null,
-      monday_plan: request.manualWorkoutData.mondayPlan || null,
-      tuesday_plan: request.manualWorkoutData.tuesdayPlan || null,
-      wednesday_plan: request.manualWorkoutData.wednesdayPlan || null,
-      thursday_plan: request.manualWorkoutData.thursdayPlan || null,
-      friday_plan: request.manualWorkoutData.fridayPlan || null,
-      saturday_plan: request.manualWorkoutData.saturdayPlan || null,
-      sunday_plan: request.manualWorkoutData.sundayPlan || null,
-      muscle_group_focus: request.manualWorkoutData.muscleGroupFocus || null,
-      frequency_by_muscle_group: request.manualWorkoutData.frequencyByMuscleGroup || null,
-      planned_volume_notes: request.manualWorkoutData.plannedVolumeNotes || null,
-      planned_intensity_notes: request.manualWorkoutData.plannedIntensityNotes || null,
-      cardio_or_conditioning_notes: request.manualWorkoutData.cardioOrConditioningNotes || null,
-      mobility_or_recovery_notes: request.manualWorkoutData.mobilityOrRecoveryNotes || null,
-      exercises: request.manualWorkoutData.exercises || null,
-    };
-  }
 
   const { data: profile, error: profileError } = await supabase
     .from(WORKOUT_TABLES.WORKOUT_BASELINES)
@@ -98,13 +261,12 @@ export const createWorkoutDocument = async (
   // Create extracted sections (placeholder for manual entry)
   const extractedSections: WorkoutExtractedSection[] = [];
 
-  if (request.manualWorkoutData) {
-    // Create extracted sections for manual data
+  if (manualData) {
     const sections = [
-      { name: 'program_structure', data: request.manualWorkoutData },
-      { name: 'weekly_schedule', data: request.manualWorkoutData },
-      { name: 'workout_context', data: request.manualWorkoutData },
-      { name: 'exercise_layer', data: request.manualWorkoutData.exercises },
+      { name: 'program_structure', data: manualData },
+      { name: 'weekly_schedule', data: manualData },
+      { name: 'workout_context', data: manualData },
+      { name: 'exercise_layer', data: manualData.exercises },
     ];
 
     for (const section of sections) {
@@ -141,8 +303,8 @@ export const createWorkoutDocument = async (
   const workoutDocument: WorkoutDocument = {
     id: (document as any).id,
     userId: (document as any).user_id,
-    fileReference: (document as any).file_reference,
-    storagePath: (document as any).storage_path,
+    fileReference: fileReference || undefined,
+    storagePath: storagePath || undefined,
     uploadDate: (document as any).upload_date,
     documentType: (document as any).document_type,
     programStartDate: (document as any).program_start_date,

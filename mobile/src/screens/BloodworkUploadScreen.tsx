@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import bloodworkService from '../services/bloodworkService';
 import type {
   BloodworkDocument,
@@ -23,14 +24,66 @@ import type {
   BloodworkStats,
   BloodworkDocumentType,
   BloodworkSource,
+  BloodworkProcessingStatus,
 } from '../types/bloodwork';
 import {
   BloodworkDocumentTypeOptions,
   BloodworkSourceOptions,
   getFileTypeIcon,
+  formatFullDate,
 } from '../types/bloodwork';
 
 const TEST_USER_ID = '550e8400-e29b-41d4-a716-446655440000';
+
+const PROCESSING_STATUS_META: Record<BloodworkProcessingStatus, { label: string; color: string; background: string }> = {
+  uploaded: { label: 'Uploaded', color: '#1D1D1F', background: '#E5E5EA' },
+  pending: { label: 'Queued', color: '#B26A00', background: '#FFE4B8' },
+  parsing: { label: 'Parsing Document', color: '#005BBB', background: '#D6E8FF' },
+  extracting: { label: 'Extracting Results', color: '#005BBB', background: '#D6E8FF' },
+  generating_trends: { label: 'Generating Trends', color: '#2F5D62', background: '#D9F5EF' },
+  generating_recommendations: { label: 'Preparing Insights', color: '#2F5D62', background: '#D9F5EF' },
+  complete: { label: 'Complete', color: '#1B5E20', background: '#DFF5E1' },
+  failed: { label: 'Failed', color: '#B00020', background: '#FFE5E5' },
+};
+
+const PROCESSING_ACTIVE_STATUSES: BloodworkProcessingStatus[] = [
+  'uploaded',
+  'pending',
+  'parsing',
+  'extracting',
+  'generating_trends',
+  'generating_recommendations',
+];
+
+const formatProcessingDuration = (ms: number | null): string => {
+  if (ms == null) {
+    return '—';
+  }
+
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  if (minutes < 60) {
+    return `${minutes}m${remainingSeconds ? ` ${remainingSeconds}s` : ''}`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  return `${hours}h${remainingMinutes ? ` ${remainingMinutes}m` : ''}`;
+};
+
+// Simple validation function - removed document_type and source requirements
+const validateUploadFormData = (formData: any) => {
+  // No validation needed - AI will handle everything
+  return {
+    isValid: true,
+    errors: {},
+  };
+};
 
 interface BloodworkUploadScreenProps {
   navigation: any;
@@ -52,7 +105,12 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
       notes: '',
     } as BloodworkUploadFormData,
     formErrors: {} as Record<string, string>,
+    expandedDocumentId: null as string | null,
+    retryingDocumentId: null as string | null,
   });
+
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const previousStatusRef = useRef<Map<string, BloodworkProcessingStatus>>(new Map());
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -71,13 +129,90 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
       }
 
       if (statsResponse.success) {
-        setState(prev => ({ ...prev, stats: statsResponse.data }));
+        setState(prev => ({ ...prev, stats: (statsResponse.data ?? null) as BloodworkStats | null }));
       }
     } catch (error) {
       console.error('Error loading documents:', error);
     } finally {
       setState(prev => ({ ...prev, loading: false }));
     }
+  }, []);
+
+  useEffect(() => {
+    const activeDocuments = state.documents.filter(doc => PROCESSING_ACTIVE_STATUSES.includes(doc.processing_status));
+
+    if (activeDocuments.length === 0) {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+        pollingIntervalRef.current = null;
+      }
+      return;
+    }
+
+    const pollStatuses = async () => {
+      try {
+        const results = await Promise.all(
+          activeDocuments.map(async doc => {
+            const statusResponse = await bloodworkService.getBloodworkDocumentStatus(doc.id);
+            return { docId: doc.id, statusResponse };
+          })
+        );
+
+        setState(prev => {
+          const updatedDocuments = prev.documents.map(doc => {
+            const result = results.find(item => item.docId === doc.id);
+            if (result && result.statusResponse.success && result.statusResponse.data) {
+              const statusData = result.statusResponse.data;
+              return {
+                ...doc,
+                processing_status: statusData.processing_status,
+                processing_progress: statusData.processing_progress ?? null,
+                processing_error: statusData.processing_error ?? null,
+                processing_started_at: statusData.processing_started_at ?? null,
+                processing_completed_at: statusData.processing_completed_at ?? null,
+              };
+            }
+            return doc;
+          });
+
+          return { ...prev, documents: updatedDocuments };
+        });
+      } catch (error) {
+        console.error('Error polling processing status:', error);
+      }
+    };
+
+    pollStatuses();
+    const intervalId = setInterval(pollStatuses, 5000);
+    pollingIntervalRef.current = intervalId;
+
+    return () => {
+      clearInterval(intervalId);
+      pollingIntervalRef.current = null;
+    };
+  }, [state.documents]);
+
+  useEffect(() => {
+    state.documents.forEach(doc => {
+      const previousStatus = previousStatusRef.current.get(doc.id);
+      if (previousStatus && previousStatus !== doc.processing_status) {
+        if (doc.processing_status === 'complete') {
+          Alert.alert('Bloodwork Ready', `${doc.file_name} has finished processing.`);
+        }
+        if (doc.processing_status === 'failed') {
+          Alert.alert('Processing Failed', doc.processing_error || 'Processing failed. You can retry.');
+        }
+      }
+      previousStatusRef.current.set(doc.id, doc.processing_status);
+    });
+  }, [state.documents]);
+
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
   }, []);
 
   useFocusEffect(
@@ -172,6 +307,13 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
 
   const pickImageDocument = async () => {
     try {
+      // Request media library permissions
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Please grant camera roll permissions to upload images.');
+        return;
+      }
+
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -202,6 +344,13 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
 
   const takePhoto = async () => {
     try {
+      // Request camera permissions
+      const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission Required', 'Please grant camera permissions to take photos.');
+        return;
+      }
+
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
@@ -231,28 +380,35 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
   };
 
   const updateFormData = (field: keyof BloodworkUploadFormData, value: string) => {
-    setState(prev => ({
-      ...prev,
-      formData: {
-        ...prev.formData,
-        [field]: value,
-      },
-      formErrors: {
-        ...prev.formErrors,
-        [field]: undefined,
-      },
-    }));
+    setState(prev => {
+      const { [field as string]: _removed, ...restErrors } = prev.formErrors;
+
+      return {
+        ...prev,
+        formData: {
+          ...prev.formData,
+          [field]: value,
+        },
+        formErrors: restErrors,
+      };
+    });
   };
 
   const uploadDocument = async () => {
+    console.log('🚀 Starting upload process...');
+    
     if (!state.selectedFile) {
+      console.log('❌ No file selected');
       Alert.alert('Error', 'Please select a file');
       return;
     }
 
+    console.log('📁 File selected:', state.selectedFile.name);
+
     const validation = validateUploadFormData(state.formData);
     
     if (!validation.isValid) {
+      console.log('❌ Validation failed:', validation.errors);
       setState(prev => ({
         ...prev,
         formErrors: validation.errors,
@@ -260,25 +416,45 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
       return;
     }
 
+    console.log('✅ Validation passed');
+
     try {
+      console.log('⏳ Starting upload...');
       setState(prev => ({ ...prev, uploading: true }));
 
       const uploadRequest = {
         file: state.selectedFile,
         file_name: state.selectedFile.name,
-        document_type: state.formData.document_type,
-        source: state.formData.source,
-        test_date: state.formData.test_date || undefined,
+        document_type: 'lab_panel' as const, // Default - AI will refine this
+        source: 'manual_upload' as const, // Default - AI will refine this
         notes: state.formData.notes || undefined,
       };
+
+      console.log('📤 Upload request:', uploadRequest);
 
       const response = await bloodworkService.uploadBloodworkDocument(
         uploadRequest,
         TEST_USER_ID
       );
 
+      console.log('📥 Upload response:', response);
+
       if (response.success) {
-        Alert.alert('Success', 'Bloodwork document uploaded successfully!');
+        Alert.alert(
+          '🎉 Upload Successful!', 
+          'Your bloodwork document has been uploaded successfully. The AI will now analyze your results and provide personalized recommendations.',
+          [
+            {
+              text: 'View Results',
+              onPress: () => navigation.navigate('BloodworkResults', { userId: TEST_USER_ID })
+            },
+            {
+              text: 'OK',
+              style: 'cancel'
+            }
+          ]
+        );
+        
         setState(prev => ({
           ...prev,
           showUploadModal: false,
@@ -293,12 +469,14 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
         }));
         loadDocuments();
       } else {
+        console.log('❌ Upload failed:', response.error);
         Alert.alert('Upload Failed', response.error || 'Failed to upload document');
       }
     } catch (error) {
-      console.error('Error uploading document:', error);
+      console.error('💥 Error uploading document:', error);
       Alert.alert('Error', 'Failed to upload document');
     } finally {
+      console.log('🏁 Upload process finished');
       setState(prev => ({ ...prev, uploading: false }));
     }
   };
@@ -335,6 +513,47 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
     );
   };
 
+  const handleRetry = async (documentId: string) => {
+    try {
+      setState(prev => ({ ...prev, retryingDocumentId: documentId }));
+      const response = await bloodworkService.retryBloodworkProcessing(documentId, TEST_USER_ID);
+
+      if (response.success) {
+        Alert.alert('Retry Started', 'The document is being reprocessed.');
+        await loadDocuments();
+      } else {
+        Alert.alert('Retry Failed', response.error || 'Unable to retry processing');
+      }
+    } catch (error) {
+      console.error('Error retrying processing:', error);
+      Alert.alert('Error', 'Failed to retry processing');
+    } finally {
+      setState(prev => ({ ...prev, retryingDocumentId: null }));
+    }
+  };
+
+  const toggleDocumentExpansion = (documentId: string) => {
+    setState(prev => ({
+      ...prev,
+      expandedDocumentId: prev.expandedDocumentId === documentId ? null : documentId,
+    }));
+  };
+
+  const formatTimestamp = (iso?: string | null) => {
+    if (!iso) return '—';
+    const date = new Date(iso);
+    return `${formatFullDate(date.toISOString())}`;
+  };
+
+  const formatDurationBetween = (start?: string | null, end?: string | null) => {
+    if (!start) return '—';
+    const startMs = new Date(start).getTime();
+    const endMs = end ? new Date(end).getTime() : Date.now();
+    const duration = endMs - startMs;
+    if (duration <= 0) return '—';
+    return formatProcessingDuration(duration);
+  };
+
   const renderDocumentItem = (document: BloodworkDocumentListItem) => (
     <View key={document.id} style={styles.documentItem}>
       <View style={styles.documentHeader}>
@@ -346,8 +565,18 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
           </View>
         </View>
         <View style={styles.documentStatus}>
-          <View style={[styles.statusBadge, { backgroundColor: document.status_color }]}>
-            <Text style={styles.statusText}>{document.status_label}</Text>
+          <View
+            style={[styles.statusBadge, {
+              backgroundColor: PROCESSING_STATUS_META[document.processing_status]?.background || document.status_color,
+            }]}
+          >
+            <Text
+              style={[styles.statusText, {
+                color: PROCESSING_STATUS_META[document.processing_status]?.color || '#FFFFFF',
+              }]}
+            >
+              {PROCESSING_STATUS_META[document.processing_status]?.label || document.status_label}
+            </Text>
           </View>
         </View>
       </View>
@@ -365,6 +594,90 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
           </Text>
         )}
       </View>
+
+      {PROCESSING_ACTIVE_STATUSES.includes(document.processing_status) && (
+        <View style={styles.processingContainer}>
+          <ActivityIndicator color={PROCESSING_STATUS_META[document.processing_status].color} />
+          <View style={styles.processingTextContainer}>
+            <Text style={[styles.processingTitle, { color: PROCESSING_STATUS_META[document.processing_status].color }]}
+            >
+              {PROCESSING_STATUS_META[document.processing_status].label}
+            </Text>
+            <Text style={styles.processingSubtitle}>
+              {document.processing_progress != null
+                ? `Progress: ${Math.round(document.processing_progress)}%`
+                : 'Processing...'}
+            </Text>
+            <Text style={styles.processingTimestamp}>
+              Started {formatDurationBetween(document.processing_started_at, null)} ago
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {document.processing_status === 'failed' && (
+        <View style={styles.processingErrorContainer}>
+          <Text style={styles.processingErrorTitle}>Processing Failed</Text>
+          {document.processing_error ? (
+            <Text style={styles.processingErrorMessage}>{document.processing_error}</Text>
+          ) : null}
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => handleRetry(document.id)}
+            disabled={state.retryingDocumentId === document.id}
+          >
+            {state.retryingDocumentId === document.id ? (
+              <ActivityIndicator color="#FFFFFF" size="small" />
+            ) : (
+              <Text style={styles.retryButtonText}>Retry Processing</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {document.processing_status === 'complete' && (
+        <View style={styles.processingCompleteContainer}>
+          <Text style={styles.processingCompleteText}>
+            Completed in {formatDurationBetween(document.processing_started_at, document.processing_completed_at)}
+          </Text>
+        </View>
+      )}
+
+      <TouchableOpacity
+        style={styles.expandToggle}
+        onPress={() => toggleDocumentExpansion(document.id)}
+      >
+        <Text style={styles.expandToggleText}>
+          {state.expandedDocumentId === document.id ? 'Hide details' : 'Show details'}
+        </Text>
+      </TouchableOpacity>
+
+      {state.expandedDocumentId === document.id && (
+        <View style={styles.documentExtraDetails}>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Processing Status</Text>
+            <Text style={styles.detailValue}>{PROCESSING_STATUS_META[document.processing_status]?.label || 'Unknown'}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Started At</Text>
+            <Text style={styles.detailValue}>{formatTimestamp(document.processing_started_at)}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Completed At</Text>
+            <Text style={styles.detailValue}>{formatTimestamp(document.processing_completed_at)}</Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Duration</Text>
+            <Text style={styles.detailValue}>
+              {formatDurationBetween(document.processing_started_at, document.processing_completed_at)}
+            </Text>
+          </View>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Parse Status</Text>
+            <Text style={styles.detailValue}>{document.status_label}</Text>
+          </View>
+        </View>
+      )}
 
       <View style={styles.documentActions}>
         <TouchableOpacity
@@ -415,80 +728,6 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
                 </Text>
               </View>
             )}
-
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Document Type</Text>
-              <View style={styles.pickerContainer}>
-                {BloodworkDocumentTypeOptions.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.pickerOption,
-                      state.formData.document_type === option.value && styles.pickerOptionSelected,
-                    ]}
-                    onPress={() => updateFormData('document_type', option.value)}
-                  >
-                    <Text
-                      style={[
-                        styles.pickerOptionText,
-                        state.formData.document_type === option.value && styles.pickerOptionTextSelected,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {state.formErrors.document_type && (
-                <Text style={styles.errorText}>{state.formErrors.document_type}</Text>
-              )}
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Source</Text>
-              <View style={styles.pickerContainer}>
-                {BloodworkSourceOptions.map((option) => (
-                  <TouchableOpacity
-                    key={option.value}
-                    style={[
-                      styles.pickerOption,
-                      state.formData.source === option.value && styles.pickerOptionSelected,
-                    ]}
-                    onPress={() => updateFormData('source', option.value)}
-                  >
-                    <Text
-                      style={[
-                        styles.pickerOptionText,
-                        state.formData.source === option.value && styles.pickerOptionTextSelected,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {state.formErrors.source && (
-                <Text style={styles.errorText}>{state.formErrors.source}</Text>
-              )}
-            </View>
-
-            <View style={styles.formGroup}>
-              <Text style={styles.formLabel}>Test Date (Optional)</Text>
-              <TouchableOpacity
-                style={styles.dateInput}
-                onPress={() => {
-                  // TODO: Implement date picker
-                  Alert.alert('Date Picker', 'Date picker coming soon');
-                }}
-              >
-                <Text style={styles.dateInputText}>
-                  {state.formData.test_date || 'Select test date'}
-                </Text>
-              </TouchableOpacity>
-              {state.formErrors.test_date && (
-                <Text style={styles.errorText}>{state.formErrors.test_date}</Text>
-              )}
-            </View>
 
             <View style={styles.formGroup}>
               <Text style={styles.formLabel}>Notes (Optional)</Text>
@@ -562,6 +801,17 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
         <View style={styles.successRateContainer}>
           <Text style={styles.successRateLabel}>Success Rate</Text>
           <Text style={styles.successRateNumber}>{statusSummary.successRate}%</Text>
+        </View>
+
+        <View style={styles.processingSummaryContainer}>
+          <Text style={styles.processingSummaryText}>
+            In Progress: {statusSummary.inProgress}
+          </Text>
+          {statusSummary.averageProcessingTimeMs && (
+            <Text style={styles.processingSummaryText}>
+              Avg Duration: {formatProcessingDuration(statusSummary.averageProcessingTimeMs)}
+            </Text>
+          )}
         </View>
       </View>
     );
@@ -685,6 +935,122 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginTop: 4,
   },
+  processingSummaryContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+  },
+  processingSummaryText: {
+    fontSize: 14,
+    color: '#8E8E93',
+  },
+  processingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#F0F4FF',
+  },
+  processingTextContainer: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  processingTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  processingSubtitle: {
+    fontSize: 14,
+    color: '#3C3C43',
+    marginBottom: 4,
+  },
+  processingTimestamp: {
+    fontSize: 12,
+    color: '#6E6E73',
+  },
+  processingErrorContainer: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#FFE5E5',
+  },
+  processingErrorTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#B00020',
+    marginBottom: 4,
+  },
+  processingErrorMessage: {
+    fontSize: 14,
+    color: '#3C3C43',
+    marginBottom: 8,
+  },
+  retryButton: {
+    backgroundColor: '#B00020',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  processingCompleteContainer: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#DFF5E1',
+  },
+  processingCompleteText: {
+    fontSize: 14,
+    color: '#1B5E20',
+    fontWeight: '600',
+  },
+  expandToggle: {
+    marginTop: 12,
+    alignItems: 'flex-start',
+  },
+  expandToggleText: {
+    color: '#007AFF',
+    fontWeight: '600',
+  },
+  documentExtraDetails: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#F2F2F7',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  detailLabel: {
+    fontSize: 14,
+    color: '#6E6E73',
+  },
+  detailValue: {
+    fontSize: 14,
+    color: '#1D1D1F',
+    fontWeight: '500',
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1D1D1F',
+  },
   successRateContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -701,17 +1067,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#34C759',
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1D1D1F',
   },
   sectionSubtitle: {
     fontSize: 14,

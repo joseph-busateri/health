@@ -28,6 +28,16 @@ export type BloodworkParseStatus =
   | 'failed'
   | 'needs_review';
 
+export type BloodworkProcessingStatus =
+  | 'uploaded'
+  | 'pending'
+  | 'parsing'
+  | 'extracting'
+  | 'generating_trends'
+  | 'generating_recommendations'
+  | 'complete'
+  | 'failed';
+
 export interface BloodworkDocument {
   id: string;
   user_id: string;
@@ -41,8 +51,23 @@ export interface BloodworkDocument {
   upload_date: string;
   parse_status: BloodworkParseStatus;
   extraction_confidence?: number;
+  processing_status: BloodworkProcessingStatus;
+  processing_error?: string | null;
+  processing_started_at?: string | null;
+  processing_completed_at?: string | null;
+  processing_progress?: number | null;
   notes?: string;
   metadata?: Record<string, any>;
+  lab_name?: string;
+  accession_number?: string;
+  physician_name?: string;
+  patient_sex?: string;
+  patient_dob?: string;
+  specimen_datetime?: string;
+  final_reported_datetime?: string;
+  report_status?: string;
+  account_name?: string;
+  panel_names_detected?: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -58,6 +83,16 @@ export interface CreateBloodworkDocumentRequest {
   test_date?: string;
   notes?: string;
   metadata?: Record<string, any>;
+  lab_name?: string;
+  accession_number?: string;
+  physician_name?: string;
+  patient_sex?: string;
+  patient_dob?: string;
+  specimen_datetime?: string;
+  final_reported_datetime?: string;
+  report_status?: string;
+  account_name?: string;
+  panel_names_detected?: string[] | null;
 }
 
 export interface UpdateBloodworkDocumentRequest {
@@ -66,8 +101,23 @@ export interface UpdateBloodworkDocumentRequest {
   test_date?: string;
   parse_status?: BloodworkParseStatus;
   extraction_confidence?: number;
+  processing_status?: BloodworkProcessingStatus;
+  processing_error?: string | null;
+  processing_started_at?: string | null;
+  processing_completed_at?: string | null;
+  processing_progress?: number | null;
   notes?: string;
   metadata?: Record<string, any>;
+  lab_name?: string;
+  accession_number?: string;
+  physician_name?: string;
+  patient_sex?: string;
+  patient_dob?: string;
+  specimen_datetime?: string;
+  final_reported_datetime?: string;
+  report_status?: string;
+  account_name?: string;
+  panel_names_detected?: string[] | null;
 }
 
 export interface BloodworkDocumentResponse {
@@ -138,9 +188,16 @@ export interface BloodworkStatsResponse {
     avg_confidence?: number;
     documents_by_type: Record<BloodworkDocumentType, number>;
     documents_by_source: Record<BloodworkSource, number>;
+    processing_stats: BloodworkProcessingStats;
   };
   error?: string;
   message?: string;
+}
+
+export interface BloodworkProcessingStats {
+  counts: Record<BloodworkProcessingStatus, number>;
+  in_progress: number;
+  average_processing_time_ms: number | null;
 }
 
 // API Request/Response types
@@ -201,6 +258,17 @@ export const BloodworkParseStatusValues = [
   'needs_review'
 ] as const;
 
+export const BloodworkProcessingStatusValues = [
+  'uploaded',
+  'pending',
+  'parsing',
+  'extracting',
+  'generating_trends',
+  'generating_recommendations',
+  'complete',
+  'failed'
+] as const;
+
 // Helper functions
 export function isValidBloodworkDocumentType(value: string): value is BloodworkDocumentType {
   return BloodworkDocumentTypeValues.includes(value as BloodworkDocumentType);
@@ -212,6 +280,10 @@ export function isValidBloodworkSource(value: string): value is BloodworkSource 
 
 export function isValidBloodworkParseStatus(value: string): value is BloodworkParseStatus {
   return BloodworkParseStatusValues.includes(value as BloodworkParseStatus);
+}
+
+export function isValidBloodworkProcessingStatus(value: string): value is BloodworkProcessingStatus {
+  return BloodworkProcessingStatusValues.includes(value as BloodworkProcessingStatus);
 }
 
 export function getDocumentTypeLabel(type: BloodworkDocumentType): string {

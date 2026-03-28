@@ -8,6 +8,8 @@ import {
   getBloodworkTimelineController,
   getBloodworkStatsController,
   updateBloodworkParseStatusController,
+  getBloodworkDocumentStatusController,
+  retryBloodworkProcessingController,
   uploadBloodworkMiddleware,
 } from '../controllers/bloodworkController';
 
@@ -30,6 +32,12 @@ router.get('/documents/:user_id', getBloodworkDocumentsController);
  * Get a specific bloodwork document
  */
 router.get('/document/:id', getBloodworkDocumentController);
+
+/**
+ * GET /bloodwork/document/:id/status
+ * Get processing status for a bloodwork document
+ */
+router.get('/document/:id/status', getBloodworkDocumentStatusController);
 
 /**
  * PUT /bloodwork/document/:id
@@ -60,5 +68,11 @@ router.get('/stats/:user_id', getBloodworkStatsController);
  * Update bloodwork document parse status
  */
 router.put('/document/:id/parse-status', updateBloodworkParseStatusController);
+
+/**
+ * POST /bloodwork/document/:id/retry
+ * Retry bloodwork processing pipeline
+ */
+router.post('/document/:id/retry', retryBloodworkProcessingController);
 
 export default router;

@@ -3,12 +3,13 @@ import {
   uploadBaselineDocument,
   getBaselineProfileByUserId,
   getLatestBaselineDocumentByUserId,
+  uploadBaselineMiddleware,
 } from '../controllers/baselineDocumentController';
 
 const router = Router();
 
 // POST /baseline-document
-router.post('/baseline-document', uploadBaselineDocument);
+router.post('/baseline-document', uploadBaselineMiddleware, uploadBaselineDocument);
 
 // GET /baseline-profile/:user_id
 router.get('/baseline-profile/:userId', getBaselineProfileByUserId);

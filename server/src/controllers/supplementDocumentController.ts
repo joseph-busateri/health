@@ -1,15 +1,72 @@
 import { Request, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import type { File as MulterFile } from 'multer';
 import { createSupplementDocument, getLatestSupplementDocument, getSupplementBaseline } from '../services/supplementDocumentService';
 import { CreateSupplementDocumentRequest, ManualSupplementData } from '../types/supplementDocument';
+import { uploadFileToStorage } from '../services/storageService';
 
-export const uploadSupplementDocument = async (req: Request, res: Response) => {
+interface SupplementUploadRequest extends Request {
+  file?: MulterFile;
+}
+
+const storage = multer.memoryStorage();
+export const uploadSupplementMiddleware = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/tiff',
+      'text/plain',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ];
+
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Allowed types: PDF, images, text, Word, Excel'));
+    }
+  },
+}).single('file');
+
+export const uploadSupplementDocument = async (req: SupplementUploadRequest, res: Response) => {
   try {
-    const { userId, documentType, fileReference, storagePath, notes, manualSupplementData }: CreateSupplementDocumentRequest = req.body;
+    const { userId, documentType, notes, manualSupplementData }: CreateSupplementDocumentRequest = req.body;
+    const file = req.file;
+
+    let manualData: ManualSupplementData | undefined;
+    if (typeof manualSupplementData === 'string') {
+      try {
+        manualData = JSON.parse(manualSupplementData) as ManualSupplementData;
+      } catch (error) {
+        return res.status(400).json({
+          error: 'Invalid manualSupplementData JSON payload',
+        });
+      }
+    } else if (manualSupplementData) {
+      manualData = manualSupplementData;
+    }
 
     // Validate required fields
     if (!userId || !documentType) {
       return res.status(400).json({
         error: 'Missing required fields: userId and documentType are required',
+      });
+    }
+
+    if (!file && documentType !== 'manual_entry') {
+      return res.status(400).json({
+        error: 'No file uploaded. Please attach a supplement document.',
       });
     }
 
@@ -22,8 +79,8 @@ export const uploadSupplementDocument = async (req: Request, res: Response) => {
     }
 
     // Validate manual supplement data if provided
-    if (manualSupplementData) {
-      const { stackName, supplements } = manualSupplementData;
+    if (manualData) {
+      const { stackName, supplements } = manualData;
       
       if (!stackName || typeof stackName !== 'string') {
         return res.status(400).json({
@@ -81,6 +138,20 @@ export const uploadSupplementDocument = async (req: Request, res: Response) => {
     }
 
     // Create supplement document
+    let storagePath: string | undefined;
+    let fileReference: string | undefined;
+
+    if (file) {
+      const fileExtension = path.extname(file.originalname) || '.bin';
+      storagePath = `supplements/${userId}/${uuidv4()}${fileExtension}`;
+      const uploadResult = await uploadFileToStorage({
+        path: storagePath,
+        file: file.buffer,
+        contentType: file.mimetype,
+      });
+      fileReference = uploadResult.publicUrl ?? storagePath;
+    }
+
     const result = await createSupplementDocument({
       user_id: userId,
       document_type: documentType,
@@ -89,7 +160,10 @@ export const uploadSupplementDocument = async (req: Request, res: Response) => {
       upload_date: new Date().toISOString(),
       parse_status: 'pending',
       notes,
-      manualSupplementData,
+      manualSupplementData: manualData,
+      fileBuffer: file?.buffer,
+      mimeType: file?.mimetype,
+      originalFileName: file?.originalname,
     });
 
     res.status(201).json({

@@ -1,4 +1,8 @@
 import { Request, Response } from 'express';
+import multer from 'multer';
+import path from 'path';
+import { v4 as uuidv4 } from 'uuid';
+import type { File as MulterFile } from 'multer';
 import {
   createBaselineDocument,
   getLatestBaselineDocument,
@@ -7,22 +11,91 @@ import {
   ManualBaselineProfileData,
 } from '../services/baselineDocumentService';
 import { logger } from '../utils/logger';
+import { uploadFileToStorage } from '../services/storageService';
 
-export const uploadBaselineDocument = async (req: Request, res: Response) => {
+interface BaselineUploadRequest extends Request {
+  file?: MulterFile;
+}
+
+const storage = multer.memoryStorage();
+export const uploadBaselineMiddleware = multer({
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/tiff',
+      'text/plain',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Allowed types: PDF, images, text, Word'));
+    }
+  },
+}).single('file');
+
+export const uploadBaselineDocument = async (req: BaselineUploadRequest, res: Response) => {
   try {
     const {
       userId,
       documentType,
-      fileReference,
-      storagePath,
       notes,
       manualProfileData,
     }: CreateBaselineDocumentRequest = req.body;
+    const file = req.file;
+    let manualData: ManualBaselineProfileData | undefined;
+
+    if (typeof manualProfileData === 'string') {
+      try {
+        manualData = JSON.parse(manualProfileData) as ManualBaselineProfileData;
+      } catch (error) {
+        return res.status(400).json({
+          error: 'Invalid manualProfileData JSON payload',
+        });
+      }
+    } else if (manualProfileData) {
+      manualData = manualProfileData;
+    }
 
     if (!userId || !documentType) {
       return res.status(400).json({
         error: 'Missing required fields: userId and documentType are required',
       });
+    }
+
+    if (!file && !manualData) {
+      return res.status(400).json({
+        error: 'No file or manual profile data provided. Please upload a document or include manualProfileData.',
+      });
+    }
+
+    let storagePath: string | undefined;
+    let fileReference: string | undefined;
+    let fileBuffer: Buffer | undefined;
+    let mimeType: string | undefined;
+    let originalFileName: string | undefined;
+
+    if (file) {
+      const fileExtension = path.extname(file.originalname) || '.bin';
+      storagePath = `baseline/${userId}/${uuidv4()}${fileExtension}`;
+      const uploadResult = await uploadFileToStorage({
+        path: storagePath,
+        file: file.buffer,
+        contentType: file.mimetype,
+      });
+      fileReference = uploadResult.publicUrl ?? storagePath;
+      fileBuffer = file.buffer;
+      mimeType = file.mimetype;
+      originalFileName = file.originalname;
     }
 
     const result = await createBaselineDocument({
@@ -31,7 +104,10 @@ export const uploadBaselineDocument = async (req: Request, res: Response) => {
       fileReference,
       storagePath,
       notes,
-      manualProfileData,
+      manualProfileData: manualData,
+      fileBuffer,
+      mimeType,
+      originalFileName,
     });
 
     logger.info('Baseline document uploaded successfully', {

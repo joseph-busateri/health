@@ -288,6 +288,30 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
         </CollapsibleSection>
 
         <CollapsibleSection
+          title="Bloodwork"
+          subtitle="Lab results and AI recommendations"
+          initiallyExpanded={false}
+        >
+          <DashboardCard title="Upload Bloodwork" subtitle="Add your lab results">
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => navigation.navigate('BloodworkUpload')}
+            >
+              <Text style={styles.headerButtonText}>Upload Results</Text>
+            </TouchableOpacity>
+          </DashboardCard>
+          
+          <DashboardCard title="View Recommendations" subtitle="AI-powered health insights">
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => navigation.navigate('BloodworkRecommendations', { userId: USER_ID })}
+            >
+              <Text style={styles.headerButtonText}>View Insights</Text>
+            </TouchableOpacity>
+          </DashboardCard>
+        </CollapsibleSection>
+
+        <CollapsibleSection
           title="Sexual Health"
           subtitle="Placeholder metrics"
           initiallyExpanded={false}

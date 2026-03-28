@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { 
-  SupplementDocument, 
+import {
+  SupplementDocument,
   SupplementDocumentInsert,
   SupplementBaseline,
   SupplementBaselineInsert,
@@ -12,8 +12,10 @@ import {
   SupplementChangeLogInsert,
   ManualSupplementData,
   SupplementDocumentResult,
-  SupplementBaselineWithItems
+  SupplementBaselineWithItems,
 } from '../types/supplementDocument';
+import { uploadFileToStorage, downloadFileFromStorage } from './storageService';
+import { extractTextFromBuffer } from './ocrService';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -21,19 +23,119 @@ const supabase = createClient(
 );
 
 // Create supplement document with baseline and items
+function parseSupplementText(ocrText: string): ManualSupplementData | undefined {
+  const cleaned = ocrText.replace(/\r/g, '').replace(/\t/g, ' ').trim();
+  if (!cleaned) return undefined;
+
+  const sections = cleaned.split(/\n\s*\n/).map(section => section.trim()).filter(Boolean);
+  const stackNameMatch = cleaned.match(/Stack Name[:\-]\s*(?<name>.+)/i);
+  const stackNotesMatch = cleaned.match(/Stack Notes[:\-]\s*(?<notes>.+)/i);
+  const timingNotesMatch = cleaned.match(/Timing Notes[:\-]\s*(?<notes>.+)/i);
+  const frequencyNotesMatch = cleaned.match(/Frequency Notes[:\-]\s*(?<notes>.+)/i);
+
+  const supplementsSection = sections.find(section => /supplements?/i.test(section));
+  const supplements: ManualSupplementData['supplements'] = [];
+
+  if (supplementsSection) {
+    const lines = supplementsSection.split(/\n|\*/).map(line => line.trim()).filter(Boolean);
+    for (const line of lines) {
+      const normalized = line.replace(/\s{2,}/g, ' ');
+      const match = normalized.match(/(?<name>[A-Za-z0-9\s]+?)\s*\-\s*(?<dosage>\d+(?:\.\d+)?)\s*(?<unit>[A-Za-z\/]+)?\s*\-\s*(?<frequency>[^-]+?)\s*\-\s*(?<timing>[^-]+?)\s*\-\s*(?<status>active|paused|removed)/i);
+      if (match?.groups) {
+        supplements.push({
+          supplementName: match.groups.name.trim(),
+          dosage: Number(match.groups.dosage),
+          dosageUnit: match.groups.unit?.trim() || 'unit',
+          frequency: match.groups.frequency.trim(),
+          timing: match.groups.timing.trim(),
+          status: match.groups.status.toLowerCase() as ManualSupplementData['supplements'][number]['status'],
+        });
+        continue;
+      }
+
+      const simpleMatch = normalized.match(/^(?<name>[A-Za-z0-9\s]+?)(?:\s*:\s*|\s*-\s*)(?<details>.+)$/);
+      if (simpleMatch?.groups) {
+        supplements.push({
+          supplementName: simpleMatch.groups.name.trim(),
+          dosage: 1,
+          dosageUnit: 'unit',
+          frequency: simpleMatch.groups.details.trim(),
+          timing: 'unspecified',
+          status: 'active',
+        });
+      }
+    }
+  }
+
+  const stackName = stackNameMatch?.groups?.name?.trim() || (supplements.length ? supplements[0].supplementName : undefined);
+  if (!stackName) {
+    return undefined;
+  }
+
+  return {
+    stackName,
+    stackNotes: stackNotesMatch?.groups?.notes?.trim(),
+    timingNotes: timingNotesMatch?.groups?.notes?.trim(),
+    frequencyNotes: frequencyNotesMatch?.groups?.notes?.trim(),
+    supplements: supplements.length
+      ? supplements.map(item => ({
+          ...item,
+          dosage: Number.isFinite(item.dosage) && item.dosage > 0 ? item.dosage : 1,
+          dosageUnit: item.dosageUnit || 'unit',
+          frequency: item.frequency || 'daily',
+          timing: item.timing || 'unspecified',
+          status: item.status || 'active',
+        }))
+      : [
+          {
+            supplementName: stackName,
+            dosage: 1,
+            dosageUnit: 'unit',
+            frequency: 'daily',
+            timing: 'unspecified',
+            status: 'active',
+          },
+        ],
+  };
+}
+
 export async function createSupplementDocument(
-  data: SupplementDocumentInsert & { manualSupplementData?: ManualSupplementData }
+  data: SupplementDocumentInsert & { manualSupplementData?: ManualSupplementData; fileBuffer?: Buffer; mimeType?: string; originalFileName?: string }
 ): Promise<SupplementDocumentResult> {
   try {
+    let storagePath = data.storage_path;
+    let fileReference = data.file_reference;
+    let manualSupplementData = data.manualSupplementData;
+
+    if (data.fileBuffer && !storagePath) {
+      const fileExtension = data.originalFileName ? `.${data.originalFileName.split('.').pop()}` : '.bin';
+      storagePath = `supplements/${data.user_id}/${Date.now()}${fileExtension}`;
+      const uploadResult = await uploadFileToStorage({
+        path: storagePath,
+        file: data.fileBuffer,
+        contentType: data.mimeType,
+      });
+      fileReference = uploadResult.publicUrl ?? storagePath;
+    }
+
+    if (!manualSupplementData && storagePath) {
+      const fileBuffer = await downloadFileFromStorage(storagePath);
+      const { text } = await extractTextFromBuffer(fileBuffer, data.mimeType);
+      manualSupplementData = parseSupplementText(text);
+    }
+
+    const parseStatus = manualSupplementData ? 'completed' : 'processing';
+    const extractionConfidence = manualSupplementData ? 0.95 : null;
+
     // 1. Create supplement document
     const { data: document, error: documentError } = await supabase
       .from('supplement_documents')
       .insert({
         user_id: data.user_id,
-        file_reference: data.file_reference,
-        storage_path: data.storage_path,
+        file_reference: fileReference,
+        storage_path: storagePath,
         document_type: data.document_type,
-        parse_status: 'processing',
+        parse_status: parseStatus,
         notes: data.notes,
       })
       .select()
@@ -48,10 +150,10 @@ export async function createSupplementDocument(
     let items: SupplementItem[] = [];
     let extractedSections: SupplementExtractedSection[] = [];
 
-    if (data.manualSupplementData) {
+    if (manualSupplementData) {
       // Process manual supplement data
-      const supplementData = data.manualSupplementData;
-      
+      const supplementData = manualSupplementData;
+
       // Create baseline
       const { data: createdBaseline, error: baselineError } = await supabase
         .from('supplement_baseline')
@@ -148,16 +250,18 @@ export async function createSupplementDocument(
     }
 
     // 3. Update document parse status
-    const { error: updateError } = await supabase
-      .from('supplement_documents')
-      .update({
-        parse_status: 'completed',
-        extraction_confidence: data.manualSupplementData ? 0.95 : 0.5,
-      })
-      .eq('id', document.id);
+    if (!manualSupplementData) {
+      const { error: updateError } = await supabase
+        .from('supplement_documents')
+        .update({
+          parse_status: 'completed',
+          extraction_confidence: 0.6,
+        })
+        .eq('id', document.id);
 
-    if (updateError) {
-      console.error('Failed to update document parse status:', updateError);
+      if (updateError) {
+        console.error('Failed to update document parse status:', updateError);
+      }
     }
 
     // 4. Log change (for future refinement tracking)

@@ -11,6 +11,9 @@ import type {
   BloodworkFilterOptions,
   BloodworkDocumentListItem,
   BloodworkUploadFormData,
+  BloodworkProcessingStatus,
+  BloodworkProcessingStats,
+  BloodworkDocumentStatusResponse,
 } from '../types/bloodwork';
 import {
   getDocumentTypeLabel,
@@ -35,30 +38,55 @@ class BloodworkService {
     userId: string
   ): Promise<BloodworkUploadResponse> {
     try {
+      console.log('🚀 Starting upload to server...');
+      console.log('📁 File:', request.file_name);
+      console.log('👤 User ID:', userId);
+      console.log('📄 File object:', request.file);
+      
+      // Create FormData properly for React Native
       const formData = new FormData();
-      formData.append('file', request.file);
+      
+      // Handle React Native file differently for web vs native
+      if (typeof window !== 'undefined' && (request.file as any).uri && (request.file as any).uri.startsWith('blob:')) {
+        // React Native Web - convert blob to actual file
+        const response = await fetch((request.file as any).uri);
+        const blob = await response.blob();
+        formData.append('file', blob, request.file_name);
+      } else {
+        // React Native native
+        formData.append('file', request.file as any);
+      }
+      
       formData.append('user_id', userId);
       formData.append('file_name', request.file_name);
       formData.append('document_type', request.document_type);
       formData.append('source', request.source);
       
-      if (request.test_date) {
-        formData.append('test_date', request.test_date);
-      }
-      
       if (request.notes) {
         formData.append('notes', request.notes);
       }
+
+      console.log('📤 Sending request to:', `${API_BASE_URL}/bloodwork/upload`);
+      console.log('📋 FormData prepared');
+
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
       const response = await fetch(`${API_BASE_URL}/bloodwork/upload`, {
         method: 'POST',
         body: formData,
         headers: {
-          'Content-Type': 'multipart/form-data',
+          // Don't set Content-Type for FormData - let the browser set it with boundary
         },
+        signal: controller.signal,
       });
 
+      clearTimeout(timeoutId);
+      console.log('📥 Response received:', response.status);
+
       const data = await response.json();
+      console.log('📄 Response data:', data);
 
       if (!response.ok) {
         return {
@@ -74,6 +102,16 @@ class BloodworkService {
         message: data.message || 'Bloodwork document uploaded successfully',
       };
     } catch (error) {
+      console.error('💥 Upload error:', error);
+      
+      if (error instanceof Error && error.name === 'AbortError') {
+        return {
+          success: false,
+          error: 'Request timed out',
+          message: 'Upload timed out after 30 seconds',
+        };
+      }
+      
       return {
         success: false,
         error: error instanceof Error ? error.message : 'Network error',
@@ -317,6 +355,65 @@ class BloodworkService {
     }
   }
 
+  async getBloodworkDocumentStatus(documentId: string): Promise<BloodworkDocumentStatusResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/bloodwork/document/${documentId}/status`);
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.error || 'Failed to fetch processing status',
+          message: data.message || 'Failed to retrieve bloodwork processing status',
+        };
+      }
+
+      return {
+        success: true,
+        data: data.data,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error',
+        message: 'Failed to retrieve bloodwork processing status',
+      };
+    }
+  }
+
+  async retryBloodworkProcessing(documentId: string, userId: string): Promise<{ success: boolean; error?: string; message?: string }> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/bloodwork/document/${documentId}/retry`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user_id: userId }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        return {
+          success: false,
+          error: data.error || 'Retry failed',
+          message: data.message || 'Failed to restart bloodwork processing',
+        };
+      }
+
+      return {
+        success: true,
+        message: data.message || 'Bloodwork processing retry started',
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Network error',
+        message: 'Failed to restart bloodwork processing',
+      };
+    }
+  }
+
   /**
    * Transform bloodwork documents for UI display
    */
@@ -338,6 +435,11 @@ class BloodworkService {
       formatted_date: formatTestDate(doc.test_date),
       formatted_upload_date: formatDate(doc.upload_date),
       formatted_file_size: formatFileSize(doc.file_size),
+      processing_status: ((doc as any).processing_status as BloodworkProcessingStatus) ?? 'uploaded',
+      processing_progress: (doc as any).processing_progress ?? null,
+      processing_error: (doc as any).processing_error ?? null,
+      processing_started_at: (doc as any).processing_started_at ?? null,
+      processing_completed_at: (doc as any).processing_completed_at ?? null,
     }));
   }
 
@@ -419,6 +521,11 @@ class BloodworkService {
       upload_date: document.upload_date,
       parse_status: document.parse_status,
       extraction_confidence: document.extraction_confidence,
+      processing_status: ((document as any).processing_status as BloodworkProcessingStatus) ?? 'uploaded',
+      processing_progress: (document as any).processing_progress ?? null,
+      processing_error: (document as any).processing_error ?? null,
+      processing_started_at: (document as any).processing_started_at ?? null,
+      processing_completed_at: (document as any).processing_completed_at ?? null,
       file_url: document.file_url,
     };
   }
@@ -432,6 +539,9 @@ class BloodworkService {
     pending: number;
     failed: number;
     successRate: number;
+    inProgress: number;
+    processingCounts: Record<BloodworkProcessingStatus, number>;
+    averageProcessingTimeMs: number | null;
   } {
     const successRate = stats.total_documents > 0 
       ? (stats.parsed_documents / stats.total_documents) * 100 
@@ -443,9 +553,13 @@ class BloodworkService {
       pending: stats.pending_documents,
       failed: stats.failed_documents,
       successRate: Math.round(successRate),
+      inProgress: stats.processing_stats?.in_progress || 0,
+      processingCounts: stats.processing_stats?.counts || {} as Record<BloodworkProcessingStatus, number>,
+      averageProcessingTimeMs: stats.processing_stats?.average_processing_time_ms ?? null,
     };
   }
 }
 
-export const bloodworkService = new BloodworkService();
+const bloodworkService = new BloodworkService();
+
 export default bloodworkService;

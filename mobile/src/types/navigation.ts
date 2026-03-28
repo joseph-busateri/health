@@ -18,6 +18,11 @@ export type RootStackParamList = {
   SupplementUpload: undefined;
   SupplementSummary: { baseline: SupplementBaseline; items: SupplementItem[] };
   PointInTimeState: undefined;
+  BloodworkUpload: undefined;
+  BloodworkResults: { userId: string };
+  BloodworkRecommendations: { userId: string };
+  BloodworkTimeline: { userId: string };
+  BloodworkTrends: { userId: string };
   // Future routes: set to undefined for now to keep extension lightweight.
   Reminders?: undefined;
   Nutrition?: undefined;

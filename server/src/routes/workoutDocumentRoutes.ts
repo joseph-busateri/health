@@ -3,12 +3,13 @@ import {
   uploadWorkoutDocument,
   getWorkoutBaselineHandler,
   getLatestWorkoutDocumentHandler,
+  uploadWorkoutMiddleware,
 } from '../controllers/workoutDocumentController';
 
 const router = Router();
 
 // POST /workout-document - Upload workout document
-router.post('/workout-document', uploadWorkoutDocument);
+router.post('/workout-document', uploadWorkoutMiddleware, uploadWorkoutDocument);
 
 // GET /workout-baseline/:user_id - Get workout baseline for user
 router.get('/workout-baseline/:userId', getWorkoutBaselineHandler);

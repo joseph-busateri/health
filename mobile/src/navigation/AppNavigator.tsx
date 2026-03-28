@@ -13,6 +13,11 @@ import WorkoutSummaryScreen from '../screens/WorkoutSummaryScreen';
 import SupplementUploadScreen from '../screens/SupplementUploadScreen';
 import SupplementSummaryScreen from '../screens/SupplementSummaryScreen';
 import PointInTimeStateScreen from '../screens/PointInTimeStateScreen';
+import BloodworkUploadScreen from '../screens/BloodworkUploadScreen';
+import BloodworkResultsScreen from '../screens/BloodworkResultsScreen';
+import BloodworkRecommendationsScreen from '../screens/BloodworkRecommendationsScreen';
+import BloodworkTimelineScreen from '../screens/BloodworkTimelineScreen';
+import BloodworkTrendsScreen from '../screens/BloodworkTrendsScreen';
 import type { RootStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -83,6 +88,31 @@ const AppNavigator: React.FC = () => (
       name="PointInTimeState"
       component={PointInTimeStateScreen}
       options={{ title: 'Point-in-Time State' }}
+    />
+    <Stack.Screen
+      name="BloodworkUpload"
+      component={BloodworkUploadScreen}
+      options={{ title: 'Upload Bloodwork' }}
+    />
+    <Stack.Screen
+      name="BloodworkResults"
+      component={BloodworkResultsScreen}
+      options={{ title: 'Bloodwork Results' }}
+    />
+    <Stack.Screen
+      name="BloodworkRecommendations"
+      component={BloodworkRecommendationsScreen}
+      options={{ title: 'Recommendations' }}
+    />
+    <Stack.Screen
+      name="BloodworkTimeline"
+      component={BloodworkTimelineScreen}
+      options={{ title: 'Bloodwork Timeline' }}
+    />
+    <Stack.Screen
+      name="BloodworkTrends"
+      component={BloodworkTrendsScreen}
+      options={{ title: 'Bloodwork Trends' }}
     />
   </Stack.Navigator>
 );

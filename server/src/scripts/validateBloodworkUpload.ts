@@ -228,24 +228,27 @@ const validateParseStatus = async (): Promise<ValidationResult> => {
       .order('created_at', { ascending: false })
       .limit(1)
       .single();
-    
+
     if (error) {
       return {
         success: false,
         message: `Failed to retrieve parse status: ${error.message}`
       };
     }
-    
-    if (!data || data.parse_status !== 'pending') {
+
+    const validStatuses: Array<'pending' | 'processing'> = ['pending', 'processing'];
+    const expectedStatuses = validStatuses.map(status => `'${status}'`).join(', ');
+
+    if (!data || !validStatuses.includes(data.parse_status as 'pending' | 'processing')) {
       return {
         success: false,
-        message: `Parse status not set correctly. Expected 'pending', got '${data?.parse_status}'`
+        message: `Parse status not set correctly. Expected one of ${expectedStatuses}, got '${data?.parse_status}'`
       };
     }
-    
+
     return {
       success: true,
-      message: 'Parse status set correctly to pending',
+      message: `Parse status set correctly to ${data.parse_status}`,
       details: {
         parse_status: data.parse_status
       }

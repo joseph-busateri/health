@@ -28,6 +28,16 @@ export type BloodworkParseStatus =
   | 'failed'
   | 'needs_review';
 
+export type BloodworkProcessingStatus =
+  | 'uploaded'
+  | 'pending'
+  | 'parsing'
+  | 'extracting'
+  | 'generating_trends'
+  | 'generating_recommendations'
+  | 'complete'
+  | 'failed';
+
 export interface BloodworkDocument {
   id: string;
   user_id: string;
@@ -41,6 +51,11 @@ export interface BloodworkDocument {
   upload_date: string;
   parse_status: BloodworkParseStatus;
   extraction_confidence?: number;
+  processing_status: BloodworkProcessingStatus;
+  processing_error?: string | null;
+  processing_started_at?: string | null;
+  processing_completed_at?: string | null;
+  processing_progress?: number | null;
   notes?: string;
   metadata?: Record<string, any>;
   created_at: string;
@@ -56,6 +71,11 @@ export interface BloodworkTimelineItem {
   upload_date: string;
   parse_status: BloodworkParseStatus;
   extraction_confidence?: number;
+  processing_status: BloodworkProcessingStatus;
+  processing_progress?: number | null;
+  processing_error?: string | null;
+  processing_started_at?: string | null;
+  processing_completed_at?: string | null;
   file_url: string;
 }
 
@@ -68,6 +88,7 @@ export interface BloodworkStats {
   avg_confidence?: number;
   documents_by_type: Record<BloodworkDocumentType, number>;
   documents_by_source: Record<BloodworkSource, number>;
+  processing_stats: BloodworkProcessingStats;
 }
 
 export interface BloodworkUploadRequest {
@@ -108,6 +129,24 @@ export interface BloodworkDocumentResponse {
   message?: string;
 }
 
+export interface BloodworkDocumentStatus {
+  document_id: string;
+  processing_status: BloodworkProcessingStatus;
+  processing_progress?: number | null;
+  processing_error?: string | null;
+  created_at: string;
+  updated_at: string;
+  processing_started_at?: string | null;
+  processing_completed_at?: string | null;
+}
+
+export interface BloodworkDocumentStatusResponse {
+  success: boolean;
+  data?: BloodworkDocumentStatus;
+  error?: string;
+  message?: string;
+}
+
 export interface BloodworkTimelineResponse {
   success: boolean;
   data?: BloodworkTimelineItem[];
@@ -141,6 +180,11 @@ export interface BloodworkDocumentListItem {
   formatted_date: string;
   formatted_upload_date: string;
   formatted_file_size: string;
+  processing_status: BloodworkProcessingStatus;
+  processing_progress?: number | null;
+  processing_error?: string | null;
+  processing_started_at?: string | null;
+  processing_completed_at?: string | null;
 }
 
 export interface BloodworkUploadFormData {
@@ -189,6 +233,12 @@ export const BloodworkParseStatusOptions = [
   { value: 'failed' as BloodworkParseStatus, label: 'Failed' },
   { value: 'needs_review' as BloodworkParseStatus, label: 'Needs Review' },
 ];
+
+export interface BloodworkProcessingStats {
+  counts: Record<BloodworkProcessingStatus, number>;
+  in_progress: number;
+  average_processing_time_ms: number | null;
+}
 
 // Helper functions
 export function getDocumentTypeLabel(type: BloodworkDocumentType): string {

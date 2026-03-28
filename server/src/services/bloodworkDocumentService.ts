@@ -15,8 +15,11 @@ import type {
   BloodworkUploadResponse,
   BloodworkDocumentType,
   BloodworkSource,
-  BloodworkParseStatus
+  BloodworkParseStatus,
+  BloodworkProcessingStatus,
+  BloodworkProcessingStats
 } from '../types/bloodworkDocument';
+import { BloodworkProcessingStatusValues } from '../types/bloodworkDocument';
 import { logger } from '../utils/logger';
 
 const supabase = createClient<any>(
@@ -54,6 +57,11 @@ export async function uploadBloodworkDocument(
         upload_date: new Date().toISOString(),
         parse_status: 'pending',
         extraction_confidence: null,
+        processing_status: 'uploaded',
+        processing_progress: 0,
+        processing_error: null,
+        processing_started_at: null,
+        processing_completed_at: null,
         notes: request.notes,
         metadata: request.metadata,
       })
@@ -333,6 +341,8 @@ export async function getBloodworkTimeline(
         upload_date,
         parse_status,
         extraction_confidence,
+        processing_status,
+        processing_progress,
         file_url
       `)
       .eq('user_id', userId)
@@ -379,7 +389,7 @@ export async function getBloodworkStats(
 
     // Get basic counts
     const { data: documents, error: docsError } = await bloodworkTable
-      .select('parse_status, document_type, source, extraction_confidence, upload_date')
+      .select('parse_status, document_type, source, extraction_confidence, upload_date, processing_status, processing_started_at, processing_completed_at')
       .eq('user_id', userId);
 
     if (docsError) {
@@ -445,6 +455,51 @@ export async function getBloodworkStats(
       }
     });
 
+    // Processing statistics
+    const processingCounts: Record<BloodworkProcessingStatus, number> = BloodworkProcessingStatusValues.reduce(
+      (acc, status) => {
+        acc[status] = 0;
+        return acc;
+      },
+      {} as Record<BloodworkProcessingStatus, number>
+    );
+
+    documents?.forEach(doc => {
+      const status = doc.processing_status as BloodworkProcessingStatus | undefined;
+      if (status && processingCounts[status] !== undefined) {
+        processingCounts[status] += 1;
+      }
+    });
+
+    const inProgressStatuses: BloodworkProcessingStatus[] = [
+      'pending',
+      'parsing',
+      'extracting',
+      'generating_trends',
+      'generating_recommendations',
+    ];
+
+    const inProgress = inProgressStatuses.reduce((sum, status) => sum + (processingCounts[status] || 0), 0);
+
+    const completedDurations: number[] = (documents || [])
+      .filter(doc => doc.processing_started_at && doc.processing_completed_at)
+      .map(doc => {
+        const start = new Date(doc.processing_started_at as string).getTime();
+        const end = new Date(doc.processing_completed_at as string).getTime();
+        return end - start;
+      })
+      .filter(duration => duration >= 0);
+
+    const averageProcessingTimeMs = completedDurations.length
+      ? completedDurations.reduce((sum, value) => sum + value, 0) / completedDurations.length
+      : null;
+
+    const processingStats: BloodworkProcessingStats = {
+      counts: processingCounts,
+      in_progress: inProgress,
+      average_processing_time_ms: averageProcessingTimeMs,
+    };
+
     logger.info('Bloodwork stats retrieved successfully', {
       userId,
       totalDocuments,
@@ -462,6 +517,7 @@ export async function getBloodworkStats(
         avg_confidence: avgConfidence,
         documents_by_type: documentsByType,
         documents_by_source: documentsBySource,
+        processing_stats: processingStats,
       },
     };
   } catch (error) {
