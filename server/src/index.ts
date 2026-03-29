@@ -17,6 +17,25 @@ import bloodworkRoutes from './routes/bloodworkRoutes';
 import bloodworkResultsRoutes from './routes/bloodworkResultsRoutes';
 import bloodworkTrendsRoutes from './routes/bloodworkTrendsRoutes';
 import bloodworkRecommendationsRoutes from './routes/bloodworkRecommendationsRoutes';
+import bodyCompositionRoutes from './routes/bodyCompositionRoutes';
+import workoutBaselineRoutes from './routes/workoutBaselineRoutes';
+import supplementBaselineRoutes from './routes/supplementBaselineRoutes';
+import strengthTrackingRoutes from './routes/strengthTrackingRoutes';
+import tapeMeasurementRoutes from './routes/tapeMeasurementRoutes';
+import nutritionExtractionRoutes from './routes/nutritionExtractionRoutes';
+import interviewAgentRoutes from './routes/interviewAgentRoutes';
+import supplementEngineRoutes from './routes/supplementEngineRoutes';
+import recoveryEngineRoutes from './routes/recoveryEngineRoutes';
+import stressEngineRoutes from './routes/stressEngineRoutes';
+import jointHealthEngineRoutes from './routes/jointHealthEngineRoutes';
+import adherenceEngineRoutes from './routes/adherenceEngineRoutes';
+import notificationStateRoutes from './routes/notificationStateRoutes';
+import dynamicFollowUpRoutes from './routes/dynamicFollowUpRoutes';
+import healthDataHubRoutes from './routes/healthDataHubRoutes';
+import controlTowerRoutes from './routes/controlTowerRoutes';
+
+// New API Routes - Health Optimization Systems
+import apiRoutes from './routes/index';
 
 dotenv.config();
 
@@ -54,6 +73,25 @@ app.use('/bloodwork', bloodworkRoutes);
 app.use('/bloodwork', bloodworkResultsRoutes);
 app.use('/bloodwork', bloodworkTrendsRoutes);
 app.use('/bloodwork', bloodworkRecommendationsRoutes);
+app.use('/', bodyCompositionRoutes);
+app.use('/', workoutBaselineRoutes);
+app.use('/', supplementBaselineRoutes);
+app.use('/', strengthTrackingRoutes);
+app.use('/', tapeMeasurementRoutes);
+app.use('/', nutritionExtractionRoutes);
+app.use('/', interviewAgentRoutes);
+app.use('/', supplementEngineRoutes);
+app.use('/', recoveryEngineRoutes);
+app.use('/', stressEngineRoutes);
+app.use('/', jointHealthEngineRoutes);
+app.use('/', adherenceEngineRoutes);
+app.use('/', notificationStateRoutes);
+app.use('/', dynamicFollowUpRoutes);
+app.use('/health-data', healthDataHubRoutes);
+app.use('/', controlTowerRoutes);
+
+// Mount new API routes under /api prefix
+app.use('/api', apiRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Health API Server is running!' });

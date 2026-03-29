@@ -2,6 +2,9 @@
 
 A React Native + Expo frontend with Node.js + Express backend.
 
+> Primary System Specification: `docs/PRODUCT_SPEC_VERSION_13_PERSONAL_HEALTH_PERFORMANCE_AGENT.md`
+> Specification Versions Index: `docs/SPECIFICATION_VERSIONS.md`
+
 ## Structure
 - `/mobile` - React Native Expo app with TypeScript
 - `/server` - Node.js Express API with TypeScript
@@ -130,6 +133,35 @@ OPENAI_EMBEDDING_MODEL=text-embedding-3-small
    - **Failure Test** – lists common issues and mitigations
 
 > **Note:** The script requires valid Supabase/OpenAI credentials and the `match_daily_logs` function. It will fail locally until those resources are provisioned.
+
+## Health Input Validation Scripts
+
+Run these from `server/` to validate the new Health Data Hub endpoints:
+
+```bash
+npm run validate:health-inputs
+```
+- Positive smoke tests for:
+  - body composition
+  - strength tracking
+  - tape measurements
+  - nutrition extraction
+
+```bash
+npm run validate:health-inputs:negative
+```
+- Negative/guardrail tests for required fields and invalid payloads.
+
+```bash
+npm run validate:health-inputs:all
+```
+- Runs both suites sequentially (recommended for regression checks).
+
+If your API is not on the default `http://localhost:3000`, set:
+
+```bash
+API_BASE_URL=http://localhost:3010 npm run validate:health-inputs:all
+```
 
 ## Project Structure
 ```

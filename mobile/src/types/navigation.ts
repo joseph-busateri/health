@@ -15,8 +15,15 @@ export type RootStackParamList = {
   BaselineSummary: { profile: BaselineProfile };
   WorkoutUpload: undefined;
   WorkoutSummary: { baseline: WorkoutBaseline };
+  WorkoutToday: { userId: string };
+  RecoveryStatus: { userId: string };
+  StressStatus: { userId: string };
+  JointHealthStatus: { userId: string };
+  AdherenceStatus: { userId: string };
+  NotificationSettings: undefined;
   SupplementUpload: undefined;
   SupplementSummary: { baseline: SupplementBaseline; items: SupplementItem[] };
+  SupplementRecommendations: { userId: string };
   PointInTimeState: undefined;
   BloodworkUpload: undefined;
   BloodworkResults: { userId: string };

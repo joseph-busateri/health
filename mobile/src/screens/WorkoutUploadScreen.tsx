@@ -2,18 +2,16 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
-  TouchableOpacity,
+  StyleSheet,
   ScrollView,
+  TouchableOpacity,
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { uploadWorkoutDocument, ManualWorkoutData } from '../services/workoutDocumentService';
+import * as DocumentPicker from 'expo-document-picker';
+import { Ionicons } from '@expo/vector-icons';
 
-type Props = NativeStackScreenProps<any, 'WorkoutUpload'>;
-
-const WorkoutUploadScreen: React.FC<Props> = ({ navigation }) => {
+export default function WorkoutUploadScreen() {
   const [loading, setLoading] = useState(false);
   const [documentType, setDocumentType] = useState('manual_entry');
   const [programStartDate, setProgramStartDate] = useState('');

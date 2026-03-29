@@ -2,11 +2,10 @@ import { Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { File as MulterFile } from 'multer';
 
 // Extend Request type to include file property
 interface AuthenticatedRequest extends Request {
-  file?: MulterFile;
+  file?: Express.Multer.File;
 }
 import {
   uploadBloodworkDocument,
@@ -232,9 +231,15 @@ export const getBloodworkDocumentController = async (req: Request, res: Response
       });
     }
 
+    const resolvedUserId = typeof user_id === 'string'
+      ? user_id
+      : Array.isArray(user_id) && typeof user_id[0] === 'string'
+        ? user_id[0]
+        : undefined;
+
     const request: GetBloodworkDocumentRequest = {
       id: Array.isArray(id) ? id[0] : id,
-      user_id: Array.isArray(user_id) ? user_id[0] : user_id,
+      user_id: resolvedUserId,
     };
 
     const result = await getBloodworkDocument(request);

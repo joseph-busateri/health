@@ -2,7 +2,7 @@
 CREATE TABLE IF NOT EXISTS bloodwork_results (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   document_id UUID NOT NULL REFERENCES bloodwork_documents(id) ON DELETE CASCADE,
-  user_id UUID NOT NULL,
+  user_id TEXT NOT NULL,
   raw_test_name TEXT NOT NULL,
   normalized_test_name TEXT,
   category TEXT,
@@ -31,21 +31,28 @@ CREATE INDEX IF NOT EXISTS idx_bloodwork_results_user_date ON bloodwork_results(
 -- Create RLS policies
 ALTER TABLE bloodwork_results ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies to make migration rerunnable
+DROP POLICY IF EXISTS "Users can read own bloodwork results" ON bloodwork_results;
+DROP POLICY IF EXISTS "Users can insert own bloodwork results" ON bloodwork_results;
+DROP POLICY IF EXISTS "Users can update own bloodwork results" ON bloodwork_results;
+DROP POLICY IF EXISTS "Users can delete own bloodwork results" ON bloodwork_results;
+DROP POLICY IF EXISTS "Service role full access to bloodwork_results" ON bloodwork_results;
+
 -- Policy: Users can only read their own results
 CREATE POLICY "Users can read own bloodwork results" ON bloodwork_results
-  FOR SELECT USING (auth.uid() = user_id);
+  FOR SELECT USING (auth.uid()::text = user_id);
 
 -- Policy: Users can only insert their own results
 CREATE POLICY "Users can insert own bloodwork results" ON bloodwork_results
-  FOR INSERT WITH CHECK (auth.uid() = user_id);
+  FOR INSERT WITH CHECK (auth.uid()::text = user_id);
 
 -- Policy: Users can only update their own results
 CREATE POLICY "Users can update own bloodwork results" ON bloodwork_results
-  FOR UPDATE USING (auth.uid() = user_id);
+  FOR UPDATE USING (auth.uid()::text = user_id);
 
 -- Policy: Users can only delete their own results
 CREATE POLICY "Users can delete own bloodwork results" ON bloodwork_results
-  FOR DELETE USING (auth.uid() = user_id);
+  FOR DELETE USING (auth.uid()::text = user_id);
 
 -- Policy: Service role has full access
 CREATE POLICY "Service role full access to bloodwork_results" ON bloodwork_results

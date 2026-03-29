@@ -25,6 +25,20 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "health-optimization-app"
+      }
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to upload health-related images.",
+          "cameraPermission": "The app needs access to your camera to take photos for health tracking."
+        }
+      ]
+    ]
   }
 }

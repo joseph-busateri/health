@@ -22,6 +22,12 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+const baselineOverrideStore = new Map<string, SupplementBaselineWithItems>();
+
+export const seedSupplementBaselineOverride = (userId: string, baseline: SupplementBaselineWithItems) => {
+  baselineOverrideStore.set(userId, baseline);
+};
+
 // Create supplement document with baseline and items
 function parseSupplementText(ocrText: string): ManualSupplementData | undefined {
   const cleaned = ocrText.replace(/\r/g, '').replace(/\t/g, ' ').trim();
@@ -312,6 +318,11 @@ export async function getLatestSupplementDocument(userId: string): Promise<Suppl
 // Get supplement baseline with items for user
 export async function getSupplementBaseline(userId: string): Promise<SupplementBaselineWithItems | null> {
   try {
+    const override = baselineOverrideStore.get(userId);
+    if (override) {
+      return override;
+    }
+
     // Get the latest baseline
     const { data: baseline, error: baselineError } = await supabase
       .from('supplement_baseline')

@@ -251,20 +251,52 @@ const DashboardScreen: React.FC<Props> = ({ navigation }) => {
           initiallyExpanded
         >
           {latestLog ? (
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Sleep Hours</Text>
-                <Text style={styles.metricValue}>{latestLog.sleepHours}</Text>
+            <>
+              <View style={styles.metricsGrid}>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Sleep Hours</Text>
+                  <Text style={styles.metricValue}>{latestLog.sleepHours}</Text>
+                </View>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Stress Level</Text>
+                  <Text style={styles.metricValue}>{latestLog.stressLevel}</Text>
+                </View>
+                <View style={styles.metricCard}>
+                  <Text style={styles.metricLabel}>Recovery Score</Text>
+                  <Text style={styles.metricValue}>{dashboard?.recoveryScore ?? '—'}</Text>
+                </View>
               </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Stress Level</Text>
-                <Text style={styles.metricValue}>{latestLog.stressLevel}</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Recovery Score</Text>
-                <Text style={styles.metricValue}>{dashboard?.recoveryScore ?? '—'}</Text>
-              </View>
-            </View>
+              <TouchableOpacity
+                style={styles.sectionActionButton}
+                onPress={() => navigation.navigate('RecoveryStatus', { userId: USER_ID })}
+              >
+                <Text style={styles.sectionActionText}>View Recovery Engine</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sectionActionButton}
+                onPress={() => navigation.navigate('StressStatus', { userId: USER_ID })}
+              >
+                <Text style={styles.sectionActionText}>View Stress / CNS Engine</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sectionActionButton}
+                onPress={() => navigation.navigate('JointHealthStatus', { userId: USER_ID })}
+              >
+                <Text style={styles.sectionActionText}>View Joint / Injury Engine</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sectionActionButton}
+                onPress={() => navigation.navigate('AdherenceStatus', { userId: USER_ID })}
+              >
+                <Text style={styles.sectionActionText}>View Adherence Engine</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.sectionActionButton}
+                onPress={() => navigation.navigate('NotificationSettings')}
+              >
+                <Text style={styles.sectionActionText}>⏰ Notification Settings</Text>
+              </TouchableOpacity>
+            </>
           ) : (
             <Text style={styles.placeholderText}>No recovery data yet. Log a daily check-in to unlock insights.</Text>
           )}

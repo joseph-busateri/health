@@ -3,11 +3,13 @@
     "target": "ES2020",
     "module": "commonjs",
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "rootDir": "./src",
     "outDir": "./dist",
     "esModuleInterop": true,
     "skipLibCheck": true,
     "strict": false,
-    "moduleResolution": "node"
+    "moduleResolution": "node",
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

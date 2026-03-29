@@ -30,7 +30,7 @@ async function testUpload() {
 
     const response = await fetch(`${API_BASE_URL}/bloodwork/upload`, {
       method: 'POST',
-      body: formData,
+      body: formData as unknown as BodyInit,
       headers: {
         ...formData.getHeaders(),
       },

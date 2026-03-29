@@ -178,6 +178,149 @@ export interface Database {
           updated_at?: string;
         };
       };
+      supplement_baseline: {
+        Row: {
+          id: string;
+          user_id: string;
+          document_id: string;
+          stack_name: string;
+          stack_notes?: string;
+          total_active_items?: number;
+          timing_notes?: string;
+          frequency_notes?: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          document_id: string;
+          stack_name: string;
+          stack_notes?: string;
+          total_active_items?: number;
+          timing_notes?: string;
+          frequency_notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          document_id?: string;
+          stack_name?: string;
+          stack_notes?: string;
+          total_active_items?: number;
+          timing_notes?: string;
+          frequency_notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      supplement_items: {
+        Row: {
+          id: string;
+          supplement_baseline_id: string;
+          supplement_name: string;
+          dosage?: string;
+          dosage_unit?: string;
+          frequency?: string;
+          timing_notes?: string;
+          notes?: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          supplement_baseline_id: string;
+          supplement_name: string;
+          dosage?: string;
+          dosage_unit?: string;
+          frequency?: string;
+          timing_notes?: string;
+          notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          supplement_baseline_id?: string;
+          supplement_name?: string;
+          dosage?: string;
+          dosage_unit?: string;
+          frequency?: string;
+          timing_notes?: string;
+          notes?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      supplement_extracted_sections: {
+        Row: {
+          id: string;
+          user_id: string;
+          document_id: string;
+          raw_text: string;
+          normalized_name?: string;
+          extraction_confidence?: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          document_id: string;
+          raw_text: string;
+          normalized_name?: string;
+          extraction_confidence?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          document_id?: string;
+          raw_text?: string;
+          normalized_name?: string;
+          extraction_confidence?: number;
+          created_at?: string;
+        };
+      };
+      supplement_change_log: {
+        Row: {
+          id: string;
+          user_id: string;
+          supplement_baseline_id: string;
+          field_name: string;
+          old_value?: string;
+          new_value?: string;
+          change_source: string;
+          rationale?: string;
+          changed_at: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          supplement_baseline_id: string;
+          field_name: string;
+          old_value?: string;
+          new_value?: string;
+          change_source: string;
+          rationale?: string;
+          changed_at?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          supplement_baseline_id?: string;
+          field_name?: string;
+          old_value?: string;
+          new_value?: string;
+          change_source?: string;
+          rationale?: string;
+          changed_at?: string;
+          created_at?: string;
+        };
+      };
       change_events: {
         Row: {
           id: string;

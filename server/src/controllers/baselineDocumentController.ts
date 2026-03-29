@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { File as MulterFile } from 'multer';
 import {
   createBaselineDocument,
   getLatestBaselineDocument,
@@ -14,7 +13,7 @@ import { logger } from '../utils/logger';
 import { uploadFileToStorage } from '../services/storageService';
 
 interface BaselineUploadRequest extends Request {
-  file?: MulterFile;
+  file?: Express.Multer.File;
 }
 
 const storage = multer.memoryStorage();

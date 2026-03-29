@@ -2,13 +2,12 @@ import { Request, Response } from 'express';
 import multer from 'multer';
 import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
-import type { File as MulterFile } from 'multer';
 import { createSupplementDocument, getLatestSupplementDocument, getSupplementBaseline } from '../services/supplementDocumentService';
 import { CreateSupplementDocumentRequest, ManualSupplementData } from '../types/supplementDocument';
 import { uploadFileToStorage } from '../services/storageService';
 
 interface SupplementUploadRequest extends Request {
-  file?: MulterFile;
+  file?: Express.Multer.File;
 }
 
 const storage = multer.memoryStorage();

@@ -93,8 +93,9 @@ ALTER TABLE public.bloodwork_results
 ALTER TABLE public.bloodwork_results
   ALTER COLUMN abnormal_flag TYPE TEXT USING
     CASE
-      WHEN abnormal_flag IS TRUE THEN 'true'
-      WHEN abnormal_flag IS FALSE THEN 'false'
+      WHEN abnormal_flag IS NULL THEN NULL
+      WHEN LOWER(abnormal_flag::text) IN ('t', 'true') THEN 'true'
+      WHEN LOWER(abnormal_flag::text) IN ('f', 'false') THEN 'false'
       ELSE NULL
     END;
 

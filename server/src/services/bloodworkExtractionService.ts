@@ -68,6 +68,13 @@ const FALLBACK_RESULTS: ExtractedBloodworkResult[] = [
 
 const PANEL_HEADER_RULES: Array<{ regex: RegExp; panel: ExtractedBloodworkPanel }> = [
   {
+    regex: /^complete blood count with differential/i,
+    panel: {
+      panel_name: 'CBC with Differential',
+      panel_category: 'hematology',
+    },
+  },
+  {
     regex: /^complete blood count/i,
     panel: {
       panel_name: 'Complete Blood Count',
@@ -172,7 +179,7 @@ function parseBloodworkText(documentContent: string): {
     .map(line => line.trim())
     .filter(line => line.length > 0);
 
-  const valueRegex = /^(?<name>[A-Za-z0-9+\/\-\s%()]+?)(?:[:\-])?\s*(?<value>[<>]=?\s*\d+(?:\.\d+)?)(?<unit>\s*(?:mg\/dL|g\/dL|IU\/L|ng\/mL|pg\/mL|mmol\/L|µIU\/mL|mcg\/dL|\%|ng\/dL|U\/L|kU\/L|x10\^3\/µL|x10\^6\/µL)?)\s*(?:\(|\[)?(?<range>(?:[^)\]]+))?(?:\)|\])?(?<remainder>.*)$/i;
+  const valueRegex = /^(?<name>[^:]+?)(?:\s*[:\-]\s*|\s+)(?<value>(?:[<>]=?\s*)?-?\d+(?:\.\d+)?)(?:\s+(?<unit>[A-Za-z%µμ\/\^\d\.\-]+))?\s*(?:\((?<parenRange>[^)]*)\)|\[(?<bracketRange>[^\]]*)\])?\s*(?<remainder>.*)$/i;
 
   for (const line of lines) {
     const headerRule = PANEL_HEADER_RULES.find(rule => rule.regex.test(line));
@@ -185,21 +192,25 @@ function parseBloodworkText(documentContent: string): {
       continue;
     }
 
+    if (!currentPanel) {
+      continue;
+    }
+
     const match = valueRegex.exec(line.replace(/\s{2,}/g, ' ').trim());
     if (!match || !match.groups) {
       continue;
     }
 
-    const rawName = match.groups.name?.trim();
+    const rawName = match.groups.name?.replace(/:$/, '').trim();
     const valueText = match.groups.value?.trim();
     const unit = match.groups.unit?.trim() || undefined;
-    const rangeGroup = match.groups.range;
+    const rangeGroup = match.groups.parenRange || match.groups.bracketRange;
 
     if (!rawName || !valueText) {
       continue;
     }
 
-    const numericValue = Number(valueText);
+    const numericValue = Number(valueText.replace(/^[<>]=?\s*/, ''));
     if (Number.isNaN(numericValue)) {
       continue;
     }
@@ -429,7 +440,9 @@ export async function parseBloodworkDocument(
         results_extracted: extractionResult.results.length,
         results: savedResults.data?.results || [],
         confidence: extractionResult.confidence,
-        processing_time: extractionResult.processing_time
+        processing_time: extractionResult.processing_time,
+        panels_detected: extractionResult.panels,
+        panel_count: extractionResult.panels.length
       },
       message: 'Bloodwork document parsed successfully'
     };

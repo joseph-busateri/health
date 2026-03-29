@@ -152,6 +152,13 @@ const WorkoutSummaryScreen: React.FC<Props> = ({ route, navigation }) => {
         {/* Action Buttons */}
         <View className="mt-6 space-y-3">
           <TouchableOpacity
+            onPress={() => navigation.navigate('WorkoutToday', { userId: baseline.userId })}
+            className="bg-emerald-600 py-3 px-4 rounded-md"
+          >
+            <Text className="text-center text-white font-medium">View Today&apos;s Workout</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             onPress={() => navigation.goBack()}
             className="bg-gray-200 py-3 px-4 rounded-md"
           >

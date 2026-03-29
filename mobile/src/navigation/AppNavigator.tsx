@@ -1,8 +1,10 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import { useNotificationDeepLinking } from '../hooks/useNotificationDeepLinking';
 import DailyCheckInScreen from '../screens/DailyCheckInScreen';
 import DashboardScreen from '../screens/DashboardScreen';
+import DashboardV13Screen from '../screens/DashboardV13Screen';
 import DetailsScreen from '../screens/DetailsScreen';
 import MealPhotoScreen from '../screens/MealPhotoScreen';
 import PhysiqueScanScreen from '../screens/PhysiqueScanScreen';
@@ -10,8 +12,15 @@ import { BaselineUploadScreen } from '../screens/BaselineUploadScreen';
 import { BaselineSummaryScreen } from '../screens/BaselineSummaryScreen';
 import WorkoutUploadScreen from '../screens/WorkoutUploadScreen';
 import WorkoutSummaryScreen from '../screens/WorkoutSummaryScreen';
+import WorkoutTodayScreen from '../screens/WorkoutTodayScreen';
+import RecoveryStatusScreen from '../screens/RecoveryStatusScreen';
+import StressStatusScreen from '../screens/StressStatusScreen';
+import JointHealthStatusScreen from '../screens/JointHealthStatusScreen';
+import AdherenceStatusScreen from '../screens/AdherenceStatusScreen';
+import NotificationSettingsScreen from '../screens/NotificationSettingsScreen';
 import SupplementUploadScreen from '../screens/SupplementUploadScreen';
 import SupplementSummaryScreen from '../screens/SupplementSummaryScreen';
+import SupplementRecommendationsScreen from '../screens/SupplementRecommendationsScreen';
 import PointInTimeStateScreen from '../screens/PointInTimeStateScreen';
 import BloodworkUploadScreen from '../screens/BloodworkUploadScreen';
 import BloodworkResultsScreen from '../screens/BloodworkResultsScreen';
@@ -22,17 +31,25 @@ import type { RootStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-const AppNavigator: React.FC = () => (
+const AppNavigator: React.FC = () => {
+  useNotificationDeepLinking();
+
+  return (
   <Stack.Navigator
-    initialRouteName="Dashboard"
+    initialRouteName="DashboardV13"
     screenOptions={{
       headerTitleAlign: 'center',
     }}
   >
     <Stack.Screen
+      name="DashboardV13"
+      component={DashboardV13Screen}
+      options={{ title: 'Health Dashboard V13' }}
+    />
+    <Stack.Screen
       name="Dashboard"
       component={DashboardScreen}
-      options={{ title: 'Health Dashboard' }}
+      options={{ title: 'Health Dashboard (Legacy)' }}
     />
     <Stack.Screen
       name="Details"
@@ -75,6 +92,36 @@ const AppNavigator: React.FC = () => (
       options={{ title: 'Workout Summary' }}
     />
     <Stack.Screen
+      name="WorkoutToday"
+      component={WorkoutTodayScreen}
+      options={{ title: 'Workout Today' }}
+    />
+    <Stack.Screen
+      name="RecoveryStatus"
+      component={RecoveryStatusScreen}
+      options={{ title: 'Recovery Status' }}
+    />
+    <Stack.Screen
+      name="StressStatus"
+      component={StressStatusScreen}
+      options={{ title: 'Stress / CNS Status' }}
+    />
+    <Stack.Screen
+      name="JointHealthStatus"
+      component={JointHealthStatusScreen}
+      options={{ title: 'Joint / Injury Status' }}
+    />
+    <Stack.Screen
+      name="AdherenceStatus"
+      component={AdherenceStatusScreen}
+      options={{ title: 'Adherence Status' }}
+    />
+    <Stack.Screen
+      name="NotificationSettings"
+      component={NotificationSettingsScreen}
+      options={{ title: 'Notification Settings' }}
+    />
+    <Stack.Screen
       name="SupplementUpload"
       component={SupplementUploadScreen}
       options={{ title: 'Upload Supplement Stack' }}
@@ -83,6 +130,11 @@ const AppNavigator: React.FC = () => (
       name="SupplementSummary"
       component={SupplementSummaryScreen}
       options={{ title: 'Supplement Summary' }}
+    />
+    <Stack.Screen
+      name="SupplementRecommendations"
+      component={SupplementRecommendationsScreen}
+      options={{ title: 'Supplement Recommendations' }}
     />
     <Stack.Screen
       name="PointInTimeState"
@@ -115,6 +167,7 @@ const AppNavigator: React.FC = () => (
       options={{ title: 'Bloodwork Trends' }}
     />
   </Stack.Navigator>
-);
+  );
+};
 
 export default AppNavigator;

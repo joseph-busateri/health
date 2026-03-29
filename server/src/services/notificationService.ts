@@ -1,10 +1,19 @@
 import { logger } from '../utils/logger';
 
 export type BloodworkNotificationType = 'complete' | 'failed';
+export type InterviewNotificationType = 'daily_prompt_ready';
 
 interface BloodworkNotificationPayload {
   documentId: string;
   errorMessage?: string;
+}
+
+interface DailyInterviewNotificationPayload {
+  sessionId: string;
+  date: string;
+  primaryPrompt: string;
+  followUpPrompt?: string;
+  dynamicQuestions: string[];
 }
 
 /**
@@ -18,6 +27,19 @@ export async function sendBloodworkProcessingNotification(
   payload: BloodworkNotificationPayload
 ): Promise<void> {
   logger.info('Bloodwork processing notification', {
+    userId,
+    type,
+    payload,
+  });
+}
+
+export async function sendDailyInterviewNotification(
+  userId: string,
+  payload: DailyInterviewNotificationPayload
+): Promise<void> {
+  const type: InterviewNotificationType = 'daily_prompt_ready';
+
+  logger.info('Daily interview notification', {
     userId,
     type,
     payload,
