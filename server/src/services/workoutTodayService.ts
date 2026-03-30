@@ -55,11 +55,6 @@ const resolveLaggingMuscle = async (
     return undefined;
   }
 
-  const metadataLag = latest.metadata?.lagging_muscle_group;
-  if (typeof metadataLag === 'string' && metadataLag.trim().length > 0) {
-    return metadataLag.trim();
-  }
-
   if (typeof latest.notes === 'string' && latest.notes.toLowerCase().includes('lagging')) {
     return latest.notes;
   }

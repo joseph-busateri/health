@@ -75,7 +75,7 @@ export const createTrainingCycleHandler = async (req: Request, res: Response, ne
 
 export const getCurrentTrainingCycleHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.params.user_id;
+    const userId = Array.isArray(req.params.user_id) ? req.params.user_id[0] : req.params.user_id;
     if (!userId) {
       return res.status(400).json({ success: false, error: 'user_id is required' });
     }
@@ -124,7 +124,7 @@ export const createWorkoutPlanVersionHandler = async (req: Request, res: Respons
 
 export const getCurrentWorkoutPlanHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.params.user_id;
+    const userId = Array.isArray(req.params.user_id) ? req.params.user_id[0] : req.params.user_id;
     if (!userId) {
       return res.status(400).json({ success: false, error: 'user_id is required' });
     }
@@ -172,7 +172,7 @@ export const logWorkoutExecutionHandler = async (req: Request, res: Response, ne
 
 export const getWorkoutExecutionHistoryHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.params.user_id;
+    const userId = Array.isArray(req.params.user_id) ? req.params.user_id[0] : req.params.user_id;
     const days = req.query.days ? parseInt(req.query.days as string) : 30;
 
     if (!userId) {

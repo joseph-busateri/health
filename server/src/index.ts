@@ -2,6 +2,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'path';
 import healthRoutes from './routes/health';
 import dailyLogsRoutes from './routes/dailyLogs';
 import structuredDailyLogRoutes from './routes/dailyLogRoutes';
@@ -49,6 +50,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 app.use(express.json());
+app.use(express.static(path.join(__dirname, '../public')));
 
 app.get('/health', (_req, res) => {
   res.json({

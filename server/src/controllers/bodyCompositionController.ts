@@ -79,7 +79,7 @@ export const createBodyCompositionScanHandler = async (req: Request, res: Respon
 
 export const getLatestBodyCompositionHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.params.user_id;
+    const userId = Array.isArray(req.params.user_id) ? req.params.user_id[0] : req.params.user_id;
     if (!userId) {
       return res.status(400).json({ success: false, error: 'user_id is required' });
     }
@@ -98,7 +98,7 @@ export const getLatestBodyCompositionHandler = async (req: Request, res: Respons
 
 export const getBodyCompositionHistory = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.params.user_id;
+    const userId = Array.isArray(req.params.user_id) ? req.params.user_id[0] : req.params.user_id;
     const limit = req.query.limit ? parseInt(req.query.limit as string) : 30;
 
     if (!userId) {
@@ -118,14 +118,14 @@ export const getBodyCompositionHistory = async (req: Request, res: Response, nex
 
 export const getBodyCompositionTrendsHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.params.user_id;
-    const days = req.query.days ? parseInt(req.query.days as string) : 30;
+    const userId = Array.isArray(req.params.user_id) ? req.params.user_id[0] : req.params.user_id;
+    const months = req.query.months ? parseInt(req.query.months as string) : 6;
 
     if (!userId) {
       return res.status(400).json({ success: false, error: 'user_id is required' });
     }
 
-    const trends = await getBodyCompositionTrends(userId, days);
+    const trends = await getBodyCompositionTrends(userId, months);
     
     // Calculate summary
     const summary = {
@@ -178,7 +178,7 @@ export const createBodyCompositionGoalHandler = async (req: Request, res: Respon
 
 export const getActiveGoalsHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.params.user_id;
+    const userId = Array.isArray(req.params.user_id) ? req.params.user_id[0] : req.params.user_id;
     if (!userId) {
       return res.status(400).json({ success: false, error: 'user_id is required' });
     }
@@ -192,7 +192,8 @@ export const getActiveGoalsHandler = async (req: Request, res: Response, next: N
 
 export const getGoalProgressHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const goalId = req.params.goal_id;
+    const goalId = Array.isArray(req.params.goal_id) ? req.params.goal_id[0] : req.params.goal_id;
+
     if (!goalId) {
       return res.status(400).json({ success: false, error: 'goal_id is required' });
     }
@@ -210,9 +211,9 @@ export const getGoalProgressHandler = async (req: Request, res: Response, next: 
 
 export const detectAnomaliesHandler = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const userId = req.params.user_id;
-    const scanId = req.params.scan_id;
-
+    const userId = Array.isArray(req.params.user_id) ? req.params.user_id[0] : req.params.user_id;
+    const scanId = Array.isArray(req.params.scan_id) ? req.params.scan_id[0] : req.params.scan_id;
+    
     if (!userId || !scanId) {
       return res.status(400).json({ success: false, error: 'user_id and scan_id are required' });
     }

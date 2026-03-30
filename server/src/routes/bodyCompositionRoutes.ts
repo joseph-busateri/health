@@ -34,4 +34,22 @@ router.get('/body-composition/goal/:goal_id/progress', getGoalProgressHandler);
 // Anomaly detection
 router.get('/body-composition/anomalies/:user_id/:scan_id', detectAnomaliesHandler);
 
+// Test endpoint with mock data
+router.get('/body-composition/test/:user_id', (req, res) => {
+  res.json({
+    success: true,
+    data: {
+      userId: req.params.user_id,
+      scanDate: new Date().toISOString(),
+      weightLb: 185.5,
+      bodyFatPercentage: 15.2,
+      muscleMassLb: 157.3,
+      visceralFatLevel: 8,
+      bmr: 1850,
+      metabolicAge: 28,
+      notes: "Good progress on muscle gain"
+    }
+  });
+});
+
 export default router;

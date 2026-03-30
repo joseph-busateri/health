@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { supabase } from '../config/supabase';
 import { extractTextFromBuffer } from './ocrService';
 import { parseInBodyScan } from '../utils/inbodyParser';
-import logger from '../utils/logger';
+import { logger } from '../utils/logger';
 
 import type {
   BodyCompositionScan,

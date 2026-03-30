@@ -2,7 +2,7 @@
 // Parses OCR text from InBody scale images (S2, 570, 770, etc.)
 
 import type { ParsedScanData, Gender } from '../types/bodyComposition';
-import logger from './logger';
+import { logger } from '../utils/logger';
 
 export const parseInBodyScan = (extractedText: string): ParsedScanData | null => {
   try {

@@ -35,6 +35,8 @@ npm install
 cp .env.example .env
 npm run dev
 ```
+cd server
+npm run dev
 
 ### Mobile App Setup
 ```bash
@@ -43,6 +45,8 @@ npm install
 cp .env.example .env
 npm start
 ```
+cd mobile
+npm start
 
 ## Running the App
 1. Start the server: `cd server && npm run dev`
@@ -191,8 +195,7 @@ select *
 from public.supplement_baseline
 limit 1;
 
-cd server
-npm run dev
+
 
 # terminal 2
 cd mobile
