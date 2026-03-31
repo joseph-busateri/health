@@ -31,7 +31,7 @@ export interface SleepNumberSleepData {
 }
 
 export class SleepNumberApiClient {
-  private baseUrl: string = 'https://api.sleepiq.sleepnumber.com/rest';
+  private baseUrl: string = 'https://prod-api.sleepiq.sleepnumber.com';
   private client: AxiosInstance;
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
@@ -43,7 +43,8 @@ export class SleepNumberApiClient {
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',
-        'User-Agent': 'HealthApp/1.0',
+        'User-Agent': 'SleepIQ/1.0 (iPhone; iOS 16.0; Scale/3.00)',
+        'Host': 'prod-api.sleepiq.sleepnumber.com',
       },
     });
 
@@ -96,7 +97,8 @@ export class SleepNumberApiClient {
    */
   async login(email: string, password: string): Promise<SleepNumberAuthTokens> {
     try {
-      const response = await this.client.post('/login', {
+      // Use the correct SleepIQ REST API v1 endpoint
+      const response = await this.client.put('/rest/login', {
         login: email,
         password: password,
       });
@@ -162,10 +164,10 @@ export class SleepNumberApiClient {
    */
   async getBeds(): Promise<any[]> {
     try {
-      const response = await this.client.get('/bed');
+      const response = await this.client.get('/rest/bed');
       return response.data.beds || [];
-    } catch (error: any) {
-      logger.error('Failed to get beds', { error: error.message });
+    } catch (error) {
+      logger.error('Failed to get beds', { error });
       throw error;
     }
   }
@@ -179,7 +181,7 @@ export class SleepNumberApiClient {
     endDate: string
   ): Promise<SleepNumberSleepData[]> {
     try {
-      const response = await this.client.get(`/sleepData`, {
+      const response = await this.client.get(`/rest/sleepData`, {
         params: {
           bedId,
           date: startDate,

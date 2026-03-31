@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Number Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 500px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        input, button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+        }
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🛏️ Sleep Number i10 Test</h1>
+    <p>Test your Sleep Number connection to Railway backend</p>
+    
+    <h2>Option 1: Direct API Connection (Currently Unavailable)</h2>
+    <p style="color: #999; font-size: 14px;">Sleep Number has deprecated their public API. Use CSV upload instead.</p>
+    <input type="email" id="email" placeholder="Sleep Number Email" disabled>
+    <input type="password" id="password" placeholder="Sleep Number Password" disabled>
+    <button onclick="connectSleepNumber()" disabled style="background: #ccc;">Connect Account (Unavailable)</button>
+    
+    <hr style="margin: 30px 0;">
+    
+    <h2>Option 2: Upload Sleep Number CSV</h2>
+    <p style="font-size: 14px;">Export your sleep data from the Sleep Number app and upload it here.</p>
+    <input type="file" id="csvFile" accept=".csv" style="padding: 8px;">
+    <button onclick="uploadCSV()">Upload Sleep Data</button>
+    
+    <div id="result"></div>
+
+    <script>
+        const API_URL = 'https://health-production-2244.up.railway.app';
+        
+        async function connectSleepNumber() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const result = document.getElementById('result');
+            
+            result.textContent = 'Connecting...';
+            
+            try {
+                const response = await fetch(`${API_URL}/sleep-number/default-user/connect`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: email, password: password })
+                });
+                
+                const data = await response.json();
+                result.textContent = JSON.stringify(data, null, 2);
+                
+                if (data.success) {
+                    result.style.background = '#d4edda';
+                    result.textContent = '✅ Connected!\n\n' + JSON.stringify(data, null, 2);
+                } else {
+                    result.style.background = '#f8d7da';
+                }
+            } catch (error) {
+                result.style.background = '#f8d7da';
+                result.textContent = '❌ Error: ' + error.message;
+            }
+        }
+        
+        async function uploadCSV() {
+            const fileInput = document.getElementById('csvFile');
+            const result = document.getElementById('result');
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                result.style.background = '#fff3cd';
+                result.textContent = '⚠️ Please select a CSV file first';
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            result.textContent = 'Uploading...';
+            result.style.background = '#f0f0f0';
+            
+            try {
+                const fileContent = await file.text();
+                
+                const response = await fetch(`${API_URL}/sleep-number/default-user/upload`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fileContent: fileContent,
+                        fileType: 'csv'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    result.style.background = '#d4edda';
+                    result.textContent = `✅ Upload Successful!\n\nSessions imported: ${data.sessionCount}\n\n` + JSON.stringify(data, null, 2);
+                } else {
+                    result.style.background = '#f8d7da';
+                    result.textContent = '❌ Upload Failed\n\n' + JSON.stringify(data, null, 2);
+                }
+            } catch (error) {
+                result.style.background = '#f8d7da';
+                result.textContent = '❌ Error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
