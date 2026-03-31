@@ -118,8 +118,14 @@ export class SleepNumberApiClient {
       logger.error('Sleep Number login failed', { 
         error: error.message,
         status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url,
       });
-      throw new Error('Failed to authenticate with Sleep Number');
+      
+      // Return more detailed error message
+      const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message;
+      throw new Error(`Failed to authenticate with Sleep Number: ${errorMsg}`);
     }
   }
 
