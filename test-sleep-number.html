@@ -67,13 +67,13 @@
                 return;
             }
             
-            result.textContent = 'Connecting to Sleep Number API...\n(This may take 10-30 seconds)';
+            result.textContent = 'Connecting to Sleep Number API...\n(This may take up to 60 seconds)';
             result.style.background = '#f0f0f0';
             
             try {
                 // Add timeout to prevent hanging
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 second timeout
                 
                 const response = await fetch(`${API_URL}/sleep-number/default-user/connect`, {
                     method: 'POST',
@@ -97,7 +97,7 @@
             } catch (error) {
                 result.style.background = '#f8d7da';
                 if (error.name === 'AbortError') {
-                    result.textContent = '❌ Connection timeout after 30 seconds.\n\nThis could mean:\n- Railway is still deploying\n- Sleep Number API is slow\n- Network issues\n\nTry again in 1-2 minutes.';
+                    result.textContent = '❌ Connection timeout after 60 seconds.\n\nThis could mean:\n- Sleep Number API is very slow or down\n- Network issues\n- Account may have 2FA enabled\n\nTry:\n- Wait a few minutes and try again\n- Use CSV upload instead (Option 2)';
                 } else {
                     result.textContent = '❌ Error: ' + error.message;
                 }
