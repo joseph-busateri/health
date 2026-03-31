@@ -1,0 +1,12 @@
+mobile/
+client/
+*.md
+.git/
+.gitignore
+server/node_modules/
+server/test-*.ts
+server/test-*.mp3
+server/src/scripts/
+*.log
+.env.local
+.env.development
