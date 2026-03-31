@@ -27,6 +27,9 @@ import BloodworkResultsScreen from '../screens/BloodworkResultsScreen';
 import BloodworkRecommendationsScreen from '../screens/BloodworkRecommendationsScreen';
 import BloodworkTimelineScreen from '../screens/BloodworkTimelineScreen';
 import BloodworkTrendsScreen from '../screens/BloodworkTrendsScreen';
+import VoiceInterviewScreen from '../screens/VoiceInterviewScreen';
+import SleepNumberConnectScreen from '../screens/SleepNumberConnectScreen';
+import SleepNumberUploadScreen from '../screens/SleepNumberUploadScreen';
 import type { RootStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -165,6 +168,24 @@ const AppNavigator: React.FC = () => {
       name="BloodworkTrends"
       component={BloodworkTrendsScreen}
       options={{ title: 'Bloodwork Trends' }}
+    />
+    <Stack.Screen
+      name="VoiceInterview"
+      component={VoiceInterviewScreen}
+      options={{ 
+        title: 'Daily Check-In',
+        headerShown: false
+      }}
+    />
+    <Stack.Screen
+      name="SleepNumberConnect"
+      component={SleepNumberConnectScreen}
+      options={{ title: 'Sleep Number i10' }}
+    />
+    <Stack.Screen
+      name="SleepNumberUpload"
+      component={SleepNumberUploadScreen}
+      options={{ title: 'Upload Sleep Data' }}
     />
   </Stack.Navigator>
   );

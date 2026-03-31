@@ -29,19 +29,23 @@ export default function SleepNumberConnectScreen() {
     setLoading(true);
 
     try {
-      // TODO: Implement API call when server is running
-      // const response = await fetch('http://localhost:3000/sleep-number/connect', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     userId,
-      //     email,
-      //     password,
-      //   }),
-      // });
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const userId = 'default-user'; // TODO: Get from auth context
+      
+      const response = await fetch(`${API_URL}/sleep-number/${userId}/connect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: email,
+          password: password,
+        }),
+      });
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Connection failed');
+      }
 
       setConnected(true);
 
@@ -58,6 +62,7 @@ export default function SleepNumberConnectScreen() {
         ]
       );
     } catch (error) {
+      console.error('Sleep Number connection error:', error);
       Alert.alert('Connection Failed', 'Failed to connect to Sleep Number. Please check your credentials and try again.');
     } finally {
       setLoading(false);
@@ -79,13 +84,26 @@ export default function SleepNumberConnectScreen() {
           onPress: async () => {
             setLoading(true);
             try {
-              // TODO: API call to disconnect
-              await new Promise(resolve => setTimeout(resolve, 1000));
+              const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+              const userId = 'default-user';
+              
+              const response = await fetch(`${API_URL}/sleep-number/${userId}/disconnect`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+              });
+
+              const data = await response.json();
+
+              if (!data.success) {
+                throw new Error(data.error || 'Disconnect failed');
+              }
+
               setConnected(false);
               setEmail('');
               setPassword('');
               Alert.alert('Disconnected', 'Your Sleep Number account has been disconnected.');
             } catch (error) {
+              console.error('Sleep Number disconnect error:', error);
               Alert.alert('Error', 'Failed to disconnect account.');
             } finally {
               setLoading(false);
@@ -99,15 +117,26 @@ export default function SleepNumberConnectScreen() {
   const triggerManualSync = async () => {
     setLoading(true);
     try {
-      // TODO: API call to trigger immediate sync
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const userId = 'default-user';
       
-      const sessionCount = Math.floor(Math.random() * 5) + 1;
+      const response = await fetch(`${API_URL}/sleep-number/${userId}/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      const data = await response.json();
+
+      if (!data.success) {
+        throw new Error(data.error || 'Sync failed');
+      }
+      
       Alert.alert(
         'Sync Complete',
-        `Successfully synced ${sessionCount} new sleep session${sessionCount > 1 ? 's' : ''}.`
+        'Successfully synced your latest sleep data from Sleep Number.'
       );
     } catch (error) {
+      console.error('Sleep Number sync error:', error);
       Alert.alert('Sync Failed', 'Failed to sync sleep data. Please try again.');
     } finally {
       setLoading(false);

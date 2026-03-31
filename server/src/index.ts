@@ -1,7 +1,9 @@
 /// <reference types="node" />
+import dotenv from 'dotenv';
+dotenv.config();
+
 import express from 'express';
 import cors from 'cors';
-import dotenv from 'dotenv';
 import path from 'path';
 import healthRoutes from './routes/health';
 import dailyLogsRoutes from './routes/dailyLogs';
@@ -34,11 +36,13 @@ import notificationStateRoutes from './routes/notificationStateRoutes';
 import dynamicFollowUpRoutes from './routes/dynamicFollowUpRoutes';
 import healthDataHubRoutes from './routes/healthDataHubRoutes';
 import controlTowerRoutes from './routes/controlTowerRoutes';
+import hybridInterviewRoutes from './routes/hybridInterview.routes';
+import voiceInterviewRoutes from './routes/voiceInterview';
+import sleepNumberRoutes from './routes/sleepNumber.routes';
+import healthDataRoutes from './routes/healthData.routes';
 
 // New API Routes - Health Optimization Systems
 import apiRoutes from './routes/index';
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -91,6 +95,10 @@ app.use('/', notificationStateRoutes);
 app.use('/', dynamicFollowUpRoutes);
 app.use('/health-data', healthDataHubRoutes);
 app.use('/', controlTowerRoutes);
+app.use('/hybrid-interview', hybridInterviewRoutes);
+app.use('/api/voice-interview', voiceInterviewRoutes);
+app.use('/sleep-number', sleepNumberRoutes);
+app.use('/api/health-data', healthDataRoutes);
 
 // Mount new API routes under /api prefix
 app.use('/api', apiRoutes);

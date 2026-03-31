@@ -30,6 +30,10 @@ export type RootStackParamList = {
   BloodworkRecommendations: { userId: string };
   BloodworkTimeline: { userId: string };
   BloodworkTrends: { userId: string };
+  DashboardV13: undefined;
+  VoiceInterview: undefined;
+  SleepNumberConnect: undefined;
+  SleepNumberUpload: undefined;
   // Future routes: set to undefined for now to keep extension lightweight.
   Reminders?: undefined;
   Nutrition?: undefined;
