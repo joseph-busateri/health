@@ -201,6 +201,12 @@ export interface ExtractionResult {
   confidence: number;
   processing_time: number;
   errors?: string[];
+  metadata?: {
+    extraction_method?: string;
+    pattern_format?: string;
+    pattern_confidence?: number;
+    [key: string]: any;
+  };
 }
 
 export interface ExtractedBloodworkPanel {

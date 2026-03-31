@@ -2,16 +2,15 @@ import { createClient } from '@supabase/supabase-js';
 import {
   SupplementDocument,
   SupplementDocumentInsert,
-  SupplementBaseline,
-  SupplementBaselineInsert,
-  SupplementItem,
-  SupplementItemInsert,
+  SupplementStackVersion,
+  Supplement,
+  SupplementInsert,
+  SupplementStackChange,
   SupplementExtractedSection,
   SupplementExtractedSectionInsert,
-  SupplementChangeLog,
-  SupplementChangeLogInsert,
   ManualSupplementData,
   SupplementDocumentResult,
+  SupplementStackWithSupplements,
   SupplementBaselineWithItems,
 } from '../types/supplementDocument';
 import { uploadFileToStorage, downloadFileFromStorage } from './storageService';
@@ -151,55 +150,63 @@ export async function createSupplementDocument(
       throw new Error(`Failed to create supplement document: ${documentError?.message}`);
     }
 
-    // 2. Create supplement baseline from manual data or placeholder
-    let baseline: SupplementBaseline;
-    let items: SupplementItem[] = [];
+    // 2. Create supplement stack version from manual data or placeholder
+    let stackVersion: SupplementStackVersion;
+    let supplements: Supplement[] = [];
     let extractedSections: SupplementExtractedSection[] = [];
 
     if (manualSupplementData) {
       // Process manual supplement data
       const supplementData = manualSupplementData;
 
-      // Create baseline
-      const { data: createdBaseline, error: baselineError } = await supabase
-        .from('supplement_baseline')
+      // Create supplement stack version (v1 for initial upload)
+      const { data: createdStackVersion, error: stackVersionError } = await supabase
+        .from('supplement_stack_versions')
         .insert({
           user_id: data.user_id,
-          document_id: document.id,
-          stack_name: supplementData.stackName,
-          stack_notes: supplementData.stackNotes,
-          total_active_items: supplementData.supplements.filter(s => s.status === 'active').length,
-          timing_notes: supplementData.timingNotes,
-          frequency_notes: supplementData.frequencyNotes,
+          version_number: 1,
+          version_name: supplementData.stackName || 'Initial Supplement Stack',
+          is_current: true,
+          created_by: 'user',
+          created_reason: 'Initial baseline upload',
+          effective_from: new Date().toISOString().split('T')[0],
         })
         .select()
         .single();
 
-      if (baselineError || !createdBaseline) {
-        throw new Error(`Failed to create supplement baseline: ${baselineError?.message}`);
+      if (stackVersionError || !createdStackVersion) {
+        throw new Error(`Failed to create supplement stack version: ${stackVersionError?.message}`);
       }
-      baseline = createdBaseline;
+      stackVersion = createdStackVersion;
 
-      // Create supplement items
-      const itemInserts: SupplementItemInsert[] = supplementData.supplements.map(supplement => ({
-        supplement_baseline_id: createdBaseline.id,
+      // Link document to stack version
+      await supabase
+        .from('supplement_baseline_documents')
+        .update({ stack_version_id: createdStackVersion.id })
+        .eq('id', document.id);
+
+      // Create supplements in stack version
+      const supplementInserts = supplementData.supplements.map((supplement, index) => ({
+        stack_version_id: createdStackVersion.id,
         supplement_name: supplement.supplementName,
-        dosage: supplement.dosage.toString(),
+        dosage_amount: supplement.dosage,
         dosage_unit: supplement.dosageUnit,
         frequency: supplement.frequency,
-        timing_notes: supplement.timing,
-        notes: supplement.notes,
+        timing: supplement.timing,
+        status: supplement.status,
+        goal: supplement.notes,
+        supplement_order: index + 1,
       }));
 
-      const { data: createdItems, error: itemsError } = await supabase
-        .from('supplement_items')
-        .insert(itemInserts)
+      const { data: createdSupplements, error: supplementsError } = await supabase
+        .from('supplements')
+        .insert(supplementInserts)
         .select();
 
-      if (itemsError) {
-        throw new Error(`Failed to create supplement items: ${itemsError.message}`);
+      if (supplementsError) {
+        throw new Error(`Failed to create supplements: ${supplementsError.message}`);
       }
-      items = createdItems || [];
+      supplements = createdSupplements || [];
 
       // Create extracted sections (simulate extraction from manual data)
       const sections: SupplementExtractedSectionInsert[] = [
@@ -237,22 +244,31 @@ export async function createSupplementDocument(
       extractedSections = createdSections || [];
 
     } else {
-      // Create placeholder baseline for non-manual uploads
-      const { data: createdBaseline, error: baselineError } = await supabase
-        .from('supplement_baseline')
+      // Create placeholder stack version for non-manual uploads
+      const { data: createdStackVersion, error: stackVersionError } = await supabase
+        .from('supplement_stack_versions')
         .insert({
           user_id: data.user_id,
-          document_id: document.id,
-          stack_name: 'Supplement Stack',
-          total_active_items: 0,
+          version_number: 1,
+          version_name: 'Supplement Stack',
+          is_current: true,
+          created_by: 'user',
+          created_reason: 'Document upload pending processing',
+          effective_from: new Date().toISOString().split('T')[0],
         })
         .select()
         .single();
 
-      if (baselineError || !createdBaseline) {
-        throw new Error(`Failed to create supplement baseline: ${baselineError?.message}`);
+      if (stackVersionError || !createdStackVersion) {
+        throw new Error(`Failed to create supplement stack version: ${stackVersionError?.message}`);
       }
-      baseline = createdBaseline;
+      stackVersion = createdStackVersion;
+
+      // Link document to stack version
+      await supabase
+        .from('supplement_baseline_documents')
+        .update({ stack_version_id: createdStackVersion.id })
+        .eq('id', document.id);
     }
 
     // 3. Update document parse status
@@ -270,20 +286,26 @@ export async function createSupplementDocument(
       }
     }
 
-    // 4. Log change (for future refinement tracking)
-    await logSupplementChange({
-      user_id: data.user_id,
-      supplement_baseline_id: baseline.id,
-      field_name: 'baseline_created',
-      new_value: 'Initial supplement baseline created',
-      change_source: 'document_upload',
-      rationale: 'Initial supplement document upload',
-    });
+    // 4. Log stack creation in changes table
+    if (supplements.length > 0) {
+      const changeInserts = supplements.map(supp => ({
+        to_version_id: stackVersion.id,
+        change_type: 'supplement_added',
+        change_description: `Added ${supp.supplement_name} to initial stack`,
+        supplement_name: supp.supplement_name,
+        new_value: `${supp.dosage_amount} ${supp.dosage_unit} ${supp.frequency}`,
+        reason: 'Initial baseline upload',
+      }));
+
+      await supabase
+        .from('supplement_stack_changes')
+        .insert(changeInserts);
+    }
 
     return {
       document: document as SupplementDocument,
-      baseline,
-      items,
+      stackVersion,
+      supplements,
       extractedSections,
     };
 
@@ -315,82 +337,103 @@ export async function getLatestSupplementDocument(userId: string): Promise<Suppl
   }
 }
 
-// Get supplement baseline with items for user
-export async function getSupplementBaseline(userId: string): Promise<SupplementBaselineWithItems | null> {
+// Get current supplement stack for user
+export async function getCurrentSupplementStack(userId: string): Promise<SupplementStackWithSupplements | null> {
   try {
-    const override = baselineOverrideStore.get(userId);
-    if (override) {
-      return override;
-    }
-
-    // Get the latest baseline
-    const { data: baseline, error: baselineError } = await supabase
-      .from('supplement_baseline')
+    // Get the current stack version
+    const { data: stackVersion, error: stackVersionError } = await supabase
+      .from('supplement_stack_versions')
       .select('*')
       .eq('user_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .eq('is_current', true)
       .single();
 
-    if (baselineError && baselineError.code !== 'PGRST116') {
-      throw new Error(`Failed to get supplement baseline: ${baselineError.message}`);
+    if (stackVersionError && stackVersionError.code !== 'PGRST116') {
+      throw new Error(`Failed to get supplement stack version: ${stackVersionError.message}`);
     }
 
-    if (!baseline) {
+    if (!stackVersion) {
       return null;
     }
 
-    // Get items for this baseline
-    const { data: items, error: itemsError } = await supabase
-      .from('supplement_items')
+    // Get supplements for this stack version
+    const { data: supplements, error: supplementsError } = await supabase
+      .from('supplements')
       .select('*')
-      .eq('supplement_baseline_id', baseline.id)
-      .order('created_at', { ascending: false });
+      .eq('stack_version_id', stackVersion.id)
+      .order('supplement_order');
 
-    if (itemsError) {
-      throw new Error(`Failed to get supplement items: ${itemsError.message}`);
+    if (supplementsError) {
+      throw new Error(`Failed to get supplements: ${supplementsError.message}`);
     }
 
     return {
-      ...baseline,
-      items: items as SupplementItem[],
-    } as SupplementBaselineWithItems;
+      ...stackVersion,
+      supplements: supplements || [],
+    } as SupplementStackWithSupplements;
 
   } catch (error) {
-    console.error('Error getting supplement baseline:', error);
+    console.error('Error getting current supplement stack:', error);
     throw error;
   }
 }
 
-// Log supplement changes (for future refinement)
-export async function logSupplementChange(data: SupplementChangeLogInsert): Promise<void> {
-  try {
-    const { error } = await supabase
-      .from('supplement_change_log')
-      .insert({
-        ...data,
-        changed_at: new Date().toISOString(),
-      });
+// Legacy function for backward compatibility - redirects to new system
+export async function getSupplementBaseline(userId: string): Promise<SupplementBaselineWithItems | null> {
+  const stack = await getCurrentSupplementStack(userId);
+  if (!stack) return null;
+  
+  // Map new structure to old structure for backward compatibility
+  return {
+    id: stack.id,
+    user_id: stack.user_id,
+    stack_name: stack.version_name,
+    created_at: stack.created_at,
+    items: stack.supplements.map((s: any) => ({
+      id: s.id,
+      supplement_name: s.supplement_name,
+      dosage: s.dosage_amount.toString(),
+      dosage_unit: s.dosage_unit,
+      frequency: s.frequency,
+      timing_notes: s.timing,
+      status: s.status,
+    })),
+  } as any;
+}
 
-    if (error) {
-      console.error('Failed to log supplement change:', error);
-    }
+// Log supplement changes using new system
+export async function logSupplementChange(data: any): Promise<void> {
+  try {
+    // This function is deprecated - changes are now logged in supplement_stack_changes
+    console.warn('logSupplementChange is deprecated. Use supplement_stack_changes table directly.');
   } catch (error) {
     console.error('Error logging supplement change:', error);
   }
 }
 
-// Get supplement change history
-export async function getSupplementChangeHistory(userId: string, baselineId?: string): Promise<SupplementChangeLog[]> {
+// Get supplement change history using new system
+export async function getSupplementChangeHistory(userId: string, stackVersionId?: string): Promise<SupplementStackChange[]> {
   try {
-    let query = supabase
-      .from('supplement_change_log')
-      .select('*')
-      .eq('user_id', userId)
-      .order('changed_at', { ascending: false });
+    // Get all stack versions for user
+    const { data: versions, error: versionsError } = await supabase
+      .from('supplement_stack_versions')
+      .select('id')
+      .eq('user_id', userId);
 
-    if (baselineId) {
-      query = query.eq('supplement_baseline_id', baselineId);
+    if (versionsError) {
+      throw new Error(`Failed to get stack versions: ${versionsError.message}`);
+    }
+
+    const versionIds = versions?.map(v => v.id) || [];
+
+    let query = supabase
+      .from('supplement_stack_changes')
+      .select('*')
+      .in('to_version_id', versionIds)
+      .order('created_at', { ascending: false });
+
+    if (stackVersionId) {
+      query = query.eq('to_version_id', stackVersionId);
     }
 
     const { data, error } = await query;
@@ -399,7 +442,7 @@ export async function getSupplementChangeHistory(userId: string, baselineId?: st
       throw new Error(`Failed to get supplement change history: ${error.message}`);
     }
 
-    return data as SupplementChangeLog[];
+    return data || [];
   } catch (error) {
     console.error('Error getting supplement change history:', error);
     throw error;

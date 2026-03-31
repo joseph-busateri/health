@@ -15,13 +15,21 @@
       "**/*"
     ],
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "This app needs access to your microphone for voice interviews.",
+        "NSSpeechRecognitionUsageDescription": "This app uses speech recognition for voice interviews."
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
-      }
+      },
+      "permissions": [
+        "RECORD_AUDIO",
+        "NOTIFICATIONS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -38,7 +46,18 @@
           "photosPermission": "The app needs access to your photos to upload health-related images.",
           "cameraPermission": "The app needs access to your camera to take photos for health tracking."
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#007AFF"
+        }
       ]
-    ]
+    ],
+    "notification": {
+      "icon": "./assets/notification-icon.png",
+      "color": "#007AFF"
+    }
   }
 }

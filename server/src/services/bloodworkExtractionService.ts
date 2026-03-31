@@ -20,6 +20,8 @@ import { normalizeBloodworkMarker } from './bloodworkNormalizationService';
 import { logger } from '../utils/logger';
 import { downloadFileFromStorage } from './storageService';
 import { extractTextFromBuffer } from './ocrService';
+import { tryPatternMatching, shouldSkipAIParsing } from './bloodworkPatternMatching';
+import { parseWithAI } from './bloodworkAIParser';
 
 const supabase = createClient<any>(
   process.env.SUPABASE_URL!,
@@ -255,8 +257,7 @@ function parseBloodworkText(documentContent: string): {
 
 /**
  * Extract structured bloodwork results from document content
- * This is a simplified deterministic parser for Phase 1
- * Future phases will incorporate AI/ML parsing
+ * HYBRID APPROACH: Pattern matching first, AI fallback if needed
  */
 export async function extractBloodworkResultsFromDocument(
   documentId: string,
@@ -264,9 +265,12 @@ export async function extractBloodworkResultsFromDocument(
 ): Promise<ExtractionResult> {
   try {
     const startTime = Date.now();
+    let extractionMethod = 'unknown';
 
+    // Step 1: Get document and extract text if not provided
     if (!documentContent || !documentContent.trim()) {
-      // Get document details
+      logger.info('Fetching document for extraction', { documentId });
+      
       const { data: document, error: documentError } = await bloodworkDocumentsTable
         .select('*')
         .eq('id', documentId)
@@ -300,34 +304,114 @@ export async function extractBloodworkResultsFromDocument(
         };
       }
 
+      // Step 2: OCR - Extract text from file
+      logger.info('Extracting text via OCR', { documentId, storagePath });
       const fileBuffer = await downloadFileFromStorage(storagePath, storageBucket);
       const mimeType: string | undefined = (document as any).mime_type || undefined;
 
-      const { text: extractedText } = await extractTextFromBuffer(fileBuffer, mimeType);
+      const { text: extractedText, confidence: ocrConfidence } = await extractTextFromBuffer(fileBuffer, mimeType);
 
       if (!extractedText.trim()) {
         logger.warn('OCR returned empty text for document', { documentId, storagePath, mimeType });
       }
 
+      logger.info('OCR extraction complete', { 
+        documentId, 
+        textLength: extractedText.length,
+        ocrConfidence 
+      });
+
       documentContent = extractedText;
     }
 
-    const { panels, results } = parseBloodworkText(documentContent || '');
-    const processingTime = Date.now() - startTime;
+    // Step 3: Try pattern matching first (fast path)
+    logger.info('Attempting pattern matching', { documentId });
+    const patternResult = await tryPatternMatching(documentContent || '');
+    
+    logger.info('Pattern matching complete', {
+      documentId,
+      format: patternResult.format,
+      markersFound: patternResult.markers.length,
+      panelsFound: patternResult.panels.length,
+      confidence: patternResult.confidence,
+      matchedLines: patternResult.matchedLines,
+      totalLines: patternResult.totalLines
+    });
 
-    let extractedPanels = panels;
-    let extractedResults = results;
+    let extractedPanels = patternResult.panels;
+    let extractedResults = patternResult.markers;
+    let overallConfidence = patternResult.confidence;
 
-    if (extractedResults.length === 0) {
-      logger.warn('No structured markers extracted from OCR text; using fallback results', { documentId });
-      extractedPanels = FALLBACK_PANELS;
-      extractedResults = FALLBACK_RESULTS;
+    // Step 4: Decide if we need AI fallback
+    if (shouldSkipAIParsing(patternResult)) {
+      // High confidence from pattern matching - use it!
+      extractionMethod = `pattern_${patternResult.format}` as 'pattern_quest' | 'pattern_labcorp' | 'pattern_healthlab' | 'pattern_generic_table' | 'ai_gpt4';
+      logger.info('Pattern matching successful, skipping AI parsing', {
+        documentId,
+        method: extractionMethod,
+        confidence: overallConfidence
+      });
+    } else {
+      // Low confidence or no results - try AI parsing
+      logger.info('Pattern matching confidence low, trying AI parsing', {
+        documentId,
+        patternConfidence: patternResult.confidence,
+        patternMarkers: patternResult.markers.length
+      });
+      
+      try {
+        const aiResult = await parseWithAI(documentContent || '');
+        
+        // Use whichever method found more markers
+        if (aiResult.markers.length > extractedResults.length) {
+          extractedPanels = aiResult.panels;
+          extractedResults = aiResult.markers;
+          extractionMethod = 'ai_gpt4';
+          overallConfidence = aiResult.confidence;
+          
+          logger.info('AI parsing found more markers', {
+            documentId,
+            aiMarkers: aiResult.markers.length,
+            patternMarkers: patternResult.markers.length,
+            tokensUsed: aiResult.tokensUsed,
+            cost: aiResult.cost.toFixed(4)
+          });
+        } else {
+          extractionMethod = `pattern_${patternResult.format}_low_confidence`;
+          logger.info('Using pattern matching results despite low confidence', {
+            documentId,
+            patternMarkers: patternResult.markers.length,
+            aiMarkers: aiResult.markers.length
+          });
+        }
+      } catch (aiError) {
+        logger.error('AI parsing failed, falling back to pattern results', {
+          documentId,
+          error: aiError instanceof Error ? aiError.message : 'Unknown error'
+        });
+        extractionMethod = `pattern_${patternResult.format}_ai_failed`;
+      }
     }
 
-    const overallConfidence =
-      extractedResults.length > 0
-        ? extractedResults.reduce((sum, result) => sum + (result.confidence ?? 0.5), 0) / extractedResults.length
-        : 0;
+    // Step 5: Final fallback if nothing worked
+    if (extractedResults.length === 0) {
+      logger.warn('No markers extracted by any method; using fallback mock data', { documentId });
+      extractedPanels = FALLBACK_PANELS;
+      extractedResults = FALLBACK_RESULTS;
+      extractionMethod = 'fallback_mock';
+      overallConfidence = 0.6;
+    }
+
+    const processingTime = Date.now() - startTime;
+
+    logger.info('Extraction complete', {
+      documentId,
+      method: extractionMethod,
+      panelsExtracted: extractedPanels.length,
+      markersExtracted: extractedResults.length,
+      confidence: overallConfidence.toFixed(2),
+      processingTimeMs: processingTime
+    });
 
     return {
       success: true,
@@ -335,6 +419,11 @@ export async function extractBloodworkResultsFromDocument(
       results: extractedResults,
       confidence: overallConfidence,
       processing_time: processingTime,
+      metadata: {
+        extraction_method: extractionMethod,
+        pattern_format: patternResult.format,
+        pattern_confidence: patternResult.confidence
+      }
     };
   } catch (error) {
     logger.error('Error extracting bloodwork results', { error, documentId });

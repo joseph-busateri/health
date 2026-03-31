@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto';
 import { supabase } from '../config/supabase';
 import { extractTextFromBuffer } from './ocrService';
 import { parseInBodyScan } from '../utils/inbodyParser';
+import { tryPatternMatching, shouldSkipAIParsing } from './bodyCompositionPatternMatching';
+import { parseWithAI } from './bodyCompositionAIParser';
 import { logger } from '../utils/logger';
 
 import type {
@@ -59,6 +61,9 @@ const processBodyCompositionDocument = async (
   mimeType: string,
   userId: string
 ): Promise<void> => {
+  let extractionMethod = 'unknown';
+  let processingCost = 0;
+  
   try {
     // Update status to processing
     await supabase
@@ -66,14 +71,96 @@ const processBodyCompositionDocument = async (
       .update({ processing_status: 'processing' })
       .eq('id', documentId);
 
-    // Extract text via OCR
-    const { text: extractedText } = await extractTextFromBuffer(fileBuffer, mimeType);
+    // Step 1: Extract text via OCR
+    logger.info('Extracting text from body composition document', { documentId });
+    const { text: extractedText, confidence: ocrConfidence } = await extractTextFromBuffer(fileBuffer, mimeType);
+    
+    if (!extractedText || extractedText.length < 10) {
+      throw new Error('OCR extraction failed or produced insufficient text');
+    }
+    
+    logger.info('OCR extraction complete', { 
+      documentId, 
+      textLength: extractedText.length,
+      ocrConfidence 
+    });
 
-    // Parse scan data
-    const parsedData = parseInBodyScan(extractedText);
+    // Step 2: Try pattern matching first (fast path)
+    logger.info('Attempting pattern matching', { documentId });
+    const patternResult = await tryPatternMatching(extractedText);
+    
+    logger.info('Pattern matching complete', {
+      documentId,
+      format: patternResult.format,
+      fieldsMatched: patternResult.matchedFields.length,
+      confidence: patternResult.confidence,
+      hasWeight: !!patternResult.data?.weight
+    });
 
-    // Detect scan source
-    const detectedSource = detectScanSource(extractedText, parsedData);
+    let parsedData = patternResult.data;
+    let overallConfidence = patternResult.confidence;
+    let detectedSource = patternResult.format;
+
+    // Step 3: Decide if we need AI fallback
+    if (shouldSkipAIParsing(patternResult)) {
+      // High confidence from pattern matching - use it!
+      extractionMethod = `pattern_${patternResult.format}`;
+      logger.info('Pattern matching successful, skipping AI parsing', {
+        documentId,
+        method: extractionMethod,
+        confidence: overallConfidence
+      });
+    } else {
+      // Low confidence or no results - try AI parsing
+      logger.info('Pattern matching confidence low, trying AI parsing', {
+        documentId,
+        patternConfidence: patternResult.confidence,
+        patternFields: patternResult.matchedFields.length
+      });
+      
+      try {
+        const aiResult = await parseWithAI(extractedText);
+        processingCost = aiResult.cost;
+        
+        // Use whichever method found more fields
+        const patternFieldCount = patternResult.matchedFields.length;
+        const aiFieldCount = aiResult.data ? Object.keys(aiResult.data).filter(k => aiResult.data![k as keyof typeof aiResult.data] !== undefined).length : 0;
+        
+        if (aiFieldCount > patternFieldCount) {
+          parsedData = aiResult.data;
+          extractionMethod = 'ai_gpt4';
+          overallConfidence = aiResult.confidence;
+          detectedSource = aiResult.data?.rawFields?.scanSource || patternResult.format;
+          
+          logger.info('AI parsing found more fields', {
+            documentId,
+            aiFields: aiFieldCount,
+            patternFields: patternFieldCount,
+            tokensUsed: aiResult.tokensUsed,
+            cost: aiResult.cost.toFixed(4)
+          });
+        } else {
+          extractionMethod = `pattern_${patternResult.format}_low_confidence`;
+          logger.info('Using pattern matching results despite low confidence', {
+            documentId,
+            patternFields: patternFieldCount,
+            aiFields: aiFieldCount
+          });
+        }
+      } catch (aiError) {
+        logger.error('AI parsing failed, falling back to pattern results', {
+          documentId,
+          error: aiError instanceof Error ? aiError.message : 'Unknown error'
+        });
+        extractionMethod = `pattern_${patternResult.format}_ai_failed`;
+      }
+    }
+
+    // Step 4: Final fallback if nothing worked
+    if (!parsedData || !parsedData.weight) {
+      logger.warn('No valid data extracted by any method', { documentId });
+      throw new Error('Failed to extract body composition data from document');
+    }
 
     // Update document with extracted data
     await supabase
@@ -83,17 +170,24 @@ const processBodyCompositionDocument = async (
         extracted_text: extractedText,
         parsed_scan_data: parsedData,
         detected_source: detectedSource,
+        extraction_method: extractionMethod,
+        extraction_confidence: overallConfidence,
+        processing_cost: processingCost,
         processed_at: new Date().toISOString(),
       })
       .eq('id', documentId);
 
     // Create body composition scan from parsed data
-    if (parsedData && parsedData.weight) {
-      const scanInput = convertParsedDataToScanInput(userId, parsedData, detectedSource, documentId);
-      await createBodyCompositionScan(scanInput);
-    }
+    const scanInput = convertParsedDataToScanInput(userId, parsedData, detectedSource, documentId);
+    await createBodyCompositionScan(scanInput);
 
-    logger.info('Body composition document processed successfully', { documentId, userId });
+    logger.info('Body composition document processed successfully', { 
+      documentId, 
+      userId,
+      method: extractionMethod,
+      confidence: overallConfidence.toFixed(2),
+      cost: processingCost.toFixed(4)
+    });
   } catch (error) {
     logger.error('Failed to process body composition document', { error, documentId });
     
@@ -102,6 +196,7 @@ const processBodyCompositionDocument = async (
       .update({
         processing_status: 'failed',
         processing_error: error instanceof Error ? error.message : 'Unknown error',
+        extraction_method: extractionMethod,
       })
       .eq('id', documentId);
   }

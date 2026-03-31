@@ -293,50 +293,38 @@ async function reconstructSupplementBaselineAsOf(
   options: StateReconstructionOptions
 ): Promise<ReconstructedSupplementBaseline | null> {
   try {
-    // Get the latest supplement baseline as of target date
-    const { data: supplementBaseline, error: baselineError } = await supabase
-      .from('supplement_baseline')
+    // Get the most recent supplement stack version before or on target date
+    const { data: stackVersion, error: stackVersionError } = await supabase
+      .from('supplement_stack_versions')
       .select('*')
       .eq('user_id', userId)
-      .lte('extracted_at', targetDate)
-      .order('extracted_at', { ascending: false })
+      .lte('created_at', targetDate)
+      .order('created_at', { ascending: false })
       .limit(1)
       .single();
 
-    if (baselineError && baselineError.code !== 'PGRST116') {
-      throw new Error(`Failed to get supplement baseline: ${baselineError.message}`);
+    if (stackVersionError && stackVersionError.code !== 'PGRST116') {
+      throw new Error(`Failed to get supplement stack version: ${stackVersionError.message}`);
     }
 
-    if (!supplementBaseline) {
+    if (!stackVersion) {
       return null;
     }
 
-    // Get changes for this baseline
-    const changes = await getChangeEvents(userId, 'supplement_baseline', supplementBaseline.id, options.max_changes);
-    const relevantChanges = changes.filter(change => 
-      new Date(change.effective_at) <= new Date(targetDate)
-    );
-
-    // Apply changes to baseline
+    // Map stack version to legacy baseline structure for backward compatibility
     let reconstructed: ReconstructedSupplementBaseline = {
-      id: supplementBaseline.id,
-      user_id: supplementBaseline.user_id,
-      document_id: supplementBaseline.document_id,
-      stack_name: supplementBaseline.stack_name,
-      stack_notes: supplementBaseline.stack_notes,
-      total_active_items: supplementBaseline.total_active_items,
-      timing_notes: supplementBaseline.timing_notes,
-      frequency_notes: supplementBaseline.frequency_notes,
-      extracted_at: supplementBaseline.extracted_at,
-      created_at: supplementBaseline.created_at,
-      updated_at: supplementBaseline.updated_at
+      id: stackVersion.id,
+      user_id: stackVersion.user_id,
+      document_id: null, // Stack versions don't have direct document_id
+      stack_name: stackVersion.version_name || 'Supplement Stack',
+      stack_notes: stackVersion.created_reason,
+      total_active_items: 0, // Will be calculated from supplements
+      timing_notes: null,
+      frequency_notes: null,
+      extracted_at: stackVersion.created_at,
+      created_at: stackVersion.created_at,
+      updated_at: stackVersion.created_at
     };
-
-    for (const change of relevantChanges.sort((a, b) => 
-      new Date(a.effective_at).getTime() - new Date(b.effective_at).getTime()
-    )) {
-      (reconstructed as any)[change.field_name] = change.new_value;
-    }
 
     return reconstructed;
   } catch (error) {
@@ -351,60 +339,45 @@ async function reconstructSupplementItemsAsOf(
   options: StateReconstructionOptions
 ): Promise<ReconstructedSupplementItem[]> {
   try {
-    // Get supplement baseline first to determine which items to reconstruct
+    // Get supplement stack version first
     const baseline = await reconstructSupplementBaselineAsOf(userId, targetDate, options);
     
     if (!baseline) {
       return [];
     }
 
-    // Get items for this baseline
-    const { data: items, error: itemsError } = await supabase
-      .from('supplement_items')
+    // Get supplements for this stack version
+    const { data: supplements, error: supplementsError } = await supabase
+      .from('supplements')
       .select('*')
-      .eq('supplement_baseline_id', baseline.id);
+      .eq('stack_version_id', baseline.id)
+      .lte('created_at', targetDate);
 
-    if (itemsError) {
-      throw new Error(`Failed to get supplement items: ${itemsError.message}`);
+    if (supplementsError) {
+      throw new Error(`Failed to get supplements: ${supplementsError.message}`);
     }
 
-    if (!items || items.length === 0) {
+    if (!supplements || supplements.length === 0) {
       return [];
     }
 
-    // Get changes for all items
-    const itemIds = items.map(item => item.id);
-    const changes = await getChangeEvents(userId, 'supplement_item', undefined, options.max_changes);
-    const relevantChanges = changes.filter(change => 
-      itemIds.includes(change.entity_id) && 
-      new Date(change.effective_at) <= new Date(targetDate)
-    );
-
-    // Apply changes to each item
-    let reconstructedItems: ReconstructedSupplementItem[] = items.map(item => ({
-      id: item.id,
-      supplement_baseline_id: item.supplement_baseline_id,
-      supplement_name: item.supplement_name,
-      dosage: item.dosage,
-      dosage_unit: item.dosage_unit,
-      frequency: item.frequency,
-      timing: item.timing,
-      status: item.status || 'active',
-      notes: item.notes,
-      created_at: item.created_at,
-      updated_at: item.updated_at
+    // Map supplements to legacy item structure for backward compatibility
+    let reconstructedItems: ReconstructedSupplementItem[] = supplements.map(supplement => ({
+      id: supplement.id,
+      supplement_baseline_id: baseline.id,
+      supplement_name: supplement.supplement_name,
+      dosage: supplement.dosage_amount.toString(),
+      dosage_unit: supplement.dosage_unit,
+      frequency: supplement.frequency,
+      timing: supplement.timing,
+      status: supplement.status === 'discontinued' ? 'removed' : supplement.status,
+      notes: supplement.goal,
+      created_at: supplement.created_at,
+      updated_at: supplement.created_at
     }));
 
-    // Apply changes chronologically
-    for (const change of relevantChanges.sort((a, b) => 
-      new Date(a.effective_at).getTime() - new Date(b.effective_at).getTime()
-    )) {
-      const itemIndex = reconstructedItems.findIndex(item => item.id === change.entity_id);
-      
-      if (itemIndex >= 0) {
-        (reconstructedItems[itemIndex] as any)[change.field_name] = change.new_value;
-      }
-    }
+    // Note: With stack versions, changes are tracked as new versions, not field-level changes
+    // So we don't need to apply individual field changes here
 
     return reconstructedItems;
   } catch (error) {
@@ -458,7 +431,7 @@ export async function compareStates(
       differences.push(...supplementDiffs);
     }
 
-    // Compare supplement items
+    // Compare supplement items (now using supplements from stack versions)
     const itemDiffs = compareEntities(
       historicalState.supplement_items,
       currentState.supplement_items,

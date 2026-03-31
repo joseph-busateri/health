@@ -17,6 +17,7 @@ import type {
 } from '../types/bloodworkRecommendations';
 import type { Database } from '../types/database';
 import { getBloodworkTrendsByUser } from './bloodworkTrendService';
+import { generateAIRecommendationText } from './bloodworkAIRecommendations';
 
 const supabase = createClient(
   process.env.SUPABASE_URL!,
@@ -380,10 +381,10 @@ function evaluateMarkerTrend(
 }
 
 export async function generateBloodworkRecommendationsForUser(
-  request: GenerateRecommendationsRequest
+  request: GenerateRecommendationsRequest & { use_ai_enhancement?: boolean }
 ): Promise<GenerateRecommendationsResponse> {
   try {
-    const { user_id, force_regenerate = false } = request;
+    const { user_id, force_regenerate = false, use_ai_enhancement = false } = request;
 
     // Get user's bloodwork trends
     const trendsResponse = await getBloodworkTrendsByUser({ user_id, min_data_points: 2 });
@@ -461,15 +462,50 @@ export async function generateBloodworkRecommendationsForUser(
       const sourceDocumentIds = sourceResults?.map(r => r.document_id) || [];
       const sourceResultIds = sourceResults?.map(r => r.id) || [];
 
+      // Optionally use AI to enhance recommendation text
+      let recommendationTitle = evaluation.recommendation_data.title;
+      let recommendationText = evaluation.recommendation_data.text;
+      let recommendationRationale = evaluation.recommendation_data.rationale;
+
+      if (use_ai_enhancement) {
+        try {
+          const aiResult = await generateAIRecommendationText({
+            markerName: evaluation.marker_name,
+            latestValue: evaluation.trend.latest_value,
+            priorValue: evaluation.trend.prior_value,
+            unit: evaluation.trend.unit || '',
+            trendDirection: evaluation.trend.trend_direction,
+            changePercent: evaluation.trend.change_percent,
+            referenceRangeLow: evaluation.trend.reference_range_low,
+            referenceRangeHigh: evaluation.trend.reference_range_high,
+            severity: evaluation.severity,
+            recommendationType: evaluation.rule.recommendation_type
+          });
+
+          recommendationTitle = aiResult.title;
+          recommendationText = aiResult.message;
+          recommendationRationale = aiResult.rationale;
+
+          // Add action items to text if present
+          if (aiResult.actionItems.length > 0) {
+            recommendationText += '\n\n**Action Steps:**\n' + 
+              aiResult.actionItems.map((item, idx) => `${idx + 1}. ${item}`).join('\n');
+          }
+        } catch (aiError) {
+          console.error('AI enhancement failed, using template:', aiError);
+          // Fall back to template-based text
+        }
+      }
+
       const recommendationData: CreateBloodworkRecommendationRequest = {
         user_id,
         test_name: evaluation.marker_name,
         normalized_test_name: evaluation.trend.marker_name,
         category: evaluation.trend.category,
         recommendation_type: evaluation.rule.recommendation_type,
-        recommendation_title: evaluation.recommendation_data.title,
-        recommendation_text: evaluation.recommendation_data.text,
-        rationale: evaluation.recommendation_data.rationale,
+        recommendation_title: recommendationTitle,
+        recommendation_text: recommendationText,
+        rationale: recommendationRationale,
         confidence: evaluation.confidence,
         severity: evaluation.severity,
         source_document_ids: sourceDocumentIds,
