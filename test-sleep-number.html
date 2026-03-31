@@ -38,11 +38,11 @@
     <h1>🛏️ Sleep Number i10 Test</h1>
     <p>Test your Sleep Number connection to Railway backend</p>
     
-    <h2>Option 1: Direct API Connection (Currently Unavailable)</h2>
-    <p style="color: #999; font-size: 14px;">Sleep Number has deprecated their public API. Use CSV upload instead.</p>
-    <input type="email" id="email" placeholder="Sleep Number Email" disabled>
-    <input type="password" id="password" placeholder="Sleep Number Password" disabled>
-    <button onclick="connectSleepNumber()" disabled style="background: #ccc;">Connect Account (Unavailable)</button>
+    <h2>Option 1: Direct API Connection</h2>
+    <p style="font-size: 14px;">Connect your Sleep Number account directly for automatic syncing.</p>
+    <input type="email" id="email" placeholder="Sleep Number Email">
+    <input type="password" id="password" placeholder="Sleep Number Password">
+    <button onclick="connectSleepNumber()">Connect Account</button>
     
     <hr style="margin: 30px 0;">
     
@@ -61,14 +61,28 @@
             const password = document.getElementById('password').value;
             const result = document.getElementById('result');
             
-            result.textContent = 'Connecting...';
+            if (!email || !password) {
+                result.style.background = '#fff3cd';
+                result.textContent = '⚠️ Please enter both email and password';
+                return;
+            }
+            
+            result.textContent = 'Connecting to Sleep Number API...\n(This may take 10-30 seconds)';
+            result.style.background = '#f0f0f0';
             
             try {
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+                
                 const response = await fetch(`${API_URL}/sleep-number/default-user/connect`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username: email, password: password })
+                    body: JSON.stringify({ username: email, password: password }),
+                    signal: controller.signal
                 });
+                
+                clearTimeout(timeoutId);
                 
                 const data = await response.json();
                 result.textContent = JSON.stringify(data, null, 2);
@@ -78,10 +92,15 @@
                     result.textContent = '✅ Connected!\n\n' + JSON.stringify(data, null, 2);
                 } else {
                     result.style.background = '#f8d7da';
+                    result.textContent = '❌ Connection Failed\n\n' + JSON.stringify(data, null, 2);
                 }
             } catch (error) {
                 result.style.background = '#f8d7da';
-                result.textContent = '❌ Error: ' + error.message;
+                if (error.name === 'AbortError') {
+                    result.textContent = '❌ Connection timeout after 30 seconds.\n\nThis could mean:\n- Railway is still deploying\n- Sleep Number API is slow\n- Network issues\n\nTry again in 1-2 minutes.';
+                } else {
+                    result.textContent = '❌ Error: ' + error.message;
+                }
             }
         }
         
