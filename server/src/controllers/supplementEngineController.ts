@@ -3,6 +3,8 @@ import {
   generateSupplementRecommendations,
   getSupplementRecommendations,
   getCurrentSupplementStack,
+  getSupplementToday,
+  getSupplementHistory,
 } from '../services/supplementEngineService';
 import { seedSupplementBaselineOverride } from '../services/supplementDocumentService';
 import type { SupplementEngineContext } from '../types/supplementEngine';
@@ -121,6 +123,49 @@ export const seedSupplementBaselineHandler = async (req: Request, res: Response)
     logger.error('Failed to seed supplement baseline override', { error: (error as Error).message });
     res.status(500).json({
       error: 'Failed to seed supplement baseline override',
+      details: (error as Error).message,
+    });
+  }
+};
+
+// AI Enrichment Architecture Handlers
+
+export const getSupplementTodayHandler = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing required parameter: userId' });
+    }
+
+    const data = await getSupplementToday(Array.isArray(userId) ? userId[0] : userId);
+
+    if (!data) {
+      return res.status(404).json({ error: 'No supplement data available' });
+    }
+
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    logger.error('Failed to get supplement today', { error: (error as Error).message });
+    res.status(500).json({
+      error: 'Failed to get supplement data',
+      details: (error as Error).message,
+    });
+  }
+};
+
+export const getSupplementHistoryHandler = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing required parameter: userId' });
+    }
+
+    const data = await getSupplementHistory(Array.isArray(userId) ? userId[0] : userId);
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    logger.error('Failed to get supplement history', { error: (error as Error).message });
+    res.status(500).json({
+      error: 'Failed to get supplement history',
       details: (error as Error).message,
     });
   }

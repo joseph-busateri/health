@@ -1,0 +1,84 @@
+{
+  "scenario": {
+    "sleepHours": 4.8,
+    "sleepQuality": "poor",
+    "soreness": 8,
+    "fatigue": 8,
+    "readiness": 3,
+    "recentTrainingLoad": "high",
+    "recoveryTrend": "declining"
+  },
+  "response": {
+    "success": true,
+    "data": {
+      "id": "33da024c-f7e8-46f6-a58f-559ff3af8351",
+      "userId": "09e208b8-ff5c-4397-b289-4b019b149b2f",
+      "date": "2026-04-05",
+      "recoveryScore": 24,
+      "recoveryStatus": "poor_recovery",
+      "readinessClassification": "recovery_focus",
+      "sourceInputs": {
+        "hrv": 28,
+        "sleepDurationHours": 4.8,
+        "sleepQuality": 2,
+        "restingHr": 84,
+        "stressLevel": 5,
+        "workoutLoad": 9,
+        "verbalRecoveryFeeling": 2,
+        "adherenceScore": 45
+      },
+      "recommendation": {
+        "summary": "Recovery is poor. Focus on restoration before high training stress.",
+        "actions": [
+          "Shift to recovery day or reduce session volume by 30-40%.",
+          "Prioritize sleep opportunity and hydration/electrolytes.",
+          "Avoid additional high-load training until recovery rebounds."
+        ]
+      },
+      "createdAt": "2026-04-05T02:56:27.296Z"
+    }
+  },
+  "persisted_record": {
+    "id": "6e489164-4db0-44c9-9ad3-522971c00560",
+    "sourceEngine": "recovery",
+    "title": "Modify Today's Workout for Better Recovery",
+    "description": "To improve your recovery score and overall health, reduce the intensity and duration of today's workout. Aim for low-impact exercises such as walking, stretching, or yoga instead of your usual routine. This adjustment will help manage your high stress levels and low heart rate variability (HRV), both of which are crucial for recovery.",
+    "priority": "important",
+    "urgencyScore": 50,
+    "category": "workout_modification",
+    "state": "generated",
+    "generatedAt": "2026-04-05T02:49:18.756+00:00",
+    "expiresAt": null
+  },
+  "retrieval_result": {
+    "id": "6e489164-4db0-44c9-9ad3-522971c00560",
+    "sourceEngine": "recovery",
+    "title": "Modify Today's Workout for Better Recovery",
+    "description": "To improve your recovery score and overall health, reduce the intensity and duration of today's workout. Aim for low-impact exercises such as walking, stretching, or yoga instead of your usual routine. This adjustment will help manage your high stress levels and low heart rate variability (HRV), both of which are crucial for recovery.",
+    "priority": "important",
+    "urgencyScore": 50,
+    "category": "workout_modification",
+    "state": "generated",
+    "generatedAt": "2026-04-05T02:49:18.756+00:00",
+    "expiresAt": null
+  },
+  "logs": [
+    "Scenario loaded from C:\\Users\\cn108578\\CascadeProjects\\health\\server\\tests\\recovery-ai-scenario.json",
+    "Scenario payload: {\"sleepHours\":4.8,\"sleepQuality\":\"poor\",\"soreness\":8,\"fatigue\":8,\"readiness\":3,\"recentTrainingLoad\":\"high\",\"recoveryTrend\":\"declining\"}",
+    "Using TEST_USER_ID: 09e208b8-ff5c-4397-b289-4b019b149b2f",
+    "Recovery endpoint success: {\"success\":true,\"data\":{\"id\":\"33da024c-f7e8-46f6-a58f-559ff3af8351\",\"userId\":\"09e208b8-ff5c-4397-b289-4b019b149b2f\",\"date\":\"2026-04-05\",\"recoveryScore\":24,\"recoveryStatus\":\"poor_recovery\",\"readinessClassification\":\"recovery_focus\",\"sourceInputs\":{\"hrv\":28,\"sleepDurationHours\":4.8,\"sleepQuality\":2,\"restingHr\":84,\"stressLevel\":5,\"workoutLoad\":9,\"verbalRecoveryFeeling\":2,\"adherenceScore\":45},\"recommendation\":{\"summary\":\"Recovery is poor. Focus on restoration before high training stress.\",\"actions\":[\"Shift to recovery day or reduce session volume by 30-40%.\",\"Prioritize sleep opportunity and hydration/electrolytes.\",\"Avoid additional high-load training until recovery rebounds.\"]},\"createdAt\":\"2026-04-05T02:56:27.296Z\"}}",
+    "Active recommendations fetched for persistence check: 1",
+    "Active recommendations summary: [{\"id\":\"6e489164-4db0-44c9-9ad3-522971c00560\",\"sourceEngine\":\"recovery\",\"title\":\"Modify Today's Workout for Better Recovery\",\"createdAt\":\"2026-04-05T02:49:18.756+00:00\",\"state\":\"generated\"}]",
+    "Persisted recommendation found: 6e489164-4db0-44c9-9ad3-522971c00560",
+    "Active recommendations fetched for retrieval check: 1",
+    "Retrieval recommendations summary: [{\"id\":\"6e489164-4db0-44c9-9ad3-522971c00560\",\"sourceEngine\":\"recovery\",\"title\":\"Modify Today's Workout for Better Recovery\",\"createdAt\":\"2026-04-05T02:49:18.756+00:00\",\"state\":\"generated\"}]",
+    "Retrieval successful: 6e489164-4db0-44c9-9ad3-522971c00560",
+    "AI enrichment indicators present in persisted recommendation",
+    "All required fields present",
+    "Optional AI fields present in retrieval shape: reasonCodes, recommendationGroup, supportingMetrics, isInsightOnly, requiresUserDecision, confidenceLevel, dataQualityScore",
+    "Retrieval matches persisted record"
+  ],
+  "timestamp": "2026-04-05T02:56:39.429Z",
+  "success": true,
+  "errors": []
+}

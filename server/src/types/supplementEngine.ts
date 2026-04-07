@@ -59,3 +59,63 @@ export interface SupplementRecommendationResult {
     reviewCount: number;
   };
 }
+
+// ============================================================================
+// AI ENRICHMENT ARCHITECTURE TYPES
+// ============================================================================
+
+export type SupplementStatus =
+  | 'optimal'
+  | 'suboptimal'
+  | 'inefficient'
+  | 'conflicted';
+
+export interface SupplementInput {
+  name: string;
+  dosage: number;
+  unit: string;
+  frequency: string;
+  timing?: string;
+}
+
+export interface SupplementEngineInputs {
+  supplements: SupplementInput[];
+  recoveryScore?: number;
+  stressScore?: number;
+  metabolicStatus?: string;
+  cardiovascularStatus?: string;
+  sexualHealthStatus?: string;
+  adherenceScore?: number;
+  goals?: string[];
+}
+
+export interface SupplementEvidenceSignal {
+  name: string;
+  value?: any;
+  interpretation: string;
+}
+
+export interface SupplementEvidence {
+  supplementStatus: SupplementStatus;
+  signals: SupplementEvidenceSignal[];
+  summary: string;
+}
+
+export interface SupplementRecommendationEnriched {
+  type: 'supplement';
+  priority: 'critical' | 'important' | 'optimization';
+  summary: string;
+  actions: string[];
+  rationale?: string;
+  source?: 'deterministic' | 'ai_enriched' | 'fallback';
+}
+
+export interface SupplementRecord {
+  id: string;
+  userId: string;
+  date: string;
+  supplementStatus: SupplementStatus;
+  evidence?: SupplementEvidence;
+  recommendation: SupplementRecommendationEnriched;
+  createdAt: string;
+}

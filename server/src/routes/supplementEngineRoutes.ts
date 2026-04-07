@@ -4,6 +4,8 @@ import {
   getSupplementRecommendationsHandler,
   getCurrentSupplementStackHandler,
   seedSupplementBaselineHandler,
+  getSupplementTodayHandler,
+  getSupplementHistoryHandler,
 } from '../controllers/supplementEngineController';
 
 const router = Router();
@@ -19,5 +21,12 @@ router.get('/supplements/recommendations/:user_id', getSupplementRecommendations
 
 // GET /supplements/current/:user_id - Get current supplement stack
 router.get('/supplements/current/:user_id', getCurrentSupplementStackHandler);
+
+// AI Enrichment Architecture Routes
+// GET /supplements/:userId/today - Get today's supplement recommendation
+router.get('/:userId/today', getSupplementTodayHandler);
+
+// GET /supplements/:userId/history - Get supplement history
+router.get('/:userId/history', getSupplementHistoryHandler);
 
 export default router;

@@ -31,7 +31,22 @@ import supplementEngineRoutes from './routes/supplementEngineRoutes';
 import recoveryEngineRoutes from './routes/recoveryEngineRoutes';
 import stressEngineRoutes from './routes/stressEngineRoutes';
 import jointHealthEngineRoutes from './routes/jointHealthEngineRoutes';
+import crossEngineRoutes from './routes/crossEngineRoutes';
+import prioritizationRoutes from './routes/prioritizationRoutes';
+import predictiveRoutes from './routes/predictiveRoutes';
+import adaptiveRoutes from './routes/adaptiveRoutes';
+import autonomousRoutes from './routes/autonomousRoutes';
+import goalRoutes from './routes/goalRoutes';
 import adherenceEngineRoutes from './routes/adherenceEngineRoutes';
+import workoutEngineRoutes from './routes/workoutEngineRoutes';
+import workoutTodayIntegratedRoutes from './routes/workoutTodayIntegratedRoutes';
+import nutritionTodayIntegratedRoutes from './routes/nutritionTodayIntegratedRoutes';
+import dailyAIPlanRoutes from './routes/dailyAIPlanRoutes';
+import controlTowerDailyRoutes from './routes/controlTowerDailyRoutes';
+import metabolicEngineRoutes from './routes/metabolicEngineRoutes';
+import cardiovascularEngineRoutes from './routes/cardiovascularEngineRoutes';
+import sexualHealthEngineRoutes from './routes/sexualHealthEngineRoutes';
+import crossEngineIntelligenceRoutes from './routes/crossEngineIntelligenceRoutes';
 import notificationStateRoutes from './routes/notificationStateRoutes';
 import dynamicFollowUpRoutes from './routes/dynamicFollowUpRoutes';
 import healthDataHubRoutes from './routes/healthDataHubRoutes';
@@ -55,6 +70,12 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
+
+// Diagnostic logging
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
 
 app.get('/health', (_req, res) => {
   res.json({
@@ -88,9 +109,26 @@ app.use('/', nutritionExtractionRoutes);
 app.use('/', interviewAgentRoutes);
 app.use('/', supplementEngineRoutes);
 app.use('/', recoveryEngineRoutes);
+console.log('Loading stress engine routes...');
 app.use('/', stressEngineRoutes);
+console.log('Stress engine routes loaded');
 app.use('/', jointHealthEngineRoutes);
+app.use('/', crossEngineRoutes);
+app.use('/', prioritizationRoutes);
+app.use('/', predictiveRoutes);
+app.use('/', adaptiveRoutes);
+app.use('/', autonomousRoutes);
+app.use('/', goalRoutes);
 app.use('/', adherenceEngineRoutes);
+app.use('/workout-engine', workoutEngineRoutes);
+app.use('/workout-today', workoutTodayIntegratedRoutes);
+app.use('/nutrition-today', nutritionTodayIntegratedRoutes);
+app.use('/daily-plan', dailyAIPlanRoutes);
+app.use('/control-tower', controlTowerDailyRoutes);
+app.use('/metabolic', metabolicEngineRoutes);
+app.use('/cardiovascular', cardiovascularEngineRoutes);
+app.use('/sexual-health', sexualHealthEngineRoutes);
+app.use('/cross-engine-intelligence', crossEngineIntelligenceRoutes);
 app.use('/', notificationStateRoutes);
 app.use('/', dynamicFollowUpRoutes);
 app.use('/health-data', healthDataHubRoutes);

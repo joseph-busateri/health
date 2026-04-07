@@ -1,0 +1,792 @@
+/**
+ * Cardiovascular Engine Service
+ * AI-enriched cardiovascular intelligence with deterministic fallback
+ * 
+ * Architecture:
+ * Deterministic Engine → Evidence Builder → AI Enrichment → Normalizer → Validator → Persistence
+ * 
+ * Preserves backward compatibility with existing cardiovascular logic
+ */
+
+import { randomUUID } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
+import { supabase } from '../config/supabase';
+import { logger } from '../utils/logger';
+import { enrichCardiovascularRecommendation } from './cardiovascularAIEnrichment';
+import { normalizeCardiovascularRecommendation } from './cardiovascularRecommendationNormalizer';
+import { validateCardiovascularRecommendation } from './cardiovascularRecommendationValidator';
+import { createRecommendation } from './recommendationEngineService';
+import { getBaselineFields } from './baselineContextService';
+import { getLatestBloodworkContext, getMarkerValue, isMarkerAbnormal } from './bloodworkContextService';
+import type {
+  CardiovascularRecord,
+  CardiovascularStatus,
+  CardiovascularInputs,
+  CardiovascularEvidence,
+  CardiovascularEvidenceSignal,
+  CardiovascularRecommendation,
+  // Legacy types for backward compatibility
+  CardiovascularRiskLevel,
+  BPRiskLevel,
+  RestingHRAnalysis,
+  BPAnalysis,
+  LipidPanel,
+} from '../types/cardiovascularEngine';
+
+const USE_AI_ENRICHMENT = process.env.USE_AI_ENRICHMENT_CARDIOVASCULAR === 'true';
+
+// ============================================================================
+// IN-MEMORY PERSISTENCE
+// ============================================================================
+
+const cardiovascularRecordStore = new Map<string, CardiovascularRecord[]>();
+
+// ============================================================================
+// LEGACY CALCULATION HELPERS (Preserved for backward compatibility)
+// ============================================================================
+
+/**
+ * Analyze resting heart rate
+ */
+function analyzeRestingHR(restingHR: number | undefined, age: number): RestingHRAnalysis {
+  if (!restingHR) {
+    return {
+      restingHR: undefined,
+      hrStatus: 'average',
+      hrTrend: 'stable',
+    };
+  }
+
+  // Age-adjusted HR status
+  let hrStatus: 'excellent' | 'good' | 'average' | 'below_average' | 'poor';
+
+  if (restingHR < 60) {
+    hrStatus = 'excellent';
+  } else if (restingHR < 70) {
+    hrStatus = 'good';
+  } else if (restingHR < 80) {
+    hrStatus = 'average';
+  } else if (restingHR < 90) {
+    hrStatus = 'below_average';
+  } else {
+    hrStatus = 'poor';
+  }
+
+  return {
+    restingHR,
+    hrStatus,
+    hrTrend: 'stable', // TODO: Calculate from historical data
+  };
+}
+
+/**
+ * Analyze blood pressure
+ */
+function analyzeBP(systolic: number | undefined, diastolic: number | undefined): BPAnalysis {
+  if (!systolic || !diastolic) {
+    return {
+      systolic: undefined,
+      diastolic: undefined,
+      bpRisk: 'normal',
+      hypertensionRisk: false,
+    };
+  }
+
+  let bpRisk: BPRiskLevel;
+  let hypertensionRisk = false;
+
+  // ACC/AHA Blood Pressure Guidelines
+  if (systolic < 120 && diastolic < 80) {
+    bpRisk = 'optimal';
+  } else if (systolic < 130 && diastolic < 80) {
+    bpRisk = 'normal';
+  } else if (systolic < 140 || diastolic < 90) {
+    bpRisk = 'elevated';
+    hypertensionRisk = true;
+  } else if (systolic < 160 || diastolic < 100) {
+    bpRisk = 'stage1';
+    hypertensionRisk = true;
+  } else {
+    bpRisk = 'stage2';
+    hypertensionRisk = true;
+  }
+
+  return {
+    systolic,
+    diastolic,
+    bpRisk,
+    hypertensionRisk,
+  };
+}
+
+/**
+ * Calculate cardiovascular risk score (0-100)
+ * Lower is better
+ */
+function calculateCardiovascularRiskScore(
+  restingHRAnalysis: RestingHRAnalysis,
+  bpAnalysis: BPAnalysis,
+  hrv: number | undefined,
+  lipidPanel: LipidPanel | undefined,
+  age: number,
+  smokingStatus: boolean
+): number {
+  let riskScore = 0;
+
+  // Resting HR contribution (0-25 points)
+  const hrRiskMap = {
+    excellent: 0,
+    good: 5,
+    average: 10,
+    below_average: 18,
+    poor: 25,
+  };
+  riskScore += hrRiskMap[restingHRAnalysis.hrStatus];
+
+  // BP contribution (0-30 points)
+  const bpRiskMap: Record<BPRiskLevel, number> = {
+    optimal: 0,
+    normal: 5,
+    elevated: 15,
+    stage1: 23,
+    stage2: 30,
+  };
+  riskScore += bpRiskMap[bpAnalysis.bpRisk];
+
+  // HRV contribution (0-20 points)
+  if (hrv) {
+    if (hrv >= 60) riskScore += 0; // Excellent HRV
+    else if (hrv >= 40) riskScore += 5; // Good HRV
+    else if (hrv >= 25) riskScore += 12; // Average HRV
+    else riskScore += 20; // Poor HRV
+  } else {
+    riskScore += 10; // Unknown, assume moderate risk
+  }
+
+  // Lipid panel contribution (0-15 points)
+  if (lipidPanel?.totalCholesterol && lipidPanel?.hdl) {
+    const ratio = lipidPanel.totalCholesterol / lipidPanel.hdl;
+    if (ratio < 3.5) riskScore += 0; // Optimal
+    else if (ratio < 4.5) riskScore += 3; // Good
+    else if (ratio < 5.5) riskScore += 8; // Elevated
+    else riskScore += 15; // High risk
+  } else {
+    riskScore += 7; // Unknown, assume moderate risk
+  }
+
+  // Age contribution (0-10 points)
+  if (age < 40) riskScore += 0;
+  else if (age < 50) riskScore += 3;
+  else if (age < 60) riskScore += 6;
+  else riskScore += 10;
+
+  // Smoking contribution (0-10 points)
+  if (smokingStatus) riskScore += 10;
+
+  return Math.min(100, riskScore);
+}
+
+/**
+ * Determine cardiovascular risk level (legacy)
+ */
+function determineCardiovascularRiskLevel(riskScore: number): CardiovascularRiskLevel {
+  if (riskScore < 20) return 'low';
+  if (riskScore < 40) return 'moderate';
+  if (riskScore < 70) return 'elevated';
+  return 'high';
+}
+
+// ============================================================================
+// NEW AI ENRICHMENT ARCHITECTURE
+// ============================================================================
+
+/**
+ * Determine cardiovascular status (new AI enrichment architecture)
+ */
+function determineCardiovascularStatus(inputs: CardiovascularInputs): CardiovascularStatus {
+  const { systolicBP, diastolicBP, restingHR, hrv, lipidPanel, hsCRP, bodyFat, stressScore, recoveryScore } = inputs;
+
+  let riskSignals = 0;
+
+  // High Risk: Multiple severe cardiovascular signals
+  if (systolicBP != null && systolicBP >= 160) riskSignals += 3;
+  if (diastolicBP != null && diastolicBP >= 100) riskSignals += 3;
+  if (restingHR != null && restingHR >= 90) riskSignals += 2;
+  if (hrv != null && hrv < 25) riskSignals += 2;
+  if (lipidPanel?.cholesterolRatio != null && lipidPanel.cholesterolRatio >= 5.5) riskSignals += 2;
+  if (hsCRP != null && hsCRP >= 3.0) riskSignals += 2;
+  if (bodyFat != null && bodyFat >= 30) riskSignals += 1;
+  if (stressScore != null && stressScore >= 80) riskSignals += 1;
+  if (recoveryScore != null && recoveryScore <= 30) riskSignals += 1;
+
+  if (riskSignals >= 6) return 'high_risk';
+
+  // Elevated Risk: Concerning cardiovascular signals
+  if (
+    (systolicBP != null && systolicBP >= 140) ||
+    (diastolicBP != null && diastolicBP >= 90) ||
+    (restingHR != null && restingHR >= 85) ||
+    (hrv != null && hrv < 35) ||
+    (lipidPanel?.cholesterolRatio != null && lipidPanel.cholesterolRatio >= 4.5) ||
+    (hsCRP != null && hsCRP >= 2.0) ||
+    riskSignals >= 3
+  ) {
+    return 'elevated_risk';
+  }
+
+  // Moderate: Mild cardiovascular concerns
+  if (
+    (systolicBP != null && systolicBP >= 130) ||
+    (diastolicBP != null && diastolicBP >= 80) ||
+    (restingHR != null && restingHR >= 75) ||
+    (hrv != null && hrv < 45) ||
+    (lipidPanel?.cholesterolRatio != null && lipidPanel.cholesterolRatio >= 3.5) ||
+    riskSignals >= 1
+  ) {
+    return 'moderate';
+  }
+
+  // Optimal: Favorable cardiovascular health
+  return 'optimal';
+}
+
+/**
+ * Build cardiovascular evidence
+ */
+function buildCardiovascularEvidence(inputs: CardiovascularInputs, status: CardiovascularStatus, bloodwork?: ReturnType<typeof getLatestBloodworkContext> extends Promise<infer T> ? T : never): CardiovascularEvidence {
+  logger.info('📊 [CARDIOVASCULAR EVIDENCE] Building evidence');
+
+  const signals: CardiovascularEvidenceSignal[] = [];
+
+  if (inputs.systolicBP != null && inputs.diastolicBP != null) {
+    const bpInterpretation = inputs.systolicBP < 120 && inputs.diastolicBP < 80
+      ? 'Optimal blood pressure'
+      : inputs.systolicBP < 130 && inputs.diastolicBP < 80
+      ? 'Normal blood pressure'
+      : inputs.systolicBP < 140 || inputs.diastolicBP < 90
+      ? 'Elevated blood pressure'
+      : 'High blood pressure';
+    
+    signals.push({
+      name: 'Blood Pressure',
+      value: `${inputs.systolicBP}/${inputs.diastolicBP}`,
+      interpretation: bpInterpretation,
+    });
+  }
+
+  if (inputs.restingHR != null) {
+    const hrInterpretation = inputs.restingHR < 60
+      ? 'Excellent resting heart rate'
+      : inputs.restingHR < 70
+      ? 'Good resting heart rate'
+      : inputs.restingHR < 80
+      ? 'Average resting heart rate'
+      : inputs.restingHR < 90
+      ? 'Elevated resting heart rate'
+      : 'High resting heart rate';
+    
+    signals.push({
+      name: 'Resting Heart Rate',
+      value: inputs.restingHR,
+      interpretation: hrInterpretation,
+    });
+  }
+
+  if (inputs.hrv != null) {
+    const hrvInterpretation = inputs.hrv >= 60
+      ? 'Excellent HRV'
+      : inputs.hrv >= 40
+      ? 'Good HRV'
+      : inputs.hrv >= 25
+      ? 'Average HRV'
+      : 'Low HRV - autonomic strain';
+    
+    signals.push({
+      name: 'HRV',
+      value: inputs.hrv,
+      interpretation: hrvInterpretation,
+    });
+  }
+
+  if (inputs.lipidPanel?.cholesterolRatio != null) {
+    const ratioInterpretation = inputs.lipidPanel.cholesterolRatio < 3.5
+      ? 'Optimal cholesterol ratio'
+      : inputs.lipidPanel.cholesterolRatio < 4.5
+      ? 'Good cholesterol ratio'
+      : inputs.lipidPanel.cholesterolRatio < 5.5
+      ? 'Elevated cholesterol ratio'
+      : 'High cholesterol ratio';
+    
+    signals.push({
+      name: 'Total Cholesterol/HDL Ratio',
+      value: inputs.lipidPanel.cholesterolRatio.toFixed(1),
+      interpretation: ratioInterpretation,
+    });
+  }
+
+  if (inputs.lipidPanel?.triglycerides != null) {
+    const trigInterpretation = inputs.lipidPanel.triglycerides < 150
+      ? 'Normal triglycerides'
+      : inputs.lipidPanel.triglycerides < 200
+      ? 'Borderline high triglycerides'
+      : 'High triglycerides';
+    
+    signals.push({
+      name: 'Triglycerides',
+      value: inputs.lipidPanel.triglycerides,
+      interpretation: trigInterpretation,
+    });
+  }
+
+  if (inputs.hsCRP != null) {
+    const crpInterpretation = inputs.hsCRP < 1.0
+      ? 'Low inflammatory burden'
+      : inputs.hsCRP < 2.0
+      ? 'Moderate inflammatory burden'
+      : 'Elevated inflammatory burden';
+    
+    signals.push({
+      name: 'hsCRP',
+      value: inputs.hsCRP,
+      interpretation: crpInterpretation,
+    });
+  }
+
+  if (inputs.bodyFat != null) {
+    const bfInterpretation = inputs.bodyFat < 20
+      ? 'Healthy body fat'
+      : inputs.bodyFat < 25
+      ? 'Moderate body fat'
+      : 'Elevated body fat';
+    
+    signals.push({
+      name: 'Body Fat',
+      value: `${inputs.bodyFat}%`,
+      interpretation: bfInterpretation,
+    });
+  }
+
+  if (inputs.stressScore != null) {
+    signals.push({
+      name: 'Stress Score',
+      value: inputs.stressScore,
+      interpretation: inputs.stressScore < 50 ? 'Low stress' : inputs.stressScore < 75 ? 'Moderate stress' : 'High stress',
+    });
+  }
+
+  if (inputs.recoveryScore != null) {
+    signals.push({
+      name: 'Recovery Score',
+      value: inputs.recoveryScore,
+      interpretation: inputs.recoveryScore >= 70 ? 'Good recovery' : inputs.recoveryScore >= 50 ? 'Moderate recovery' : 'Poor recovery',
+    });
+  }
+
+  const summary = `Cardiovascular status: ${status}. ${signals.length} cardiovascular signals analyzed.`;
+
+  logger.info('✅ [CARDIOVASCULAR EVIDENCE] Evidence built', { signalCount: signals.length, status });
+
+  return {
+    cardiovascularStatus: status,
+    signals,
+    summary,
+  };
+}
+
+/**
+ * Build fallback cardiovascular recommendation
+ */
+function buildCardiovascularFallbackRecommendation(status: CardiovascularStatus): CardiovascularRecommendation {
+  logger.info('🔧 [CARDIOVASCULAR FALLBACK] Building fallback recommendation');
+
+  let priority: 'critical' | 'important' | 'optimization';
+  let summary: string;
+  let actions: string[];
+
+  switch (status) {
+    case 'high_risk':
+      priority = 'critical';
+      summary = 'Cardiovascular health requires immediate attention';
+      actions = [
+        'Reduce training intensity today',
+        'Avoid excessive strain or max-effort work',
+        'Prioritize hydration and recovery',
+        'Monitor blood pressure if available',
+        'Discuss abnormal values with clinician if persistent',
+      ];
+      break;
+
+    case 'elevated_risk':
+      priority = 'important';
+      summary = 'Cardiovascular signals show elevated risk';
+      actions = [
+        'Use lower-intensity cardio or active recovery',
+        'Emphasize hydration and sleep',
+        'Reduce excessive sodium intake',
+        'Reinforce nutrition support',
+        'Monitor cardiovascular load',
+      ];
+      break;
+
+    case 'moderate':
+      priority = 'important';
+      summary = 'Cardiovascular health shows mild concerns';
+      actions = [
+        'Monitor training load',
+        'Keep cardiovascular work moderate and sustainable',
+        'Emphasize consistency',
+        'Maintain hydration',
+      ];
+      break;
+
+    case 'optimal':
+    default:
+      priority = 'optimization';
+      summary = 'Cardiovascular health is optimal';
+      actions = [
+        'Maintain current practices',
+        'Continue steady aerobic work',
+        'Reinforce healthy routine',
+      ];
+      break;
+  }
+
+  logger.info('✅ [CARDIOVASCULAR FALLBACK] Fallback recommendation built', { priority, status });
+
+  return {
+    type: 'cardiovascular',
+    priority,
+    summary,
+    actions,
+    source: 'deterministic',
+  };
+}
+
+// ============================================================================
+// MAIN ENGINE FLOW
+// ============================================================================
+
+export async function getCardiovascularRecommendation(
+  userId: string,
+  inputs: CardiovascularInputs,
+): Promise<CardiovascularRecord> {
+  logger.info('🔵 [CARDIOVASCULAR ENGINE] Starting cardiovascular recommendation flow', { userId });
+
+  // Step 0: Load baseline profile for personalized context
+  const baseline = await getBaselineFields(userId);
+  logger.info('✅ [CARDIOVASCULAR ENGINE] Baseline profile loaded', {
+    userId,
+    age: baseline.age,
+    sex: baseline.sex,
+    hasFamilyHistory: Object.keys(baseline.familyHistory).length > 0,
+  });
+
+  // Step 0b: Load bloodwork for lipid panel and cardiovascular markers
+  const bloodwork = await getLatestBloodworkContext(userId);
+  if (bloodwork.hasBloodwork) {
+    logger.info('✅ [CARDIOVASCULAR ENGINE] Bloodwork loaded', {
+      userId,
+      latestTestDate: bloodwork.latestTestDate,
+      hasLDL: !!bloodwork.markers.ldl,
+      hasHDL: !!bloodwork.markers.hdl,
+      hasTriglycerides: !!bloodwork.markers.triglycerides,
+      hasApoB: !!bloodwork.markers.apoB,
+      hasLpa: !!bloodwork.markers.lpa,
+      hasHsCRP: !!bloodwork.markers.hsCRP,
+    });
+
+    // Enrich inputs with lipid panel from bloodwork (preserve user-provided values if present)
+    if (!inputs.lipidPanel) {
+      const lipidPanel: Partial<LipidPanel> = {};
+      
+      if (bloodwork.markers.totalCholesterol) {
+        lipidPanel.totalCholesterol = getMarkerValue(bloodwork.markers.totalCholesterol) ?? undefined;
+      }
+      if (bloodwork.markers.ldl) {
+        lipidPanel.ldl = getMarkerValue(bloodwork.markers.ldl) ?? undefined;
+      }
+      if (bloodwork.markers.hdl) {
+        lipidPanel.hdl = getMarkerValue(bloodwork.markers.hdl) ?? undefined;
+      }
+      if (bloodwork.markers.triglycerides) {
+        lipidPanel.triglycerides = getMarkerValue(bloodwork.markers.triglycerides) ?? undefined;
+      }
+      if (bloodwork.markers.apoB) {
+        lipidPanel.apoB = getMarkerValue(bloodwork.markers.apoB) ?? undefined;
+      }
+      if (bloodwork.markers.lpa) {
+        lipidPanel.lpa = getMarkerValue(bloodwork.markers.lpa) ?? undefined;
+      }
+
+      // Calculate cholesterol ratio if we have both total and HDL
+      if (lipidPanel.totalCholesterol && lipidPanel.hdl) {
+        lipidPanel.cholesterolRatio = lipidPanel.totalCholesterol / lipidPanel.hdl;
+      }
+
+      if (Object.keys(lipidPanel).length > 0) {
+        inputs.lipidPanel = lipidPanel as LipidPanel;
+        logger.info('📊 [CARDIOVASCULAR ENGINE] Using lipid panel from bloodwork', {
+          ldl: lipidPanel.ldl,
+          hdl: lipidPanel.hdl,
+          triglycerides: lipidPanel.triglycerides,
+        });
+      }
+    }
+
+    // Add inflammation marker if available
+    if (!inputs.hsCRP && bloodwork.markers.hsCRP) {
+      inputs.hsCRP = getMarkerValue(bloodwork.markers.hsCRP) ?? undefined;
+      logger.info('📊 [CARDIOVASCULAR ENGINE] Using hsCRP from bloodwork', { hsCRP: inputs.hsCRP });
+    }
+  } else {
+    logger.info('⚠️ [CARDIOVASCULAR ENGINE] No bloodwork available, using provided inputs only', { userId });
+  }
+
+  // Step 1: Deterministic status
+  const cardiovascularStatus = determineCardiovascularStatus(inputs);
+  logger.info('📊 [CARDIOVASCULAR ENGINE] Status determined', { cardiovascularStatus });
+
+  // Step 2: Build evidence (include bloodwork)
+  const evidence = buildCardiovascularEvidence(inputs, cardiovascularStatus, bloodwork);
+
+  // Step 3: Build fallback recommendation
+  const fallbackRecommendation = buildCardiovascularFallbackRecommendation(cardiovascularStatus);
+
+  // Step 4: AI enrichment (if enabled)
+  let recommendation: CardiovascularRecommendation;
+  if (USE_AI_ENRICHMENT) {
+    logger.info('🤖 [CARDIOVASCULAR ENGINE] AI enrichment enabled');
+    recommendation = await enrichCardiovascularRecommendation(evidence, fallbackRecommendation);
+  } else {
+    logger.info('🔧 [CARDIOVASCULAR ENGINE] Using fallback recommendation');
+    recommendation = fallbackRecommendation;
+  }
+
+  // Step 5: Normalize
+  recommendation = normalizeCardiovascularRecommendation(recommendation);
+
+  // Step 6: Validate
+  const isValid = validateCardiovascularRecommendation(recommendation);
+  if (!isValid) {
+    logger.warn('⚠️ [CARDIOVASCULAR ENGINE] Validation failed, using fallback');
+    recommendation = normalizeCardiovascularRecommendation(fallbackRecommendation);
+  }
+
+  // Step 7: Create record
+  const record: CardiovascularRecord = {
+    id: randomUUID(),
+    userId,
+    date: new Date().toISOString().slice(0, 10),
+    cardiovascularStatus,
+    evidence,
+    recommendation,
+    createdAt: new Date().toISOString(),
+  };
+
+  // Step 8: Persist to in-memory store
+  const userRecords = cardiovascularRecordStore.get(userId) ?? [];
+  cardiovascularRecordStore.set(userId, [record, ...userRecords]);
+
+  // Step 9: Persist to RecommendationEngine
+  try {
+    await createRecommendation({
+      userId,
+      request: {
+        sourceEngine: 'cardiovascular',
+        title: recommendation.summary,
+        description: recommendation.actions.join('. '),
+        rationale: recommendation.rationale,
+        priority: recommendation.priority,
+        category: 'health_monitoring',
+        confidenceLevel: recommendation.source === 'ai_enriched' ? 'high' : 'medium',
+        actionType: 'monitor',
+        actionTarget: 'cardiovascular_health',
+      },
+    });
+    logger.info('✅ [CARDIOVASCULAR ENGINE] Persisted to RecommendationEngine');
+  } catch (error) {
+    logger.error('❌ [CARDIOVASCULAR ENGINE] Failed to persist to RecommendationEngine', {
+      error: (error as Error).message,
+    });
+  }
+
+  logger.info('✅ [CARDIOVASCULAR ENGINE] Cardiovascular recommendation complete', {
+    userId,
+    cardiovascularStatus,
+    priority: recommendation.priority,
+    source: recommendation.source,
+  });
+
+  return record;
+}
+
+/**
+ * Legacy calculate function (preserved for backward compatibility)
+ */
+export async function calculateCardiovascular(userId: string): Promise<CardiovascularRecord | null> {
+  try {
+    logger.info('Calculating cardiovascular metrics', { userId });
+
+    // Get user baseline profile for age
+    const { data: baseline, error: baselineError } = await supabase
+      .from('baseline_profiles')
+      .select('demographics')
+      .eq('user_id', userId)
+      .single();
+
+    if (baselineError) {
+      logger.warn('No baseline profile found for cardiovascular calculation', { userId });
+    }
+
+    // Get latest recovery record for resting HR and HRV
+    const { data: recovery, error: recoveryError } = await supabase
+      .from('recovery_records')
+      .select('source_inputs')
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (recoveryError) {
+      logger.warn('No recovery record found for cardiovascular calculation', { userId });
+    }
+
+    // Get latest bloodwork for lipid panel (if available)
+    const { data: bloodwork, error: bloodworkError } = await supabase
+      .from('bloodwork_results')
+      .select('biomarkers')
+      .eq('user_id', userId)
+      .order('test_date', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (bloodworkError) {
+      logger.warn('No bloodwork found for cardiovascular calculation', { userId });
+    }
+
+    // Build inputs from available data
+    const age = baseline?.demographics?.age ?? 35;
+    const inputs: CardiovascularInputs = {
+      restingHR: recovery?.source_inputs?.restingHr,
+      hrv: recovery?.source_inputs?.hrv,
+      systolicBP: undefined, // TODO: Get from device sync or manual entry
+      diastolicBP: undefined, // TODO: Get from device sync or manual entry
+      lipidPanel: bloodwork?.biomarkers ? {
+        totalCholesterol: bloodwork.biomarkers.total_cholesterol,
+        ldl: bloodwork.biomarkers.ldl,
+        hdl: bloodwork.biomarkers.hdl,
+        triglycerides: bloodwork.biomarkers.triglycerides,
+        cholesterolRatio: bloodwork.biomarkers.total_cholesterol && bloodwork.biomarkers.hdl
+          ? bloodwork.biomarkers.total_cholesterol / bloodwork.biomarkers.hdl
+          : undefined,
+      } : undefined,
+      age,
+      smokingStatus: baseline?.demographics?.smoking_status ?? false,
+    };
+
+    // Calculate all metrics
+    const restingHRAnalysis = analyzeRestingHR(inputs.restingHR, age);
+    const bpAnalysis = analyzeBP(inputs.systolicBP, inputs.diastolicBP);
+    const cardiovascularRiskScore = calculateCardiovascularRiskScore(
+      restingHRAnalysis,
+      bpAnalysis,
+      inputs.hrv,
+      inputs.lipidPanel,
+      age,
+      inputs.smokingStatus ?? false
+    );
+    const cardiovascularRiskLevel = determineCardiovascularRiskLevel(cardiovascularRiskScore);
+
+    const record: CardiovascularRecord = {
+      id: uuidv4(),
+      userId,
+      date: new Date().toISOString().split('T')[0],
+      cardiovascularRiskScore,
+      cardiovascularRiskLevel,
+      restingHRAnalysis,
+      bpAnalysis,
+      hrvCardiovascularSignal: inputs.hrv,
+      lipidPanel: inputs.lipidPanel,
+      inputs,
+      // New required fields with fallback values
+      cardiovascularStatus: cardiovascularRiskLevel === 'low' ? 'optimal' : cardiovascularRiskLevel === 'moderate' ? 'moderate' : cardiovascularRiskLevel === 'elevated' ? 'elevated_risk' : 'high_risk',
+      recommendation: {
+        type: 'cardiovascular',
+        priority: cardiovascularRiskLevel === 'high' ? 'critical' : cardiovascularRiskLevel === 'elevated' ? 'important' : 'optimization',
+        summary: `Cardiovascular risk is ${cardiovascularRiskLevel}`,
+        actions: ['Monitor cardiovascular health'],
+        source: 'deterministic',
+      },
+      createdAt: new Date().toISOString(),
+    };
+
+    // Store record in database
+    const { error: insertError } = await supabase
+      .from('cardiovascular_records')
+      .insert({
+        id: record.id,
+        user_id: record.userId,
+        date: record.date,
+        cardiovascular_risk_score: record.cardiovascularRiskScore,
+        cardiovascular_risk_level: record.cardiovascularRiskLevel,
+        resting_hr_analysis: record.restingHRAnalysis,
+        bp_analysis: record.bpAnalysis,
+        hrv_cardiovascular_signal: record.hrvCardiovascularSignal,
+        lipid_panel: record.lipidPanel,
+        inputs: record.inputs,
+        created_at: record.createdAt,
+      });
+
+    if (insertError) {
+      logger.error('Failed to store cardiovascular record', { error: insertError, userId });
+    }
+
+    logger.info('Cardiovascular calculation complete', {
+      userId,
+      cardiovascularRiskScore,
+      cardiovascularRiskLevel,
+    });
+
+    return record;
+  } catch (error) {
+    logger.error('Cardiovascular calculation failed', { error, userId });
+    return null;
+  }
+}
+
+export async function getCardiovascularToday(userId: string): Promise<CardiovascularRecord | null> {
+  const today = new Date().toISOString().slice(0, 10);
+  const userRecords = cardiovascularRecordStore.get(userId) ?? [];
+  const existing = userRecords.find(record => record.date === today);
+
+  if (existing) {
+    logger.info('📋 [CARDIOVASCULAR ENGINE] Returning cached record', { userId, date: today });
+    return existing;
+  }
+
+  logger.info('🔄 [CARDIOVASCULAR ENGINE] No cached record, generating new', { userId });
+  
+  // Default inputs for demo
+  const inputs: CardiovascularInputs = {
+    systolicBP: 118,
+    diastolicBP: 76,
+    restingHR: 62,
+    hrv: 55,
+    lipidPanel: {
+      totalCholesterol: 180,
+      hdl: 55,
+      ldl: 100,
+      triglycerides: 125,
+      cholesterolRatio: 3.3,
+    },
+    bodyFat: 18,
+    stressScore: 45,
+    recoveryScore: 72,
+  };
+
+  return getCardiovascularRecommendation(userId, inputs);
+}
+
+export async function getCardiovascularHistory(userId: string): Promise<CardiovascularRecord[]> {
+  return cardiovascularRecordStore.get(userId) ?? [];
+}

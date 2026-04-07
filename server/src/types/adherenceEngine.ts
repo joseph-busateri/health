@@ -6,6 +6,9 @@ export interface AdherenceInputs {
   nutritionAdherence?: number;
   sleepAdherence?: number;
   supplementAdherence?: number;
+  recommendationAdherence?: number;
+  autonomousPlanAdherence?: number;
+  goalPlanAdherence?: number;
   verbalNotes?: string;
 }
 
@@ -16,9 +19,31 @@ export interface AdherenceDomainBreakdown {
   supplement: number;
 }
 
-export interface AdherenceRecommendation {
+export interface AdherenceEvidenceSignal {
+  name: string;
+  value: number | string | boolean | null;
+  interpretation: string;
+}
+
+export interface AdherenceEvidence {
+  adherenceScore: number;
+  adherenceStatus: AdherenceStatus;
+  sourceInputs: AdherenceInputs;
+  signals: AdherenceEvidenceSignal[];
   summary: string;
+}
+
+export type AdherenceRecommendationPriority = 'critical' | 'important' | 'optimization';
+export type AdherenceRecommendationSource = 'deterministic' | 'ai_enriched' | 'fallback';
+
+export interface AdherenceRecommendation {
+  type?: 'adherence';
+  priority?: AdherenceRecommendationPriority;
+  summary: string;
+  rationale?: string;
   note: string;
+  actions?: string[];
+  source?: AdherenceRecommendationSource;
 }
 
 export interface AdherenceRecord {
@@ -31,5 +56,6 @@ export interface AdherenceRecord {
   trend: AdherenceTrend;
   recommendation: AdherenceRecommendation;
   sourceInputs: AdherenceInputs;
+  evidence?: AdherenceEvidence;
   createdAt: string;
 }

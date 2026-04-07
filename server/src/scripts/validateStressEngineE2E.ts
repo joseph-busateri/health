@@ -2,15 +2,20 @@
 import 'dotenv/config';
 import { existsSync } from 'fs';
 import path from 'path';
+import axios from 'axios';
 
-const BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:3000';
+const BASE_URL = process.env.API_BASE_URL ?? 'http://localhost:3001';
 
 type Check = { name: string; success: boolean; detail: string };
 
 const getJson = async (endpoint: string) => {
-  const response = await fetch(`${BASE_URL}${endpoint}`);
-  const data = await response.json().catch(() => ({}));
-  return { ok: response.ok, data };
+  try {
+    const response = await axios.get(`${BASE_URL}${endpoint}`);
+    return { ok: response.status === 200, data: response.data };
+  } catch (error: any) {
+    console.error(`Request failed for ${endpoint}:`, error.message);
+    return { ok: false, data: {} };
+  }
 };
 
 async function main() {
