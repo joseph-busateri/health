@@ -36,6 +36,7 @@ import { AdvancedIntelligenceSection } from '../components/controlTower/Advanced
 
 import controlTowerDailyService from '../services/controlTowerDailyService';
 import { normalizeControlTowerPayload } from '../adapters/controlTowerAdapter';
+import { useUser } from '../context/UserContext';
 import type { ControlTowerPayload } from '../types/controlTower';
 import type { DashboardScreenNavigationProp } from '../types/navigation';
 
@@ -43,15 +44,21 @@ type Props = {
   navigation: DashboardScreenNavigationProp;
 };
 
-const USER_ID = process.env.EXPO_PUBLIC_SAMPLE_USER_ID || 'mobile-demo-user';
-
 const ControlTowerScreen: React.FC<Props> = ({ navigation }) => {
+  const { userId } = useUser();
   const [controlTower, setControlTower] = useState<ControlTowerPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const fetchControlTower = useCallback(async (initial = false) => {
+    if (!userId) {
+      setError('Please set your user ID in Settings');
+      setLoading(false);
+      setRefreshing(false);
+      return;
+    }
+
     if (initial) {
       setLoading(true);
     } else {
@@ -60,7 +67,7 @@ const ControlTowerScreen: React.FC<Props> = ({ navigation }) => {
 
     try {
       // Fetch from existing Control Tower Daily service
-      const dailyResponse = await controlTowerDailyService.getToday(USER_ID, !initial);
+      const dailyResponse = await controlTowerDailyService.getToday(userId, !initial);
       
       // Normalize into unified ViewModel
       const normalized = normalizeControlTowerPayload(dailyResponse);
@@ -74,7 +81,7 @@ const ControlTowerScreen: React.FC<Props> = ({ navigation }) => {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [userId]);
 
   useFocusEffect(
     useCallback(() => {
