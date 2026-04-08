@@ -1,3 +1,9 @@
+/**
+ * @deprecated This screen is superseded by GoalManagementScreen.
+ * Use GoalManagementScreen instead for comprehensive goal management functionality.
+ * This file is kept for backward compatibility but will be removed in a future release.
+ */
+
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert } from 'react-native';
 import { useUser } from '../context/UserContext';

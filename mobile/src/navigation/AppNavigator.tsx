@@ -30,6 +30,24 @@ import BloodworkTrendsScreen from '../screens/BloodworkTrendsScreen';
 import VoiceInterviewScreen from '../screens/VoiceInterviewScreen';
 import SleepNumberConnectScreen from '../screens/SleepNumberConnectScreen';
 import SleepNumberUploadScreen from '../screens/SleepNumberUploadScreen';
+import ControlTowerScreen from '../screens/ControlTowerScreen';
+import BaselineProfileScreen from '../screens/BaselineProfileScreen';
+import GoalManagementScreen from '../screens/GoalManagementScreen';
+import HealthDataHubScreen from '../screens/HealthDataHubScreen';
+import AppleWatchConnectScreen from '../screens/AppleWatchConnectScreen';
+import OuraConnectScreen from '../screens/OuraConnectScreen';
+import AgentInterviewScreen from '../screens/AgentInterviewScreen';
+import DynamicInterviewScreen from '../screens/DynamicInterviewScreen';
+import HybridInterviewScreen from '../screens/HybridInterviewScreen';
+import BodyCompositionUploadScreen from '../screens/BodyCompositionUploadScreen';
+import InjuryPreventionScreen from '../screens/InjuryPreventionScreen';
+import StrengthTrackingScreen from '../screens/StrengthTrackingScreen';
+import RecoveryDashboardScreen from '../screens/RecoveryDashboardScreen';
+import AnalyticsDashboardScreen from '../screens/AnalyticsDashboardScreen';
+import TapeMeasurementsScreen from '../screens/TapeMeasurementsScreen';
+import AutonomousAdjustmentsScreen from '../screens/AutonomousAdjustmentsScreen';
+import InterviewSelectorScreen from '../screens/InterviewSelectorScreen';
+import SourceProvenanceScreen from '../screens/SourceProvenanceScreen';
 import type { RootStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -186,6 +204,96 @@ const AppNavigator: React.FC = () => {
       name="SleepNumberUpload"
       component={SleepNumberUploadScreen}
       options={{ title: 'Upload Sleep Data' }}
+    />
+    <Stack.Screen
+      name="ControlTower"
+      component={ControlTowerScreen}
+      options={{ title: 'Control Tower' }}
+    />
+    <Stack.Screen
+      name="BaselineProfile"
+      component={BaselineProfileScreen}
+      options={{ title: 'Edit Baseline Profile' }}
+    />
+    <Stack.Screen
+      name="GoalManagement"
+      component={GoalManagementScreen}
+      options={{ title: 'Goal Management' }}
+    />
+    <Stack.Screen
+      name="HealthDataHub"
+      component={HealthDataHubScreen}
+      options={{ title: 'Health Data Hub' }}
+    />
+    <Stack.Screen
+      name="AppleWatchConnect"
+      component={AppleWatchConnectScreen}
+      options={{ title: 'Connect Apple Watch' }}
+    />
+    <Stack.Screen
+      name="OuraConnect"
+      component={OuraConnectScreen}
+      options={{ title: 'Connect Oura Ring' }}
+    />
+    <Stack.Screen
+      name="AgentInterview"
+      component={AgentInterviewScreen}
+      options={{ title: 'Agent Interview' }}
+    />
+    <Stack.Screen
+      name="DynamicInterview"
+      component={DynamicInterviewScreen}
+      options={{ title: 'Dynamic Interview' }}
+    />
+    <Stack.Screen
+      name="HybridInterview"
+      component={HybridInterviewScreen}
+      options={{ title: 'Hybrid Interview' }}
+    />
+    <Stack.Screen
+      name="BodyCompositionUpload"
+      component={BodyCompositionUploadScreen}
+      options={{ title: 'Upload Body Composition' }}
+    />
+    <Stack.Screen
+      name="InjuryPrevention"
+      component={InjuryPreventionScreen}
+      options={{ title: 'Injury Prevention' }}
+    />
+    <Stack.Screen
+      name="StrengthTracking"
+      component={StrengthTrackingScreen}
+      options={{ title: 'Strength Tracking' }}
+    />
+    <Stack.Screen
+      name="RecoveryDashboard"
+      component={RecoveryDashboardScreen}
+      options={{ title: 'Recovery Dashboard' }}
+    />
+    <Stack.Screen
+      name="AnalyticsDashboard"
+      component={AnalyticsDashboardScreen}
+      options={{ title: 'Analytics Dashboard' }}
+    />
+    <Stack.Screen
+      name="TapeMeasurements"
+      component={TapeMeasurementsScreen}
+      options={{ title: 'Body Measurements' }}
+    />
+    <Stack.Screen
+      name="AutonomousAdjustments"
+      component={AutonomousAdjustmentsScreen}
+      options={{ title: 'Autonomous Adjustments' }}
+    />
+    <Stack.Screen
+      name="InterviewSelector"
+      component={InterviewSelectorScreen}
+      options={{ title: 'Choose Interview Mode' }}
+    />
+    <Stack.Screen
+      name="SourceProvenance"
+      component={SourceProvenanceScreen}
+      options={{ title: 'Source Provenance' }}
     />
   </Stack.Navigator>
   );

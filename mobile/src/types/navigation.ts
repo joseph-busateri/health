@@ -34,6 +34,24 @@ export type RootStackParamList = {
   VoiceInterview: undefined;
   SleepNumberConnect: undefined;
   SleepNumberUpload: undefined;
+  ControlTower: undefined;
+  BaselineProfile: undefined;
+  GoalManagement: undefined;
+  HealthDataHub: undefined;
+  AppleWatchConnect: undefined;
+  OuraConnect: undefined;
+  AgentInterview: undefined;
+  DynamicInterview: undefined;
+  HybridInterview: undefined;
+  BodyCompositionUpload: undefined;
+  InjuryPrevention: undefined;
+  StrengthTracking: undefined;
+  RecoveryDashboard: undefined;
+  AnalyticsDashboard: undefined;
+  TapeMeasurements: undefined;
+  AutonomousAdjustments: undefined;
+  InterviewSelector: undefined;
+  SourceProvenance: undefined;
   // Future routes: set to undefined for now to keep extension lightweight.
   Reminders?: undefined;
   Nutrition?: undefined;

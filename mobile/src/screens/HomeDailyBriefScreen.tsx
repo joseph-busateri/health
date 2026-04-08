@@ -1,6 +1,10 @@
 /**
  * Home Daily Brief Screen - Autonomous AI Health Operating System Control Tower
  * 
+ * @deprecated This screen is a duplicate of ControlTowerScreen and should not be used.
+ * Use ControlTowerScreen instead for Phase 14 Control Tower functionality.
+ * This file is kept for backward compatibility but will be removed in a future release.
+ * 
  * Production-Safe Refactor: Decision-First Architecture
  * Preserves existing service contracts while implementing 7-section hierarchy
  */
