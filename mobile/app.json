@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Health App",
-    "slug": "health-app",
+    "name": "Personal Health Agent",
+    "slug": "personal-health-agent",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -36,7 +36,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "health-optimization-app"
+        "projectId": "12345678-1234-1234-1234-123456789abc"
       }
     },
     "plugins": [
