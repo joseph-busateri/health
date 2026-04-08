@@ -2,15 +2,15 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
 
-import DashboardV13Screen from '../screens/DashboardV13Screen';
+// import DashboardV13Screen from '../screens/DashboardV13Screen'; // Not used in tabs
 import ConnectedDashboardScreen from '../screens/ConnectedDashboardScreen';
 import WorkoutsScreen from '../screens/WorkoutsScreen';
 import DevicesScreen from '../screens/DevicesScreen';
 import UserSettingsScreen from '../screens/UserSettingsScreen';
-import HealthDataHubScreen from '../screens/HealthDataHubScreen';
-import TrendsScreen from '../screens/TrendsScreen';
-import AgentInterviewScreen from '../screens/AgentInterviewScreen';
-import SettingsScreen from '../screens/SettingsScreen';
+// import HealthDataHubScreen from '../screens/HealthDataHubScreen'; // Not used in tabs
+// import TrendsScreen from '../screens/TrendsScreen'; // DEPRECATED - use AnalyticsDashboardScreen
+// import AgentInterviewScreen from '../screens/AgentInterviewScreen'; // Not used in tabs
+// import SettingsScreen from '../screens/SettingsScreen'; // DEPRECATED - use UserSettingsScreen
 
 const Tab = createBottomTabNavigator();
 

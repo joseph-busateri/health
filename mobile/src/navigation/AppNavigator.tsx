@@ -3,7 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { useNotificationDeepLinking } from '../hooks/useNotificationDeepLinking';
 import DailyCheckInScreen from '../screens/DailyCheckInScreen';
-import DashboardScreen from '../screens/DashboardScreen';
+// import DashboardScreen from '../screens/DashboardScreen'; // DEPRECATED - use DashboardV13Screen
 import DashboardV13Screen from '../screens/DashboardV13Screen';
 import DetailsScreen from '../screens/DetailsScreen';
 import MealPhotoScreen from '../screens/MealPhotoScreen';
@@ -67,11 +67,12 @@ const AppNavigator: React.FC = () => {
       component={DashboardV13Screen}
       options={{ title: 'Health Dashboard V13' }}
     />
-    <Stack.Screen
+    {/* DEPRECATED: Legacy Dashboard - use DashboardV13 instead */}
+    {/* <Stack.Screen
       name="Dashboard"
       component={DashboardScreen}
       options={{ title: 'Health Dashboard (Legacy)' }}
-    />
+    /> */}
     <Stack.Screen
       name="Details"
       component={DetailsScreen}
