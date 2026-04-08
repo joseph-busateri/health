@@ -51,7 +51,12 @@ const AutonomousAdjustmentsScreen = () => {
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:3000/autonomous-adjustments/${USER_ID}`);
+      const response = await fetch(`http://localhost:3000/autonomous-adjustments/${USER_ID}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-App-ID': '12345678-1234-1234-1234-123456789abc',
+        },
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch autonomous adjustments');
       }
@@ -78,7 +83,10 @@ const AutonomousAdjustmentsScreen = () => {
     try {
       const response = await fetch(`http://localhost:3000/autonomous-adjustments/${adjustmentId}/approve`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-App-ID': '12345678-1234-1234-1234-123456789abc',
+        },
         body: JSON.stringify({ user_id: USER_ID }),
       });
       if (response.ok) {
@@ -93,7 +101,10 @@ const AutonomousAdjustmentsScreen = () => {
     try {
       const response = await fetch(`http://localhost:3000/autonomous-adjustments/${adjustmentId}/override`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-App-ID': '12345678-1234-1234-1234-123456789abc',
+        },
         body: JSON.stringify({ user_id: USER_ID, feedback }),
       });
       if (response.ok) {

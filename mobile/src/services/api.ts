@@ -19,6 +19,7 @@ const api = axios.create({
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
+    'X-App-ID': '12345678-1234-1234-1234-123456789abc', // Hardcoded UUID for single-user development
   },
 });
 

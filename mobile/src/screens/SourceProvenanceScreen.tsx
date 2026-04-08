@@ -57,7 +57,12 @@ const SourceProvenanceScreen = () => {
     setError(null);
 
     try {
-      const response = await fetch(`http://localhost:3000/provenance/${USER_ID}`);
+      const response = await fetch(`http://localhost:3000/provenance/${USER_ID}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'X-App-ID': '12345678-1234-1234-1234-123456789abc',
+        },
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch provenance data');
       }
