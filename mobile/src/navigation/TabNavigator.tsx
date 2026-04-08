@@ -3,7 +3,8 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
 
 // import DashboardV13Screen from '../screens/DashboardV13Screen'; // Not used in tabs
-import ConnectedDashboardScreen from '../screens/ConnectedDashboardScreen';
+// import ConnectedDashboardScreen from '../screens/ConnectedDashboardScreen'; // DEPRECATED - old design
+import ControlTowerScreen from '../screens/ControlTowerScreen'; // Modern design system
 import WorkoutsScreen from '../screens/WorkoutsScreen';
 import DevicesScreen from '../screens/DevicesScreen';
 import UserSettingsScreen from '../screens/UserSettingsScreen';
@@ -36,7 +37,7 @@ const TabNavigator: React.FC = () => {
     >
       <Tab.Screen
         name="HomeTab"
-        component={ConnectedDashboardScreen}
+        component={ControlTowerScreen}
         options={{
           tabBarLabel: 'Home',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🏠</Text>,
