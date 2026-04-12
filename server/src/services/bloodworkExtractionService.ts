@@ -28,9 +28,164 @@ const supabase = createClient<any>(
   process.env.SUPABASE_SERVICE_ROLE_KEY!,
 );
 
-const bloodworkResultsTable = supabase.from('bloodwork_results');
 const bloodworkDocumentsTable = supabase.from('bloodwork_documents');
-const bloodworkPanelsTable = supabase.from('bloodwork_panels');
+const bloodworkResultsTable = supabase.from('bloodwork_results');
+
+const MONTH_NAMES: Record<string, number> = {
+  jan: 1,
+  january: 1,
+  feb: 2,
+  february: 2,
+  mar: 3,
+  march: 3,
+  apr: 4,
+  april: 4,
+  may: 5,
+  jun: 6,
+  june: 6,
+  jul: 7,
+  july: 7,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  oct: 10,
+  october: 10,
+  nov: 11,
+  november: 11,
+  dec: 12,
+  december: 12,
+};
+
+function formatDateParts(year: number, month: number, day: number): string | undefined {
+  if (!year || !month || !day) {
+    return undefined;
+  }
+
+  if (year < 1900 || year > 2100) {
+    return undefined;
+  }
+
+  if (month < 1 || month > 12) {
+    return undefined;
+  }
+
+  if (day < 1 || day > 31) {
+    return undefined;
+  }
+
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function normalizeNumericDate(match: RegExpMatchArray, order: 'ymd' | 'mdy' | 'dmy'): string | undefined {
+  let year: number;
+  let month: number;
+  let day: number;
+
+  if (order === 'ymd') {
+    year = Number(match[1]);
+    month = Number(match[2]);
+    day = Number(match[3]);
+  } else if (order === 'mdy') {
+    month = Number(match[1]);
+    day = Number(match[2]);
+    year = Number(match[3]);
+  } else {
+    day = Number(match[1]);
+    month = Number(match[2]);
+    year = Number(match[3]);
+  }
+
+  if (year < 100) {
+    year += year > 70 ? 1900 : 2000;
+  }
+
+  return formatDateParts(year, month, day);
+}
+
+function normalizeTextualDate(match: RegExpMatchArray): string | undefined {
+  const monthName = match[1].toLowerCase();
+  const day = Number(match[2]);
+  const year = Number(match[3]);
+  const month = MONTH_NAMES[monthName];
+
+  return formatDateParts(year, month, day);
+}
+
+function tryParseDateString(raw: string): string | undefined {
+  const sanitized = raw
+    .replace(/(\d)(st|nd|rd|th)/gi, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const isoMatch = sanitized.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/);
+  if (isoMatch) {
+    return normalizeNumericDate(isoMatch, 'ymd');
+  }
+
+  const mdyMatch = sanitized.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (mdyMatch) {
+    return normalizeNumericDate(mdyMatch, 'mdy');
+  }
+
+  const dmyMatch = sanitized.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (dmyMatch) {
+    return normalizeNumericDate(dmyMatch, 'dmy');
+  }
+
+  const textMatch = sanitized.match(/^(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(\d{1,2}),?\s+(\d{2,4})$/i);
+  if (textMatch) {
+    const normalizedYear = textMatch[3].length === 2 ? (Number(textMatch[3]) > 70 ? `19${textMatch[3]}` : `20${textMatch[3]}`) : textMatch[3];
+    return normalizeTextualDate([textMatch[0], textMatch[1], textMatch[2], normalizedYear]);
+  }
+
+  const textMatchNoComma = sanitized.match(/^(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)\s+(\d{1,2})\s+(\d{2,4})$/i);
+  if (textMatchNoComma) {
+    const normalizedYear = textMatchNoComma[3].length === 2 ? (Number(textMatchNoComma[3]) > 70 ? `19${textMatchNoComma[3]}` : `20${textMatchNoComma[3]}`) : textMatchNoComma[3];
+    return normalizeTextualDate([textMatchNoComma[0], textMatchNoComma[1], textMatchNoComma[2], normalizedYear]);
+  }
+
+  const dayFirstTextMatch = sanitized.match(/^(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec),?\s+(\d{2,4})$/i);
+  if (dayFirstTextMatch) {
+    const normalizedYear = dayFirstTextMatch[3].length === 2 ? (Number(dayFirstTextMatch[3]) > 70 ? `19${dayFirstTextMatch[3]}` : `20${dayFirstTextMatch[3]}`) : dayFirstTextMatch[3];
+    return normalizeTextualDate(['', dayFirstTextMatch[2], dayFirstTextMatch[1], normalizedYear]);
+  }
+
+  const fallbackDate = new Date(sanitized);
+  if (!Number.isNaN(fallbackDate.getTime())) {
+    return formatDateParts(fallbackDate.getFullYear(), fallbackDate.getMonth() + 1, fallbackDate.getDate());
+  }
+
+  return undefined;
+}
+
+function extractTestDateFromContent(text: string): string | undefined {
+  const lines = text.split(/\r?\n/);
+
+  for (const line of lines) {
+    const labelMatch = line.match(/(?:collection date|test date|date collected|sample collected|collection time|specimen collected|drawn on|collected on|report date|result date)[:\-]?\s*(.+)$/i);
+    if (labelMatch) {
+      const candidate = tryParseDateString(labelMatch[1]);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+
+  const genericMatches = text.match(/(\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2})|(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4})|((?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec|January|February|March|April|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{2,4})/gi);
+
+  if (genericMatches) {
+    for (const match of genericMatches) {
+      const candidate = tryParseDateString(match);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+
+  return undefined;
+}
 
 const FALLBACK_PANELS: ExtractedBloodworkPanel[] = [
   {
@@ -267,27 +422,27 @@ export async function extractBloodworkResultsFromDocument(
     const startTime = Date.now();
     let extractionMethod = 'unknown';
 
-    // Step 1: Get document and extract text if not provided
+    logger.info('Fetching document for extraction', { documentId });
+    const { data: document, error: documentError } = await bloodworkDocumentsTable
+      .select('*')
+      .eq('id', documentId)
+      .single();
+
+    if (documentError || !document) {
+      logger.error('Error retrieving document for extraction', { error: documentError, documentId });
+      return {
+        success: false,
+        panels: [],
+        results: [],
+        confidence: 0,
+        processing_time: 0,
+        errors: [documentError?.message || 'Document not found']
+      };
+    }
+
+    let detectedTestDate: string | undefined;
+
     if (!documentContent || !documentContent.trim()) {
-      logger.info('Fetching document for extraction', { documentId });
-      
-      const { data: document, error: documentError } = await bloodworkDocumentsTable
-        .select('*')
-        .eq('id', documentId)
-        .single();
-
-      if (documentError || !document) {
-        logger.error('Error retrieving document for extraction', { error: documentError, documentId });
-        return {
-          success: false,
-          panels: [],
-          results: [],
-          confidence: 0,
-          processing_time: 0,
-          errors: [documentError?.message || 'Document not found']
-        };
-      }
-
       const metadata = (document as any).metadata || {};
       const storagePath: string | undefined = metadata.storage_path;
       const storageBucket: string | undefined = metadata.storage_bucket;
@@ -304,7 +459,6 @@ export async function extractBloodworkResultsFromDocument(
         };
       }
 
-      // Step 2: OCR - Extract text from file
       logger.info('Extracting text via OCR', { documentId, storagePath });
       const fileBuffer = await downloadFileFromStorage(storagePath, storageBucket);
       const mimeType: string | undefined = (document as any).mime_type || undefined;
@@ -315,13 +469,32 @@ export async function extractBloodworkResultsFromDocument(
         logger.warn('OCR returned empty text for document', { documentId, storagePath, mimeType });
       }
 
-      logger.info('OCR extraction complete', { 
-        documentId, 
+      logger.info('OCR extraction complete', {
+        documentId,
         textLength: extractedText.length,
-        ocrConfidence 
+        ocrConfidence
       });
 
       documentContent = extractedText;
+    }
+
+    if (documentContent) {
+      detectedTestDate = extractTestDateFromContent(documentContent);
+      if (detectedTestDate) {
+        logger.info('Detected test date from document content', {
+          documentId,
+          detectedTestDate,
+        });
+      }
+    }
+
+    const existingTestDate = (document as { test_date?: string | null }).test_date || undefined;
+    const effectiveTestDate = existingTestDate || detectedTestDate;
+
+    if (!existingTestDate && detectedTestDate) {
+      await bloodworkDocumentsTable
+        .update({ test_date: detectedTestDate })
+        .eq('id', documentId);
     }
 
     // Step 3: Try pattern matching first (fast path)
@@ -422,7 +595,8 @@ export async function extractBloodworkResultsFromDocument(
       metadata: {
         extraction_method: extractionMethod,
         pattern_format: patternResult.format,
-        pattern_confidence: patternResult.confidence
+        pattern_confidence: patternResult.confidence,
+        detected_test_date: effectiveTestDate,
       }
     };
   } catch (error) {
@@ -493,12 +667,15 @@ export async function parseBloodworkDocument(
       };
     }
 
+    const existingTestDate = (document as { test_date?: string | null }).test_date || undefined;
+    const effectiveTestDate = extractionResult.metadata?.detected_test_date || existingTestDate;
+
     // Save extracted results
     const savedResults = await saveBloodworkResults(
-      document.user_id,
+      (document as { user_id: string }).user_id,
       request.document_id,
       extractionResult.results,
-      document.test_date
+      effectiveTestDate
     );
 
     if (!savedResults.success) {
@@ -513,6 +690,7 @@ export async function parseBloodworkDocument(
     await bloodworkDocumentsTable
       .update({
         extraction_confidence: extractionResult.confidence,
+        test_date: effectiveTestDate ?? existingTestDate ?? null,
         updated_at: new Date().toISOString()
       })
       .eq('id', request.document_id);

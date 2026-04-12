@@ -93,7 +93,7 @@ app.use('/', physiqueScanRoutes);
 app.use('/', baselineConfigRoutes);
 app.use('/', structuredDailyLogRoutes);
 app.use('/', baselineDocumentRoutes);
-app.use('/', workoutDocumentRoutes);
+app.use('/api/workout-document', workoutDocumentRoutes);
 app.use('/', supplementDocumentRoutes);
 app.use('/', pointInTimeRoutes);
 app.use('/bloodwork', bloodworkRoutes);

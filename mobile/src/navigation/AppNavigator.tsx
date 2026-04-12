@@ -1,10 +1,10 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { View, Text, StyleSheet } from 'react-native';
 
 import { useNotificationDeepLinking } from '../hooks/useNotificationDeepLinking';
 import DailyCheckInScreen from '../screens/DailyCheckInScreen';
-// import DashboardScreen from '../screens/DashboardScreen'; // DEPRECATED - use DashboardV13Screen
-import DashboardV13Screen from '../screens/DashboardV13Screen';
+// import DashboardScreen from '../screens/DashboardScreen'; // DEPRECATED - use ModernHomeScreen
 import DetailsScreen from '../screens/DetailsScreen';
 import MealPhotoScreen from '../screens/MealPhotoScreen';
 import PhysiqueScanScreen from '../screens/PhysiqueScanScreen';
@@ -31,6 +31,7 @@ import VoiceInterviewScreen from '../screens/VoiceInterviewScreen';
 import SleepNumberConnectScreen from '../screens/SleepNumberConnectScreen';
 import SleepNumberUploadScreen from '../screens/SleepNumberUploadScreen';
 import ControlTowerScreen from '../screens/ControlTowerScreen';
+import RecommendationsScreen from '../screens/RecommendationsScreen';
 import BaselineProfileScreen from '../screens/BaselineProfileScreen';
 import GoalManagementScreen from '../screens/GoalManagementScreen';
 import HealthDataHubScreen from '../screens/HealthDataHubScreen';
@@ -52,6 +53,16 @@ import type { RootStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const QuarantinedDashboardScreen: React.FC = () => (
+  <View style={styles.quarantineContainer}>
+    <Text style={styles.quarantineHeading}>Legacy dashboard archived</Text>
+    <Text style={styles.quarantineBody}>
+      The control tower dashboard (DashboardV13) has been quarantined. Please navigate via the Home tab
+      to explore the modern, human-centered experience.
+    </Text>
+  </View>
+);
+
 const AppNavigator: React.FC = () => {
   useNotificationDeepLinking();
 
@@ -64,8 +75,8 @@ const AppNavigator: React.FC = () => {
   >
     <Stack.Screen
       name="DashboardV13"
-      component={DashboardV13Screen}
-      options={{ title: 'Health Dashboard V13' }}
+      component={QuarantinedDashboardScreen}
+      options={{ title: 'Legacy Dashboard (Quarantined)' }}
     />
     {/* DEPRECATED: Legacy Dashboard - use DashboardV13 instead */}
     {/* <Stack.Screen
@@ -212,6 +223,11 @@ const AppNavigator: React.FC = () => {
       options={{ title: 'Control Tower' }}
     />
     <Stack.Screen
+      name="Recommendations"
+      component={RecommendationsScreen}
+      options={{ title: 'Recommendations' }}
+    />
+    <Stack.Screen
       name="BaselineProfile"
       component={BaselineProfileScreen}
       options={{ title: 'Edit Baseline Profile' }}
@@ -301,3 +317,26 @@ const AppNavigator: React.FC = () => {
 };
 
 export default AppNavigator;
+
+const styles = StyleSheet.create({
+  quarantineContainer: {
+    flex: 1,
+    padding: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+  },
+  quarantineHeading: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  quarantineBody: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#475569',
+    textAlign: 'center',
+  },
+});

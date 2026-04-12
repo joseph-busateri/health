@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { getAllDashboardData } from '../services/dashboardService';
 import type {
   RecoveryEngineData,
@@ -34,6 +35,58 @@ interface DashboardData {
   bloodwork: BloodworkLatest | null;
   recommendations: TodayRecommendation[];
 }
+
+type ControlTowerComponentKey = keyof ControlTowerData['components'];
+
+const CONTROL_TOWER_COMPONENTS: Array<{
+  key: ControlTowerComponentKey;
+  title: string;
+  abbreviation: string;
+  iconName: string;
+  iconColor: string;
+  iconBackground: string;
+}> = [
+  {
+    key: 'cv',
+    title: 'Cardiovascular',
+    abbreviation: 'CV',
+    iconName: 'heart',
+    iconColor: '#EF4444',
+    iconBackground: 'rgba(239, 68, 68, 0.12)',
+  },
+  {
+    key: 'rec',
+    title: 'Recovery',
+    abbreviation: 'REC',
+    iconName: 'bed-outline',
+    iconColor: '#3B82F6',
+    iconBackground: 'rgba(59, 130, 246, 0.12)',
+  },
+  {
+    key: 'met',
+    title: 'Metabolic',
+    abbreviation: 'MET',
+    iconName: 'flame',
+    iconColor: '#F97316',
+    iconBackground: 'rgba(249, 115, 22, 0.12)',
+  },
+  {
+    key: 'perf',
+    title: 'Performance',
+    abbreviation: 'PERF',
+    iconName: 'barbell-outline',
+    iconColor: '#22C55E',
+    iconBackground: 'rgba(34, 197, 94, 0.12)',
+  },
+  {
+    key: 'sh',
+    title: 'Sexual Health',
+    abbreviation: 'SH',
+    iconName: 'people',
+    iconColor: '#8B5CF6',
+    iconBackground: 'rgba(139, 92, 246, 0.12)',
+  },
+];
 
 const DashboardV13Screen = () => {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -115,11 +168,17 @@ const DashboardV13Screen = () => {
             </View>
             
             <View style={styles.componentsGrid}>
-              <ComponentScore label="CV" data={data.controlTower.components.cv} />
-              <ComponentScore label="REC" data={data.controlTower.components.rec} />
-              <ComponentScore label="MET" data={data.controlTower.components.met} />
-              <ComponentScore label="PERF" data={data.controlTower.components.perf} />
-              <ComponentScore label="SH" data={data.controlTower.components.sh} />
+              {CONTROL_TOWER_COMPONENTS.map(component => (
+                <ComponentScore
+                  key={component.key}
+                  title={component.title}
+                  abbreviation={component.abbreviation}
+                  iconName={component.iconName}
+                  iconColor={component.iconColor}
+                  iconBackground={component.iconBackground}
+                  data={data.controlTower.components[component.key]}
+                />
+              ))}
             </View>
           </View>
         ) : (
@@ -556,9 +615,31 @@ const DashboardV13Screen = () => {
 };
 
 // Helper Components
-const ComponentScore = ({ label, data }: { label: string; data: { score: number | null; status: string } }) => (
+const ComponentScore = ({
+  title,
+  abbreviation,
+  iconName,
+  iconColor,
+  iconBackground,
+  data,
+}: {
+  title: string;
+  abbreviation: string;
+  iconName: string;
+  iconColor: string;
+  iconBackground: string;
+  data: { score: number | null; status: string };
+}) => (
   <View style={styles.componentScore}>
-    <Text style={styles.componentLabel}>{label}</Text>
+    <View style={styles.componentHeader}>
+      <View style={[styles.componentIcon, { backgroundColor: iconBackground }]}>
+        <Ionicons name={iconName as never} size={18} color={iconColor} />
+      </View>
+      <View>
+        <Text style={styles.componentTitle}>{title}</Text>
+        <Text style={styles.componentSubtitle}>{abbreviation}</Text>
+      </View>
+    </View>
     <Text style={styles.componentValue}>{data.score ?? '—'}</Text>
     <Text style={styles.componentStatus}>{data.status}</Text>
   </View>
@@ -728,23 +809,41 @@ const styles = StyleSheet.create({
   },
   componentScore: {
     flex: 1,
-    minWidth: '30%',
+    minWidth: '45%',
     backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
+    borderRadius: 14,
+    padding: 16,
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    gap: 8,
   },
-  componentLabel: {
-    fontSize: 12,
+  componentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  componentIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  componentTitle: {
+    fontSize: 14,
     fontWeight: '600',
+    color: '#0F172A',
+  },
+  componentSubtitle: {
+    fontSize: 12,
     color: '#64748B',
-    marginBottom: 4,
+    textTransform: 'uppercase',
+    marginTop: 2,
   },
   componentValue: {
     fontSize: 24,
     fontWeight: '700',
-    color: '#111827',
-    marginBottom: 4,
+    color: '#0F172A',
   },
   componentStatus: {
     fontSize: 10,

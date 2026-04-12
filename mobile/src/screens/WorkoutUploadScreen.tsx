@@ -1,22 +1,28 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  SafeAreaView,
 } from 'react-native';
-import * as DocumentPicker from 'expo-document-picker';
-import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-export default function WorkoutUploadScreen() {
+import { uploadWorkoutDocument } from '../services/workoutDocumentService';
+import type { ManualWorkoutData } from '../types/workoutDocument';
+import type { RootStackParamList } from '../types/navigation';
+
+const WorkoutUploadScreen = () => {
   const [loading, setLoading] = useState(false);
   const [documentType, setDocumentType] = useState('manual_entry');
   const [programStartDate, setProgramStartDate] = useState('');
   const [notes, setNotes] = useState('');
-  
+
   // Program Structure
   const [programName, setProgramName] = useState('');
   const [splitName, setSplitName] = useState('');
@@ -39,6 +45,29 @@ export default function WorkoutUploadScreen() {
   const [plannedIntensityNotes, setPlannedIntensityNotes] = useState('');
   const [cardioOrConditioningNotes, setCardioOrConditioningNotes] = useState('');
   const [mobilityOrRecoveryNotes, setMobilityOrRecoveryNotes] = useState('');
+
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  const weeklyPlans = useMemo(
+    () => [
+      { label: 'Monday', value: mondayPlan, setter: setMondayPlan },
+      { label: 'Tuesday', value: tuesdayPlan, setter: setTuesdayPlan },
+      { label: 'Wednesday', value: wednesdayPlan, setter: setWednesdayPlan },
+      { label: 'Thursday', value: thursdayPlan, setter: setThursdayPlan },
+      { label: 'Friday', value: fridayPlan, setter: setFridayPlan },
+      { label: 'Saturday', value: saturdayPlan, setter: setSaturdayPlan },
+      { label: 'Sunday', value: sundayPlan, setter: setSundayPlan },
+    ],
+    [
+      fridayPlan,
+      mondayPlan,
+      saturdayPlan,
+      sundayPlan,
+      thursdayPlan,
+      tuesdayPlan,
+      wednesdayPlan,
+    ],
+  );
 
   const handleSubmit = async () => {
     if (!programName || !workoutDaysPerWeek || !trainingStyle) {
@@ -100,46 +129,47 @@ export default function WorkoutUploadScreen() {
   };
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      <View className="p-6">
-        <Text className="text-2xl font-bold text-gray-900 mb-6">
-          Upload Workout Baseline
-        </Text>
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.contentContainer}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.headerTitle}>Upload Workout Baseline</Text>
 
-        {/* Document Type */}
-        <View className="mb-4">
-          <Text className="text-sm font-medium text-gray-700 mb-2">Document Type</Text>
-          <Text className="text-sm text-gray-600">Manual Entry</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Document Type</Text>
+          <Text style={styles.helperText}>Manual Entry</Text>
         </View>
 
-        {/* Program Structure */}
-        <View className="mb-6">
-          <Text className="text-lg font-semibold text-gray-900 mb-3">Program Structure</Text>
-          
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Program Name *</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Program Structure</Text>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Program Name *</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+              style={styles.input}
               value={programName}
               onChangeText={setProgramName}
               placeholder="e.g., Push-Pull-Legs, Upper-Lower Split"
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Split Name</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Split Name</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+              style={styles.input}
               value={splitName}
               onChangeText={setSplitName}
               placeholder="e.g., 4-Day Upper/Lower, 3-Day Full Body"
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Workout Days Per Week *</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Workout Days Per Week *</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+              style={styles.input}
               value={workoutDaysPerWeek}
               onChangeText={setWorkoutDaysPerWeek}
               placeholder="e.g., 3, 4, 5"
@@ -147,10 +177,10 @@ export default function WorkoutUploadScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Rest Days Per Week</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Rest Days Per Week</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+              style={styles.input}
               value={restDaysPerWeek}
               onChangeText={setRestDaysPerWeek}
               placeholder="e.g., 2, 3, 4"
@@ -158,20 +188,20 @@ export default function WorkoutUploadScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Training Style *</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Training Style *</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+              style={styles.input}
               value={trainingStyle}
               onChangeText={setTrainingStyle}
               placeholder="e.g., Strength Training, Hypertrophy, Powerlifting"
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Program Notes</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Program Notes</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white h-20"
+              style={[styles.input, styles.inputMultiline, styles.inputTall]}
               value={programNotes}
               onChangeText={setProgramNotes}
               placeholder="Additional notes about the program..."
@@ -180,39 +210,29 @@ export default function WorkoutUploadScreen() {
           </View>
         </View>
 
-        {/* Weekly Schedule */}
-        <View className="mb-6">
-          <Text className="text-lg font-semibold text-gray-900 mb-3">Weekly Schedule</Text>
-          
-          {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((day, index) => (
-            <View key={day} className="mb-3">
-              <Text className="text-sm font-medium text-gray-700 mb-1">{day}</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Weekly Schedule</Text>
+
+          {weeklyPlans.map(plan => (
+            <View key={plan.label} style={styles.fieldTight}>
+              <Text style={styles.label}>{plan.label}</Text>
               <TextInput
-                className="border border-gray-300 rounded-md px-3 py-2 bg-white"
-                value={
-                  [mondayPlan, tuesdayPlan, wednesdayPlan, thursdayPlan, fridayPlan, saturdayPlan, sundayPlan][index]
-                }
-                onChangeText={(text) => {
-                  const setters = [
-                    setMondayPlan, setTuesdayPlan, setWednesdayPlan,
-                    setThursdayPlan, setFridayPlan, setSaturdayPlan, setSundayPlan
-                  ];
-                  setters[index](text);
-                }}
-                placeholder={`e.g., Upper Body, Lower Body, Rest`}
+                style={styles.input}
+                value={plan.value}
+                onChangeText={plan.setter}
+                placeholder="e.g., Upper Body, Lower Body, Rest"
               />
             </View>
           ))}
         </View>
 
-        {/* Workout Context */}
-        <View className="mb-6">
-          <Text className="text-lg font-semibold text-gray-900 mb-3">Workout Context</Text>
-          
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Planned Volume Notes</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Workout Context</Text>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Planned Volume Notes</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white h-16"
+              style={[styles.input, styles.inputMultiline]}
               value={plannedVolumeNotes}
               onChangeText={setPlannedVolumeNotes}
               placeholder="e.g., 3-4 sets per exercise, 8-12 reps..."
@@ -220,10 +240,10 @@ export default function WorkoutUploadScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Planned Intensity Notes</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Planned Intensity Notes</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white h-16"
+              style={[styles.input, styles.inputMultiline]}
               value={plannedIntensityNotes}
               onChangeText={setPlannedIntensityNotes}
               placeholder="e.g., RPE 7-8, Progressive overload..."
@@ -231,10 +251,10 @@ export default function WorkoutUploadScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Cardio/Conditioning Notes</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Cardio/Conditioning Notes</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white h-16"
+              style={[styles.input, styles.inputMultiline]}
               value={cardioOrConditioningNotes}
               onChangeText={setCardioOrConditioningNotes}
               placeholder="e.g., 20 min LISS post-workout, HIIT 2x/week..."
@@ -242,10 +262,10 @@ export default function WorkoutUploadScreen() {
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Mobility/Recovery Notes</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Mobility/Recovery Notes</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white h-16"
+              style={[styles.input, styles.inputMultiline]}
               value={mobilityOrRecoveryNotes}
               onChangeText={setMobilityOrRecoveryNotes}
               placeholder="e.g., 10 min stretching, foam rolling..."
@@ -254,24 +274,23 @@ export default function WorkoutUploadScreen() {
           </View>
         </View>
 
-        {/* Additional Options */}
-        <View className="mb-6">
-          <Text className="text-lg font-semibold text-gray-900 mb-3">Additional Options</Text>
-          
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Program Start Date</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Additional Options</Text>
+
+          <View style={styles.field}>
+            <Text style={styles.label}>Program Start Date</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white"
+              style={styles.input}
               value={programStartDate}
               onChangeText={setProgramStartDate}
               placeholder="YYYY-MM-DD (optional)"
             />
           </View>
 
-          <View className="mb-4">
-            <Text className="text-sm font-medium text-gray-700 mb-1">Notes</Text>
+          <View style={styles.field}>
+            <Text style={styles.label}>Notes</Text>
             <TextInput
-              className="border border-gray-300 rounded-md px-3 py-2 bg-white h-16"
+              style={[styles.input, styles.inputMultiline]}
               value={notes}
               onChangeText={setNotes}
               placeholder="Any additional notes about this upload..."
@@ -280,21 +299,100 @@ export default function WorkoutUploadScreen() {
           </View>
         </View>
 
-        {/* Submit Button */}
         <TouchableOpacity
           onPress={handleSubmit}
           disabled={loading}
-          className="bg-blue-600 py-3 px-4 rounded-md items-center"
+          style={[styles.submitButton, loading && styles.submitButtonDisabled]}
         >
           {loading ? (
-            <ActivityIndicator color="white" />
+            <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text className="text-white font-semibold">Upload Workout Baseline</Text>
+            <Text style={styles.submitButtonText}>Upload Workout Baseline</Text>
           )}
         </TouchableOpacity>
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 export default WorkoutUploadScreen;
+
+const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  scroll: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: 24,
+    paddingBottom: 48,
+    gap: 24,
+  },
+  headerTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#111827',
+  },
+  section: {
+    gap: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  helperText: {
+    fontSize: 14,
+    color: '#4B5563',
+  },
+  field: {
+    gap: 6,
+  },
+  fieldTight: {
+    gap: 6,
+  },
+  label: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    fontSize: 14,
+    color: '#111827',
+  },
+  inputMultiline: {
+    minHeight: 64,
+    textAlignVertical: 'top',
+  },
+  inputTall: {
+    minHeight: 80,
+  },
+  submitButton: {
+    backgroundColor: '#2563EB',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    backgroundColor: '#93C5FD',
+  },
+  submitButtonText: {
+    color: '#F8FAFC',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+});

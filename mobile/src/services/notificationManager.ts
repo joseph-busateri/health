@@ -73,7 +73,7 @@ export const scheduleDailyCheckInNotification = async (
 
   const notificationId = await scheduleLocalNotification({
     title: 'Daily Health Check-In',
-    body: 'Share how you're feeling today to get personalized insights.',
+    body: 'Share how you\'re feeling today to get personalized insights.',
     data: {
       type: 'daily_check_in',
       userId,

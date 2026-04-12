@@ -24,38 +24,38 @@ const router = Router();
 // ============================================================================
 
 // Create single recommendation
-router.post('/recommendations', createRecommendationHandler);
+router.post('/', createRecommendationHandler);
 
 // Batch create recommendations
-router.post('/recommendations/batch', batchCreateRecommendationsHandler);
+router.post('/batch', batchCreateRecommendationsHandler);
 
 // ============================================================================
 // GET ROUTES
 // ============================================================================
 
 // Get active recommendations
-router.get('/recommendations/active/:userId', getActiveRecommendationsHandler);
+router.get('/active/:userId', getActiveRecommendationsHandler);
 
 // Get prioritized recommendations
-router.get('/recommendations/prioritized/:userId', getPrioritizedRecommendationsHandler);
+router.get('/prioritized/:userId', getPrioritizedRecommendationsHandler);
 
 // ============================================================================
 // STATE TRANSITION ROUTES
 // ============================================================================
 
 // Accept recommendation
-router.post('/recommendations/:recommendationId/accept', acceptRecommendationHandler);
+router.post('/:recommendationId/accept', acceptRecommendationHandler);
 
 // Reject recommendation
-router.post('/recommendations/:recommendationId/reject', rejectRecommendationHandler);
+router.post('/:recommendationId/reject', rejectRecommendationHandler);
 
 // Snooze recommendation
-router.post('/recommendations/:recommendationId/snooze', snoozeRecommendationHandler);
+router.post('/:recommendationId/snooze', snoozeRecommendationHandler);
 
 // Complete recommendation
-router.post('/recommendations/:recommendationId/complete', completeRecommendationHandler);
+router.post('/:recommendationId/complete', completeRecommendationHandler);
 
 // Modify recommendation
-router.post('/recommendations/:recommendationId/modify', modifyRecommendationHandler);
+router.post('/:recommendationId/modify', modifyRecommendationHandler);
 
 export default router;

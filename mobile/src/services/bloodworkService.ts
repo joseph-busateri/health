@@ -1,3 +1,5 @@
+import { Platform } from 'react-native';
+
 import type {
   BloodworkDocument,
   BloodworkTimelineItem,
@@ -28,6 +30,7 @@ import {
 } from '../types/bloodwork';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:3000';
+const SHOULD_INCLUDE_CREDENTIALS = Platform.OS !== 'web';
 
 class BloodworkService {
   /**
@@ -47,11 +50,22 @@ class BloodworkService {
       const formData = new FormData();
       
       // Handle React Native file differently for web vs native
-      if (typeof window !== 'undefined' && (request.file as any).uri && (request.file as any).uri.startsWith('blob:')) {
-        // React Native Web - convert blob to actual file
-        const response = await fetch((request.file as any).uri);
-        const blob = await response.blob();
-        formData.append('file', blob, request.file_name);
+      if (typeof window !== 'undefined') {
+        const maybeFile: any = request.file;
+        if (maybeFile instanceof File) {
+          formData.append('file', maybeFile);
+        } else if (maybeFile?.uri && typeof maybeFile.uri === 'string') {
+          const uri: string = maybeFile.uri;
+          if (uri.startsWith('blob:') || uri.startsWith('data:')) {
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            formData.append('file', blob, request.file_name);
+          } else {
+            formData.append('file', maybeFile);
+          }
+        } else {
+          formData.append('file', maybeFile);
+        }
       } else {
         // React Native native
         formData.append('file', request.file as any);
@@ -80,6 +94,7 @@ class BloodworkService {
           // Don't set Content-Type for FormData - let the browser set it with boundary
         },
         signal: controller.signal,
+        credentials: SHOULD_INCLUDE_CREDENTIALS ? 'include' : 'omit',
       });
 
       clearTimeout(timeoutId);
@@ -152,7 +167,9 @@ class BloodworkService {
         params.append('end_date', filters.end_date);
       }
 
-      const response = await fetch(`${API_BASE_URL}/bloodwork/documents/${userId}?${params}`);
+      const response = await fetch(`${API_BASE_URL}/bloodwork/documents/${userId}?${params}`, {
+        credentials: SHOULD_INCLUDE_CREDENTIALS ? 'include' : 'omit',
+      });
       const data = await response.json();
 
       if (!response.ok) {
@@ -190,7 +207,9 @@ class BloodworkService {
   ): Promise<BloodworkDocumentResponse> {
     try {
       const params = userId ? `?user_id=${userId}` : '';
-      const response = await fetch(`${API_BASE_URL}/bloodwork/document/${id}${params}`);
+      const response = await fetch(`${API_BASE_URL}/bloodwork/document/${id}${params}`, {
+        credentials: SHOULD_INCLUDE_CREDENTIALS ? 'include' : 'omit',
+      });
       const data = await response.json();
 
       if (!response.ok) {
@@ -228,6 +247,7 @@ class BloodworkService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(updateData),
+        credentials: SHOULD_INCLUDE_CREDENTIALS ? 'include' : 'omit',
       });
 
       const data = await response.json();
@@ -268,6 +288,7 @@ class BloodworkService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ user_id: userId }),
+        credentials: SHOULD_INCLUDE_CREDENTIALS ? 'include' : 'omit',
       });
 
       const data = await response.json();
@@ -301,7 +322,9 @@ class BloodworkService {
     limit: number = 20
   ): Promise<BloodworkTimelineResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/bloodwork/timeline/${userId}?limit=${limit}`);
+      const response = await fetch(`${API_BASE_URL}/bloodwork/timeline/${userId}?limit=${limit}`, {
+        credentials: SHOULD_INCLUDE_CREDENTIALS ? 'include' : 'omit',
+      });
       const data = await response.json();
 
       if (!response.ok) {
@@ -331,7 +354,9 @@ class BloodworkService {
    */
   async getBloodworkStats(userId: string): Promise<BloodworkStatsResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/bloodwork/stats/${userId}`);
+      const response = await fetch(`${API_BASE_URL}/bloodwork/stats/${userId}`, {
+        credentials: SHOULD_INCLUDE_CREDENTIALS ? 'include' : 'omit',
+      });
       const data = await response.json();
 
       if (!response.ok) {
@@ -357,7 +382,9 @@ class BloodworkService {
 
   async getBloodworkDocumentStatus(documentId: string): Promise<BloodworkDocumentStatusResponse> {
     try {
-      const response = await fetch(`${API_BASE_URL}/bloodwork/document/${documentId}/status`);
+      const response = await fetch(`${API_BASE_URL}/bloodwork/document/${documentId}/status`, {
+        credentials: SHOULD_INCLUDE_CREDENTIALS ? 'include' : 'omit',
+      });
       const data = await response.json();
 
       if (!response.ok) {
@@ -389,6 +416,7 @@ class BloodworkService {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ user_id: userId }),
+        credentials: SHOULD_INCLUDE_CREDENTIALS ? 'include' : 'omit',
       });
 
       const data = await response.json();

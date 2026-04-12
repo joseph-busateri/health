@@ -35,6 +35,7 @@ export type RootStackParamList = {
   SleepNumberConnect: undefined;
   SleepNumberUpload: undefined;
   ControlTower: undefined;
+  Recommendations: undefined;
   BaselineProfile: undefined;
   GoalManagement: undefined;
   HealthDataHub: undefined;
@@ -57,6 +58,29 @@ export type RootStackParamList = {
   Nutrition?: undefined;
   Physique?: undefined;
   Settings?: undefined;
+};
+
+export type HomeStackParamList = {
+  ModernHome: undefined;
+  RecoveryStatus: { userId: string };
+  StressStatus: { userId: string };
+  JointHealthStatus: { userId: string };
+  WorkoutUpload: undefined;
+  WorkoutToday: { userId: string };
+  BloodworkUpload: undefined;
+  BodyCompositionUpload: undefined;
+  SupplementUpload: undefined;
+  VoiceInterview: undefined;
+  Recommendations: undefined;
+  CardiovascularDashboard: undefined;
+  SexualHealthDashboard: undefined;
+};
+
+export type InsightsStackParamList = {
+  InsightsHome: undefined;
+  CardiovascularDashboard: undefined;
+  SexualHealthDashboard: undefined;
+  VoiceInterview: undefined;
 };
 
 export type DashboardScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;

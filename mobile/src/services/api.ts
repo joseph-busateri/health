@@ -184,6 +184,16 @@ export const healthApi = {
       api.get(`/api/analytics/${userId}/anomalies?days=${days}`),
   },
 
+  // Recommendation engine endpoints
+  recommendations: {
+    getActive: (userId: string) => api.get(`/api/recommendations/active/${userId}`),
+    getPrioritized: (userId: string) => api.get(`/api/recommendations/prioritized/${userId}`),
+    accept: (recommendationId: string, userNotes?: string) =>
+      api.post(`/api/recommendations/${recommendationId}/accept`, userNotes ? { userNotes } : {}),
+    reject: (recommendationId: string, rejectionReason?: string) =>
+      api.post(`/api/recommendations/${recommendationId}/reject`, rejectionReason ? { rejectionReason } : {}),
+  },
+
   // AI Agent endpoints
   aiAgent: {
     getInsights: (userId: string) => api.post(`/api/ai-agent/${userId}/insights`),

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, SafeAreaView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -79,7 +79,8 @@ const RecoveryStatusScreen: React.FC<Props> = ({ route }) => {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Recovery Status</Text>
       <Text style={styles.score}>{today.recoveryScore}/100</Text>
       <Text style={styles.subtitle}>{today.recoveryStatus.replace('_', ' ').toUpperCase()}</Text>
@@ -114,6 +115,7 @@ const RecoveryStatusScreen: React.FC<Props> = ({ route }) => {
         ))}
       </View>
     </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -122,8 +124,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F4F6',
   },
+  scrollView: {
+    flex: 1,
+  },
   content: {
     padding: 16,
+    paddingBottom: 100, // Extra padding for tab bar
     gap: 12,
   },
   center: {

@@ -16,6 +16,7 @@ import type {
   RecommendationStatus
 } from '../types/bloodworkRecommendations';
 import type { Database } from '../types/database';
+import { logger } from '../utils/logger';
 import { getBloodworkTrendsByUser } from './bloodworkTrendService';
 import { generateAIRecommendationText } from './bloodworkAIRecommendations';
 
@@ -390,9 +391,27 @@ export async function generateBloodworkRecommendationsForUser(
     const trendsResponse = await getBloodworkTrendsByUser({ user_id, min_data_points: 2 });
 
     if (!trendsResponse.success || !trendsResponse.data) {
+      const errorMessage = trendsResponse.error || 'Failed to fetch bloodwork trends for recommendation generation';
+
+      if (errorMessage.includes('No bloodwork results') || errorMessage.includes('Insufficient data points')) {
+        logger.warn('Skipping recommendation generation due to insufficient trend data', {
+          userId: user_id,
+          error: errorMessage,
+        });
+
+        return {
+          success: true,
+          data: {
+            generated_count: 0,
+            superseded_count: 0,
+            recommendations: [],
+          },
+        };
+      }
+
       return {
         success: false,
-        error: 'Failed to fetch bloodwork trends for recommendation generation'
+        error: errorMessage,
       };
     }
 

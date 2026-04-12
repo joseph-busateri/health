@@ -210,10 +210,23 @@ export const startVoiceInterviewSession = async (
   sessionStore.set(sessionId, session);
 
   // Generate first question
-  const firstQuestion = await generateVoiceQuestion(context, []);
+  let firstQuestion: string;
+  try {
+    firstQuestion = await generateVoiceQuestion(context, []);
+  } catch (error) {
+    console.error('Error generating question:', error);
+    // Fallback question
+    firstQuestion = "Good morning! How are you feeling today, and how did you sleep last night?";
+  }
   
   // Generate audio
-  const audioBuffer = await generateSpeech(firstQuestion);
+  let audioBuffer: Buffer | null = null;
+  try {
+    audioBuffer = await generateSpeech(firstQuestion);
+  } catch (error) {
+    console.error('Error generating speech:', error);
+    // Continue without audio
+  }
 
   return { sessionId, firstQuestion, audioBuffer };
 };

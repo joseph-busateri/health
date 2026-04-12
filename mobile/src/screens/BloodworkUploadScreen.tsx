@@ -9,7 +9,6 @@ import {
   RefreshControl,
   ActivityIndicator,
   Platform,
-  ActionSheetIOS,
   TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -34,6 +33,12 @@ import {
 } from '../types/bloodwork';
 
 const TEST_USER_ID = '550e8400-e29b-41d4-a716-446655440000';
+
+let actionSheetIOS: typeof import('react-native').ActionSheetIOS | undefined;
+if (Platform.OS === 'ios') {
+  const { ActionSheetIOS } = require('react-native');
+  actionSheetIOS = ActionSheetIOS;
+}
 
 const PROCESSING_STATUS_META: Record<BloodworkProcessingStatus, { label: string; color: string; background: string }> = {
   uploaded: { label: 'Uploaded', color: '#1D1D1F', background: '#E5E5EA' },
@@ -107,10 +112,98 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
     formErrors: {} as Record<string, string>,
     expandedDocumentId: null as string | null,
     retryingDocumentId: null as string | null,
+    networkError: false,
   });
 
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const previousStatusRef = useRef<Map<string, BloodworkProcessingStatus>>(new Map());
+  const completedDocsRef = useRef<Set<string>>(new Set());
+  const webFileInputRef = useRef<any>(null);
+  const webFileInputHandlerRef = useRef<((event: Event) => void) | null>(null);
+
+  const finalizeFileSelection = useCallback((file: any) => {
+    console.log('🔐 Finalizing file selection:', file?.name);
+    const validation = bloodworkService.validateFileType(file);
+    console.log('✅ File validation result:', validation);
+
+    if (!validation.isValid) {
+      Alert.alert('Invalid File', validation.error);
+      return false;
+    }
+
+    console.log('📦 Setting selected file and opening modal');
+    setState(prev => ({
+      ...prev,
+      selectedFile: file,
+      showUploadModal: true,
+    }));
+    return true;
+  }, []);
+
+  const setupWebFileInput = useCallback(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined') {
+      return null;
+    }
+
+    let input = webFileInputRef.current as HTMLInputElement | null;
+
+    if (input && document.body.contains(input)) {
+      return input;
+    }
+
+    input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'application/pdf,image/*,text/plain,.doc,.docx,.tif,.tiff';
+    input.style.display = 'none';
+
+    const handleChange = (event: Event) => {
+      const target = event.target as HTMLInputElement;
+      const file = target.files?.[0];
+
+      if (!file) {
+        console.log('⚠️ No file selected from web input');
+        return;
+      }
+
+      console.log('🌐 Web file chosen via hidden input:', file.name);
+      finalizeFileSelection(file);
+      target.value = '';
+    };
+
+    webFileInputHandlerRef.current = handleChange;
+    input.addEventListener('change', handleChange);
+    document.body.appendChild(input);
+    webFileInputRef.current = input;
+
+    return input;
+  }, [finalizeFileSelection]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      return;
+    }
+
+    const input = setupWebFileInput();
+
+    return () => {
+      if (Platform.OS !== 'web') {
+        return;
+      }
+
+      const currentInput = (webFileInputRef.current ?? input) as HTMLInputElement | null;
+      const handler = webFileInputHandlerRef.current;
+
+      if (currentInput && handler) {
+        currentInput.removeEventListener('change', handler);
+      }
+      if (currentInput && currentInput.parentNode) {
+        currentInput.parentNode.removeChild(currentInput);
+      }
+
+      webFileInputRef.current = null;
+      webFileInputHandlerRef.current = null;
+    };
+  }, [setupWebFileInput]);
 
   const loadDocuments = useCallback(async () => {
     try {
@@ -175,15 +268,34 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
             return doc;
           });
 
-          return { ...prev, documents: updatedDocuments };
+          const documentsChanged =
+            updatedDocuments.length !== prev.documents.length ||
+            updatedDocuments.some((doc, index) => doc !== prev.documents[index]);
+
+          if (!documentsChanged && !prev.networkError) {
+            return prev;
+          }
+
+          return { ...prev, documents: updatedDocuments, networkError: false };
         });
       } catch (error) {
         console.error('Error polling processing status:', error);
+        setState(prev => {
+          if (prev.networkError) {
+            return prev;
+          }
+          return { ...prev, networkError: true };
+        });
+        if (pollingIntervalRef.current) {
+          clearInterval(pollingIntervalRef.current);
+          pollingIntervalRef.current = null;
+        }
       }
     };
 
     pollStatuses();
-    const intervalId = setInterval(pollStatuses, 5000);
+    const intervalMs = Platform.OS === 'web' ? 8000 : 5000;
+    const intervalId = setInterval(pollStatuses, intervalMs);
     pollingIntervalRef.current = intervalId;
 
     return () => {
@@ -193,19 +305,33 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
   }, [state.documents]);
 
   useEffect(() => {
+    let shouldRefresh = false;
+
     state.documents.forEach(doc => {
       const previousStatus = previousStatusRef.current.get(doc.id);
+
+      if (doc.processing_status !== 'complete' && completedDocsRef.current.has(doc.id)) {
+        completedDocsRef.current.delete(doc.id);
+      }
+
       if (previousStatus && previousStatus !== doc.processing_status) {
-        if (doc.processing_status === 'complete') {
+        if (doc.processing_status === 'complete' && !completedDocsRef.current.has(doc.id)) {
           Alert.alert('Bloodwork Ready', `${doc.file_name} has finished processing.`);
+          completedDocsRef.current.add(doc.id);
+          shouldRefresh = true;
         }
         if (doc.processing_status === 'failed') {
           Alert.alert('Processing Failed', doc.processing_error || 'Processing failed. You can retry.');
         }
       }
+
       previousStatusRef.current.set(doc.id, doc.processing_status);
     });
-  }, [state.documents]);
+
+    if (shouldRefresh) {
+      void loadDocuments();
+    }
+  }, [state.documents, loadDocuments]);
 
   useEffect(() => {
     return () => {
@@ -229,8 +355,22 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
 
   const pickDocument = async () => {
     try {
-      if (Platform.OS === 'ios') {
-        ActionSheetIOS.showActionSheetWithOptions(
+      console.log('📂 pickDocument invoked');
+
+      if (Platform.OS === 'web') {
+        const input = setupWebFileInput();
+        if (input) {
+          console.log('🌐 Triggering hidden web file input');
+          input.click();
+        } else {
+          console.log('⚠️ Web file input not ready, falling back to DocumentPicker');
+          await pickPDFDocument();
+        }
+        return;
+      }
+
+      if (actionSheetIOS && typeof actionSheetIOS.showActionSheetWithOptions === 'function') {
+        actionSheetIOS.showActionSheetWithOptions(
           {
             options: ['Cancel', 'Choose PDF', 'Choose Image', 'Take Photo'],
             cancelButtonIndex: 0,
@@ -252,7 +392,7 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
           }
         );
       } else {
-        // For Android, show document picker first
+        console.log('🖱️ Directly opening DocumentPicker (non-iOS)');
         await pickPDFDocument();
       }
     } catch (error) {
@@ -263,6 +403,7 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
 
   const pickPDFDocument = async () => {
     try {
+      console.log('📄 pickPDFDocument start');
       const result = await DocumentPicker.getDocumentAsync({
         type: [
           'application/pdf',
@@ -274,31 +415,40 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
         copyToCacheDirectory: true,
         multiple: false,
       });
+      console.log('📄 DocumentPicker result:', result);
 
-      if (!result.canceled && result.assets && result.assets[0]) {
-        const asset = result.assets[0];
-        
-        // Convert to File object (simplified for React Native)
-        const file = {
+      if (result.canceled) {
+        console.log('⚠️ DocumentPicker canceled');
+        return;
+      }
+
+      const asset = result.assets?.[0] ?? {
+        uri: (result as any).uri,
+        name: (result as any).name ?? `document_${Date.now()}`,
+        mimeType: (result as any).mimeType ?? 'application/pdf',
+        size: (result as any).size ?? 0,
+      };
+
+      if (!asset?.uri) {
+        Alert.alert('Invalid File', 'Unable to read selected file.');
+        return;
+      }
+
+      let file: any;
+
+      if (Platform.OS === 'web' && asset.file instanceof File) {
+        console.log('🌐 Using native File from DocumentPicker');
+        file = asset.file;
+      } else {
+        file = {
           uri: asset.uri,
-          name: asset.name,
+          name: asset.name ?? `document_${Date.now()}`,
           type: asset.mimeType || 'application/octet-stream',
           size: asset.size || 0,
         } as any;
-
-        const validation = bloodworkService.validateFileType(file);
-        
-        if (!validation.isValid) {
-          Alert.alert('Invalid File', validation.error);
-          return;
-        }
-
-        setState(prev => ({
-          ...prev,
-          selectedFile: file,
-          showUploadModal: true,
-        }));
       }
+
+      finalizeFileSelection(file);
     } catch (error) {
       console.error('Error picking PDF document:', error);
       Alert.alert('Error', 'Failed to pick document');
@@ -482,6 +632,33 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
   };
 
   const deleteDocument = async (documentId: string) => {
+    const performDelete = async () => {
+      try {
+        const response = await bloodworkService.deleteBloodworkDocument(
+          documentId,
+          TEST_USER_ID
+        );
+
+        if (response.success) {
+          Alert.alert('Success', 'Document deleted successfully');
+          loadDocuments();
+        } else {
+          Alert.alert('Error', response.error || 'Failed to delete document');
+        }
+      } catch (error) {
+        console.error('Error deleting document:', error);
+        Alert.alert('Error', 'Failed to delete document');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      const confirmed = typeof window !== 'undefined' ? window.confirm('Delete this bloodwork document?') : false;
+      if (confirmed) {
+        await performDelete();
+      }
+      return;
+    }
+
     Alert.alert(
       'Delete Document',
       'Are you sure you want to delete this bloodwork document?',
@@ -490,23 +667,8 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
         {
           text: 'Delete',
           style: 'destructive',
-          onPress: async () => {
-            try {
-              const response = await bloodworkService.deleteBloodworkDocument(
-                documentId,
-                TEST_USER_ID
-              );
-
-              if (response.success) {
-                Alert.alert('Success', 'Document deleted successfully');
-                loadDocuments();
-              } else {
-                Alert.alert('Error', response.error || 'Failed to delete document');
-              }
-            } catch (error) {
-              console.error('Error deleting document:', error);
-              Alert.alert('Error', 'Failed to delete document');
-            }
+          onPress: () => {
+            void performDelete();
           },
         },
       ]
@@ -622,14 +784,14 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
             <Text style={styles.processingErrorMessage}>{document.processing_error}</Text>
           ) : null}
           <TouchableOpacity
-            style={styles.retryButton}
+            style={styles.processingRetryButton}
             onPress={() => handleRetry(document.id)}
             disabled={state.retryingDocumentId === document.id}
           >
             {state.retryingDocumentId === document.id ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.retryButtonText}>Retry Processing</Text>
+              <Text style={styles.processingRetryButtonText}>Retry Processing</Text>
             )}
           </TouchableOpacity>
         </View>
@@ -870,6 +1032,36 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
 };
 
 const styles = StyleSheet.create({
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+    gap: 16,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1F2937',
+    textAlign: 'center',
+  },
+  errorSubtitle: {
+    fontSize: 16,
+    color: '#4B5563',
+    textAlign: 'center',
+  },
+  retryButton: {
+    marginTop: 8,
+    backgroundColor: '#2563EB',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+  },
+  retryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 16,
+  },
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
@@ -990,13 +1182,13 @@ const styles = StyleSheet.create({
     color: '#3C3C43',
     marginBottom: 8,
   },
-  retryButton: {
+  processingRetryButton: {
     backgroundColor: '#B00020',
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
   },
-  retryButtonText: {
+  processingRetryButtonText: {
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '600',

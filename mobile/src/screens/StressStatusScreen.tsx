@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View, SafeAreaView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -73,7 +73,8 @@ const StressStatusScreen: React.FC<Props> = ({ route }) => {
   }
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Stress / CNS Status</Text>
       <Text style={styles.score}>{today.stressScore}/100</Text>
       <Text style={styles.subtitle}>Stress: {today.stressStatus.toUpperCase()}</Text>
@@ -107,7 +108,8 @@ const StressStatusScreen: React.FC<Props> = ({ route }) => {
           </View>
         ))}
       </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -116,8 +118,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#F3F4F6',
   },
+  scrollView: {
+    flex: 1,
+  },
   content: {
     padding: 16,
+    paddingBottom: 100, // Extra padding for tab bar
     gap: 12,
   },
   center: {

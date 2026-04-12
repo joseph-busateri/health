@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, SafeAreaView } from 'react-native';
 import { useUser } from '../context/UserContext';
 
 export default function UserSettingsScreen() {
@@ -44,7 +44,8 @@ export default function UserSettingsScreen() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <SafeAreaView style={styles.container}>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>User Configuration</Text>
         
@@ -89,7 +90,7 @@ export default function UserSettingsScreen() {
           <Text style={styles.infoLabel}>API Base URL</Text>
           <Text style={styles.infoValue}>http://localhost:3000</Text>
           
-          <Text style={styles.helpText} style={{ marginTop: 15 }}>
+          <Text style={[styles.helpText, { marginTop: 15 }]}>
             Make sure your server is running on this address. Change in .env file if needed.
           </Text>
         </View>
@@ -130,7 +131,8 @@ export default function UserSettingsScreen() {
           <Text style={styles.stepText}>Navigate to Dashboard to see your health data</Text>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
@@ -138,6 +140,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#f5f5f5',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 100, // Extra padding for tab bar
   },
   section: {
     marginBottom: 20,

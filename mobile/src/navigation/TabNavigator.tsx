@@ -1,10 +1,10 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-// import DashboardV13Screen from '../screens/DashboardV13Screen'; // Not used in tabs
-// import ConnectedDashboardScreen from '../screens/ConnectedDashboardScreen'; // DEPRECATED - old design
-import ControlTowerScreen from '../screens/ControlTowerScreen'; // Modern design system
+import HomeStackNavigator from './HomeStackNavigator';
+import InsightsStackNavigator from './InsightsStackNavigator';
 import WorkoutsScreen from '../screens/WorkoutsScreen';
 import DevicesScreen from '../screens/DevicesScreen';
 import UserSettingsScreen from '../screens/UserSettingsScreen';
@@ -37,10 +37,18 @@ const TabNavigator: React.FC = () => {
     >
       <Tab.Screen
         name="HomeTab"
-        component={ControlTowerScreen}
+        component={HomeStackNavigator}
         options={{
           tabBarLabel: 'Home',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>🏠</Text>,
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+        }}
+      />
+      <Tab.Screen
+        name="InsightsTab"
+        component={InsightsStackNavigator}
+        options={{
+          tabBarLabel: 'Insights',
+          tabBarIcon: ({ color, size }) => <Ionicons name="pulse" size={size} color={color} />,
         }}
       />
       <Tab.Screen
@@ -48,15 +56,15 @@ const TabNavigator: React.FC = () => {
         component={WorkoutsScreen}
         options={{
           tabBarLabel: 'Workouts',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>💪</Text>,
+          tabBarIcon: ({ color, size }) => <Ionicons name="fitness" size={size} color={color} />,
         }}
       />
       <Tab.Screen
-        name="DevicesTab"
+        name="IntegrationsTab"
         component={DevicesScreen}
         options={{
-          tabBarLabel: 'Devices',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>�</Text>,
+          tabBarLabel: 'Integrations',
+          tabBarIcon: ({ color, size }) => <Ionicons name="watch" size={size} color={color} />,
         }}
       />
       <Tab.Screen
@@ -64,7 +72,7 @@ const TabNavigator: React.FC = () => {
         component={UserSettingsScreen}
         options={{
           tabBarLabel: 'Settings',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24 }}>⚙️</Text>,
+          tabBarIcon: ({ color, size }) => <Ionicons name="settings" size={size} color={color} />,
         }}
       />
     </Tab.Navigator>

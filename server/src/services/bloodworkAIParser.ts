@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { jsonrepair } from 'jsonrepair';
 import { logger } from '../utils/logger';
 import type { ExtractedBloodworkResult, ExtractedBloodworkPanel } from '../types/bloodworkResults';
 
@@ -115,7 +116,8 @@ Return JSON with this EXACT structure:
       response_format: { type: 'json_object' }
     });
 
-    const content = response.choices[0].message.content;
+    const firstChoice = response.choices[0];
+    const content = firstChoice.message.content;
     if (!content) {
       throw new Error('OpenAI returned empty response');
     }
@@ -139,8 +141,20 @@ Return JSON with this EXACT structure:
     
     // Remove any trailing commas before closing braces/brackets (common JSON error)
     jsonContent = jsonContent.replace(/,\s*([\]}])/g, '$1');
-    
-    const parsed: AIParseResponse = JSON.parse(jsonContent);
+
+    let parsed: AIParseResponse;
+
+    try {
+      parsed = JSON.parse(jsonContent);
+    } catch (parseError) {
+      logger.warn('Initial JSON.parse failed, attempting repair', {
+        error: parseError instanceof Error ? parseError.message : 'unknown',
+        textPreview: jsonContent.slice(0, 200),
+      });
+
+      const repaired = jsonrepair(jsonContent);
+      parsed = JSON.parse(repaired);
+    }
     const processingTime = Date.now() - startTime;
 
     // Convert AI response to our internal format
@@ -171,7 +185,8 @@ Return JSON with this EXACT structure:
       markersFound: markers.length,
       tokensUsed,
       cost: cost.toFixed(4),
-      processingTimeMs: processingTime
+      processingTimeMs: processingTime,
+      finishReason: firstChoice.finish_reason
     });
 
     return {

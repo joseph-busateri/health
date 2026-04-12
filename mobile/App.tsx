@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as Notifications from 'expo-notifications';
 
 import TabNavigator from './src/navigation/TabNavigator';
+import { UserProvider } from './src/context/UserContext';
 import { registerForPushNotificationsAsync } from './src/services/notificationService';
 
 export default function App() {
@@ -37,9 +38,11 @@ export default function App() {
   }, []);
 
   return (
-    <NavigationContainer ref={navigationRef}>
-      <StatusBar style="auto" />
-      <TabNavigator />
-    </NavigationContainer>
+    <UserProvider>
+      <NavigationContainer ref={navigationRef}>
+        <StatusBar style="auto" />
+        <TabNavigator />
+      </NavigationContainer>
+    </UserProvider>
   );
 }

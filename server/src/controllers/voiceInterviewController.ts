@@ -52,15 +52,24 @@ export const startVoiceInterview = async (req: Request, res: Response) => {
     // Start voice interview session
     const { sessionId, firstQuestion, audioBuffer } = await startVoiceInterviewSession(userId, context);
 
-    // Save audio to temporary file
-    const audioFilename = `${sessionId}_q1.mp3`;
-    const audioPath = path.join('uploads', 'audio', audioFilename);
-    fs.writeFileSync(audioPath, audioBuffer);
+    // Save audio to temporary file if available
+    let audioUrl = null;
+    if (audioBuffer) {
+      try {
+        const audioFilename = `${sessionId}_q1.mp3`;
+        const audioPath = path.join('uploads', 'audio', audioFilename);
+        fs.writeFileSync(audioPath, audioBuffer);
+        audioUrl = `/audio/${audioFilename}`;
+      } catch (audioError) {
+        console.error('Error saving audio:', audioError);
+        // Continue without audio
+      }
+    }
 
     res.json({
       sessionId,
       firstQuestion,
-      audioUrl: `/audio/${audioFilename}`,
+      audioUrl,
     });
   } catch (error) {
     console.error('Error starting voice interview:', error);

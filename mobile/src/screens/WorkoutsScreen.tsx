@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, ActivityIndicator, Alert, SafeAreaView } from 'react-native';
 import { useUser } from '../context/UserContext';
 import { healthApi } from '../services/api';
 
@@ -77,7 +77,7 @@ export default function WorkoutsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Workouts</Text>
         <TouchableOpacity style={styles.addButton} onPress={() => setModalVisible(true)}>
@@ -148,20 +148,24 @@ export default function WorkoutsScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#F8FAFC',
+  },
+  list: {
+    flex: 1,
+    padding: 16,
+    paddingBottom: 100, // Extra padding for tab bar
   },
   centerContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   header: {
     flexDirection: 'row',
@@ -185,10 +189,6 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: 'white',
     fontWeight: '600',
-  },
-  list: {
-    flex: 1,
-    padding: 15,
   },
   emptyText: {
     textAlign: 'center',

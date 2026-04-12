@@ -5,7 +5,7 @@
  */
 
 import { Request, Response } from 'express';
-import { logger } from '../utils/logger';
+import { logger, logEvent } from '../utils/logger';
 import {
   createRecommendation,
   batchCreateRecommendations,
@@ -184,7 +184,19 @@ export async function acceptRecommendationHandler(req: Request, res: Response) {
     };
     
     const result = await acceptRecommendation(input);
-    
+
+    logEvent({
+      category: 'recommendations',
+      message: 'recommendation.accepted',
+      metadata: {
+        recommendationId: result.id,
+        userId: result.userId,
+        priority: result.priority,
+        category: result.category,
+        sourceEngine: result.sourceEngine,
+      },
+    });
+
     res.status(200).json({
       success: true,
       data: result,
@@ -219,7 +231,20 @@ export async function rejectRecommendationHandler(req: Request, res: Response) {
     };
     
     const result = await rejectRecommendation(input);
-    
+
+    logEvent({
+      category: 'recommendations',
+      message: 'recommendation.rejected',
+      metadata: {
+        recommendationId: result.id,
+        userId: result.userId,
+        priority: result.priority,
+        category: result.category,
+        sourceEngine: result.sourceEngine,
+        rejectionReason,
+      },
+    });
+
     res.status(200).json({
       success: true,
       data: result,

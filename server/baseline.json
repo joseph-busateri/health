@@ -1,0 +1,67 @@
+{
+  "id": "baseline-11111",
+  "documentId": "doc-11111",
+  "userId": "11111",
+  "version": 1,
+  "createdAt": "2026-04-11T00:00:00Z",
+  "updatedAt": "2026-04-11T00:00:00Z",
+  "mondayPlan": "Lower body strength",
+  "tuesdayPlan": "Upper push",
+  "wednesdayPlan": "Active recovery",
+  "thursdayPlan": "Upper pull",
+  "fridayPlan": "Lower body power",
+  "saturdayPlan": "Conditioning",
+  "sundayPlan": "Rest",
+  "exercises": [
+    {
+      "id": "ex-1",
+      "name": "Back squat",
+      "dayAssociation": "mon",
+      "sets": 4,
+      "reps": "6",
+      "setRepLoadNotes": "Progressively add 5 lbs each week while bar speed stays clean",
+      "exerciseOrder": 1,
+      "grouping": "main"
+    },
+    {
+      "id": "ex-2",
+      "name": "Romanian deadlift",
+      "dayAssociation": "mon",
+      "sets": 3,
+      "reps": "8",
+      "setRepLoadNotes": "Keep hamstrings loaded—slow eccentric",
+      "exerciseOrder": 2,
+      "grouping": "accessory"
+    },
+    {
+      "id": "ex-3",
+      "name": "Leg press",
+      "dayAssociation": "mon",
+      "sets": 3,
+      "reps": "12",
+      "setRepLoadNotes": "Full range, pause at bottom",
+      "exerciseOrder": 3,
+      "grouping": "accessory"
+    },
+    {
+      "id": "ex-4",
+      "name": "Walking lunges",
+      "dayAssociation": "mon",
+      "sets": 2,
+      "reps": "16 total steps",
+      "setRepLoadNotes": "Control torso, focus on glute drive",
+      "exerciseOrder": 4,
+      "grouping": "finisher"
+    },
+    {
+      "id": "ex-5",
+      "name": "Hanging knee raise",
+      "dayAssociation": "mon",
+      "sets": 3,
+      "reps": "12",
+      "setRepLoadNotes": "Hold top for 1 second",
+      "exerciseOrder": 5,
+      "grouping": "core"
+    }
+  ]
+}

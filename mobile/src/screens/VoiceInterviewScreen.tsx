@@ -112,13 +112,15 @@ const VoiceInterviewScreen: React.FC<VoiceInterviewScreenProps> = ({ navigation 
 
       const data = await response.json();
       
-      if (data.sessionId && data.firstQuestion && data.audioUrl) {
+      if (data.sessionId && data.firstQuestion) {
         setSessionId(data.sessionId);
         setCurrentQuestion(data.firstQuestion);
         setQuestionCount(1);
         
-        // Play first question
-        await playAudio(data.audioUrl);
+        // Play audio if available, otherwise just show the question
+        if (data.audioUrl) {
+          await playAudio(data.audioUrl);
+        }
       } else {
         throw new Error('Invalid response from server');
       }

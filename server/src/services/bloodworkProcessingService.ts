@@ -214,8 +214,17 @@ export async function processBloodworkDocument(documentId: string, userId: strin
     const trendsResult = await getBloodworkTrendsByUser({ user_id: userId, min_data_points: 1 });
 
     if (!trendsResult.success) {
-      await markProcessingFailed(documentId, userId, trendsResult.error || 'Failed to generate trends');
-      return;
+      const trendError = trendsResult.error || '';
+      if (trendError.includes('No bloodwork results') || trendError.includes('Insufficient data points')) {
+        logger.warn('Skipping trend generation due to insufficient data', {
+          documentId,
+          userId,
+          error: trendError,
+        });
+      } else {
+        await markProcessingFailed(documentId, userId, trendError || 'Failed to generate trends');
+        return;
+      }
     }
 
     await updateProcessingStatusInternal(documentId, 'generating_recommendations', {
