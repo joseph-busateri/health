@@ -256,6 +256,17 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
             const result = results.find(item => item.docId === doc.id);
             if (result && result.statusResponse.success && result.statusResponse.data) {
               const statusData = result.statusResponse.data;
+              const hasChanged =
+                doc.processing_status !== statusData.processing_status ||
+                doc.processing_progress !== (statusData.processing_progress ?? null) ||
+                doc.processing_error !== (statusData.processing_error ?? null) ||
+                doc.processing_started_at !== (statusData.processing_started_at ?? null) ||
+                doc.processing_completed_at !== (statusData.processing_completed_at ?? null);
+
+              if (!hasChanged) {
+                return doc;
+              }
+
               return {
                 ...doc,
                 processing_status: statusData.processing_status,
@@ -294,7 +305,7 @@ const BloodworkUploadScreen: React.FC<BloodworkUploadScreenProps> = ({ navigatio
     };
 
     pollStatuses();
-    const intervalMs = Platform.OS === 'web' ? 8000 : 5000;
+    const intervalMs = Platform.OS === 'web' ? 5000 : 5000;
     const intervalId = setInterval(pollStatuses, intervalMs);
     pollingIntervalRef.current = intervalId;
 

@@ -1,5 +1,4 @@
 import { v4 as uuidv4 } from 'uuid';
-import { getSupplementBaseline } from './supplementDocumentService';
 import { getEngineSnapshot } from './engineStateService';
 import { createChangeEvent } from './pointInTimeService';
 import { enrichSupplementRecommendationWithAI } from './supplementAIEnrichment';
@@ -12,6 +11,7 @@ import { logger } from '../utils/logger';
 import { getBaselineFields } from './baselineContextService';
 import { getLatestBloodworkContext, getMarkerValue, isMarkerAbnormal } from './bloodworkContextService';
 import { getCurrentSupplementStackContext, getDoseCategory, formatSupplement, getGoalAlignedSupplements, hasIngredient } from './supplementContextService';
+import { supplementManagementEngine } from './supplementManagementEngine';
 import type {
   SupplementRecommendation,
   SupplementRecommendationAction,
@@ -43,21 +43,23 @@ export const generateSupplementRecommendations = async (
   userId: string,
   context?: Partial<SupplementEngineContext>
 ): Promise<SupplementRecommendationResult> => {
-  const baseline = await getSupplementBaseline(userId);
+  const regimen = await supplementManagementEngine
+    .getSupplementRegimen(userId)
+    .catch(() => null);
   const engineState = await getEngineSnapshot(userId);
 
   const recommendations: SupplementRecommendation[] = [];
 
-  const currentStack = baseline
+  const currentStack = regimen
     ? {
-        stackName: baseline.stack_name,
-        items: baseline.items.map(item => ({
-          supplementName: item.supplement_name,
-          dosage: item.dosage,
-          dosageUnit: item.dosage_unit,
+        stackName: regimen.stackVersion.versionName,
+        items: regimen.supplements.map(item => ({
+          supplementName: item.supplementName,
+          dosage: item.dosageAmount.toString(),
+          dosageUnit: item.dosageUnit,
           frequency: item.frequency,
-          timing: item.timing_notes ?? 'unspecified',
-          status: 'active',
+          timing: item.timing ?? 'unspecified',
+          status: item.status,
         })),
       }
     : undefined;
@@ -169,7 +171,7 @@ export const generateSupplementRecommendations = async (
     await createChangeEvent({
       user_id: userId,
       entity_type: 'supplement_baseline',
-      entity_id: baseline?.id ?? `supplement-engine-${userId}`,
+      entity_id: regimen?.stackVersion.id ?? `supplement-engine-${userId}`,
       field_name: `recommendation_${rec.action}`,
       new_value: rec.supplementName,
       change_source: 'agent_adjustment',
@@ -194,27 +196,31 @@ export const getSupplementRecommendations = async (userId: string): Promise<Supp
 };
 
 export const getCurrentSupplementStack = async (userId: string) => {
-  const baseline = await getSupplementBaseline(userId);
-  if (!baseline) {
+  const regimen = await supplementManagementEngine.getSupplementRegimen(userId);
+  if (!regimen) {
     return null;
   }
 
+  const activeCount = regimen.supplements.filter(item => item.status === 'active').length;
+  const pausedCount = regimen.supplements.filter(item => item.status === 'paused').length;
+  const discontinuedCount = regimen.supplements.filter(item => item.status === 'discontinued').length;
+
   return {
-    stackName: baseline.stack_name,
-    stackNotes: baseline.stack_notes,
-    totalActiveItems: baseline.total_active_items,
-    timingNotes: baseline.timing_notes,
-    frequencyNotes: baseline.frequency_notes,
-    items: baseline.items.map(item => ({
-      supplementName: item.supplement_name,
-      dosage: item.dosage,
-      dosageUnit: item.dosage_unit,
-      frequency: item.frequency,
-      timing: item.timing_notes ?? 'unspecified',
-      notes: item.notes,
-    })),
-    createdAt: baseline.created_at,
-    updatedAt: baseline.updated_at,
+    stackVersion: regimen.stackVersion,
+    supplements: regimen.supplements,
+    metrics: {
+      totalCount: regimen.supplements.length,
+      activeCount,
+      pausedCount,
+      discontinuedCount,
+    },
+    adherenceSummary: {
+      windowDays: 30,
+      totalScheduled: regimen.supplements.reduce((acc, item) => acc + (item.adherence?.totalScheduled ?? 0), 0),
+      totalTaken: regimen.supplements.reduce((acc, item) => acc + (item.adherence?.totalTaken ?? 0), 0),
+      totalMissed: regimen.supplements.reduce((acc, item) => acc + (item.adherence?.totalMissed ?? 0), 0),
+      sideEffects: regimen.supplements.reduce((acc, item) => acc + (item.adherence?.sideEffects ?? 0), 0),
+    },
   };
 };
 

@@ -100,6 +100,7 @@ export default function ModernHomeScreen() {
   const [loading] = useState(false);
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList & InsightsStackParamList>>();
   const { userId } = useUser();
+  const resolvedUserId = userId && userId !== '11111' ? userId : '550e8400-e29b-41d4-a716-446655440000';
 
   const overallScore = 85;
 
@@ -152,17 +153,15 @@ export default function ModernHomeScreen() {
   ];
 
   const getComponentPressHandler = (componentKey: string): (() => void) | undefined => {
-    const fallbackUserId = userId || '12345678-1234-1234-1234-123456789abc';
-
     switch (componentKey) {
       case 'recovery':
-        return () => navigation.navigate('RecoveryStatus', { userId: fallbackUserId });
+        return () => navigation.navigate('RecoveryStatus', { userId: resolvedUserId });
       case 'cardiovascular':
         return () => navigation.navigate('CardiovascularDashboard');
       case 'metabolic':
         return () => navigation.navigate('InsightsHome');
       case 'performance':
-        return () => navigation.navigate('JointHealthStatus', { userId: fallbackUserId });
+        return () => navigation.navigate('JointHealthStatus', { userId: resolvedUserId });
       case 'sexualHealth':
         return () => navigation.navigate('SexualHealthDashboard');
       default:
@@ -177,8 +176,7 @@ export default function ModernHomeScreen() {
       icon: 'calendar-today',
       color: '#10B981',
       onPress: () => {
-        const userIdToUse = userId || '12345678-1234-1234-1234-123456789abc';
-        navigation.navigate('WorkoutToday', { userId: userIdToUse });
+        navigation.navigate('WorkoutToday', { userId: resolvedUserId });
       },
     },
     {
@@ -186,7 +184,7 @@ export default function ModernHomeScreen() {
       subtitle: 'Confirm current stack',
       icon: 'pill',
       color: '#059669',
-      onPress: () => navigation.navigate('SupplementUpload'),
+      onPress: () => navigation.navigate('SupplementRecommendations', { userId: resolvedUserId }),
     },
     {
       title: 'Review recommendations',

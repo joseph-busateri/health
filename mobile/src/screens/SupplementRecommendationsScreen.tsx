@@ -4,7 +4,11 @@ import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../types/navigation';
-import type { SupplementRecommendation, SupplementStack } from '../types/supplementEngine';
+import type {
+  SupplementRecommendation,
+  SupplementStack,
+  SupplementRegimenItem,
+} from '../types/supplementEngine';
 import {
   getCurrentSupplementStack,
   getSupplementRecommendations,
@@ -50,6 +54,18 @@ const SupplementRecommendationsScreen: React.FC<Props> = ({ route }) => {
       setGenerating(false);
     }
   }, [userId]);
+
+  const getStatusStyle = (status: SupplementRegimenItem['status']) => {
+    switch (status) {
+      case 'active':
+        return styles.status_active;
+      case 'paused':
+        return styles.status_paused;
+      case 'discontinued':
+      default:
+        return styles.status_discontinued;
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -111,14 +127,58 @@ const SupplementRecommendationsScreen: React.FC<Props> = ({ route }) => {
 
       {stack && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Current Stack: {stack.stackName}</Text>
-          <Text style={styles.subtitle}>Active Items: {stack.totalActiveItems}</Text>
-          {stack.items.map((item, index) => (
-            <View key={index} style={styles.itemRow}>
-              <Text style={styles.itemName}>{item.supplementName}</Text>
+          <Text style={styles.cardTitle}>{stack.stackVersion.versionName}</Text>
+          <Text style={styles.subtitle}>Version #{stack.stackVersion.versionNumber} • Effective {stack.stackVersion.effectiveFrom}</Text>
+
+          <View style={styles.metricsRow}>
+            <View style={styles.metricPill}>
+              <Text style={styles.metricLabel}>Total</Text>
+              <Text style={styles.metricValue}>{stack.metrics.totalCount}</Text>
+            </View>
+            <View style={styles.metricPill}>
+              <Text style={styles.metricLabel}>Active</Text>
+              <Text style={styles.metricValue}>{stack.metrics.activeCount}</Text>
+            </View>
+            <View style={styles.metricPill}>
+              <Text style={styles.metricLabel}>Paused</Text>
+              <Text style={styles.metricValue}>{stack.metrics.pausedCount}</Text>
+            </View>
+            <View style={styles.metricPill}>
+              <Text style={styles.metricLabel}>Stopped</Text>
+              <Text style={styles.metricValue}>{stack.metrics.discontinuedCount}</Text>
+            </View>
+          </View>
+
+          <View style={styles.adherenceSummary}>
+            <Text style={styles.sectionSubtitle}>30-day Adherence</Text>
+            <Text style={styles.adherenceDetail}>
+              Scheduled {stack.adherenceSummary.totalScheduled} • Taken {stack.adherenceSummary.totalTaken} • Missed {stack.adherenceSummary.totalMissed}
+            </Text>
+            <Text style={styles.adherenceDetail}>Side Effects Reported: {stack.adherenceSummary.sideEffects}</Text>
+          </View>
+
+          {stack.supplements.map(item => (
+            <View key={item.id} style={styles.itemRow}>
+              <View style={styles.itemHeader}>
+                <Text style={styles.itemName}>{item.supplementName}</Text>
+                <Text style={[styles.statusBadge, getStatusStyle(item.status)]}>{item.status.toUpperCase()}</Text>
+              </View>
               <Text style={styles.itemDetail}>
-                {item.dosage} {item.dosageUnit} • {item.frequency} • {item.timing}
+                {item.dosageAmount} {item.dosageUnit} • {item.frequency} • {item.timing}
               </Text>
+              {item.goal && <Text style={styles.itemHint}>Goal: {item.goal}</Text>}
+              {item.reasonToTake && <Text style={styles.itemHint}>Why: {item.reasonToTake}</Text>}
+              <View style={styles.itemMetaRow}>
+                <Text style={styles.itemMeta}>
+                  Adherence: {item.adherence.adherencePercentage === null ? 'n/a' : `${item.adherence.adherencePercentage}%`}
+                </Text>
+                {item.inventory && (
+                  <Text style={styles.itemMeta}>
+                    Servings left: {item.inventory.current_servings}
+                    {item.inventory.needs_reorder ? ' • Reorder soon' : ''}
+                  </Text>
+                )}
+              </View>
             </View>
           ))}
         </View>
@@ -219,17 +279,102 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     color: '#111827',
   },
+  metricsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  metricPill: {
+    backgroundColor: '#EEF2FF',
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  metricLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#4338CA',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  metricValue: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E1B4B',
+  },
+  adherenceSummary: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  sectionSubtitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  adherenceDetail: {
+    fontSize: 13,
+    color: '#4B5563',
+  },
   itemRow: {
     marginBottom: 8,
+    borderBottomColor: '#E5E7EB',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingBottom: 12,
+  },
+  itemHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
   },
   itemName: {
     fontSize: 14,
     fontWeight: '600',
     color: '#1F2937',
   },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  status_active: {
+    backgroundColor: '#16A34A',
+  },
+  status_paused: {
+    backgroundColor: '#F59E0B',
+  },
+  status_discontinued: {
+    backgroundColor: '#9CA3AF',
+  },
   itemDetail: {
     fontSize: 13,
     color: '#6B7280',
+  },
+  itemHint: {
+    fontSize: 12,
+    color: '#4B5563',
+    marginTop: 2,
+  },
+  itemMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  itemMeta: {
+    fontSize: 12,
+    color: '#6B7280',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   generateButton: {
     backgroundColor: '#2563EB',

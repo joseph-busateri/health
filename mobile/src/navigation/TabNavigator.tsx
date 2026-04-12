@@ -8,6 +8,7 @@ import InsightsStackNavigator from './InsightsStackNavigator';
 import WorkoutsScreen from '../screens/WorkoutsScreen';
 import DevicesScreen from '../screens/DevicesScreen';
 import UserSettingsScreen from '../screens/UserSettingsScreen';
+
 // import HealthDataHubScreen from '../screens/HealthDataHubScreen'; // Not used in tabs
 // import TrendsScreen from '../screens/TrendsScreen'; // DEPRECATED - use AnalyticsDashboardScreen
 // import AgentInterviewScreen from '../screens/AgentInterviewScreen'; // Not used in tabs

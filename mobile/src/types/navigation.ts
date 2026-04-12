@@ -70,6 +70,7 @@ export type HomeStackParamList = {
   BloodworkUpload: undefined;
   BodyCompositionUpload: undefined;
   SupplementUpload: undefined;
+  SupplementRecommendations: { userId: string };
   VoiceInterview: undefined;
   Recommendations: undefined;
   CardiovascularDashboard: undefined;

@@ -12,6 +12,7 @@ import SupplementUploadScreen from '../screens/SupplementUploadScreen';
 import BodyCompositionUploadScreen from '../screens/BodyCompositionUploadScreen';
 import VoiceInterviewScreen from '../screens/VoiceInterviewScreen';
 import RecommendationsScreen from '../screens/RecommendationsScreen';
+import SupplementRecommendationsScreen from '../screens/SupplementRecommendationsScreen';
 import type { HomeStackParamList } from '../types/navigation';
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
@@ -27,6 +28,7 @@ const HomeStackNavigator: React.FC = () => (
     <HomeStack.Screen name="BloodworkUpload" component={BloodworkUploadScreen} />
     <HomeStack.Screen name="BodyCompositionUpload" component={BodyCompositionUploadScreen} />
     <HomeStack.Screen name="SupplementUpload" component={SupplementUploadScreen} />
+    <HomeStack.Screen name="SupplementRecommendations" component={SupplementRecommendationsScreen} />
     <HomeStack.Screen name="VoiceInterview" component={VoiceInterviewScreen} />
     <HomeStack.Screen name="Recommendations" component={RecommendationsScreen} />
   </HomeStack.Navigator>
