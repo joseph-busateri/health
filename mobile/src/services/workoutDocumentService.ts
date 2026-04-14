@@ -1,84 +1,52 @@
+import api from './api';
 import { WorkoutBaseline, WorkoutDocumentResult, ManualWorkoutData } from '../types/workoutDocument';
 
 export type { ManualWorkoutData };
 
-const API_BASE_URL = 'http://localhost:3000';
+interface UploadWorkoutDocumentPayload {
+  userId: string;
+  documentType: string;
+  manualWorkoutData?: ManualWorkoutData;
+  fileReference?: string;
+  storagePath?: string;
+  programStartDate?: string;
+  notes?: string;
+}
 
 export const uploadWorkoutDocument = async (
-  userId: string,
-  documentType: string,
-  manualWorkoutData?: ManualWorkoutData,
-  fileReference?: string,
-  storagePath?: string,
-  programStartDate?: string,
-  notes?: string
+  payload: UploadWorkoutDocumentPayload,
 ): Promise<WorkoutDocumentResult> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/workout-document`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId,
-        documentType,
-        manualWorkoutData,
-        fileReference,
-        storagePath,
-        programStartDate,
-        notes,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data.error || 'Failed to upload workout document');
-    }
-
-    return data.data;
-  } catch (error) {
-    console.error('Error uploading workout document:', error);
-    throw error;
-  }
+  const response = await api.post<{ success: boolean; data: WorkoutDocumentResult }>(
+    '/api/workout-document/workout-document',
+    payload,
+  );
+  return response.data.data;
 };
 
 export const getWorkoutBaseline = async (userId: string): Promise<WorkoutBaseline | null> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/workout-baseline/${userId}`);
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(data.error || 'Failed to get workout baseline');
+    const response = await api.get<{ success: boolean; data: WorkoutBaseline }>(
+      `/api/workout-document/workout-baseline/${userId}`,
+    );
+    return response.data.data;
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      return null;
     }
-
-    return data.data;
-  } catch (error) {
-    console.error('Error getting workout baseline:', error);
     throw error;
   }
 };
 
 export const getLatestWorkoutDocument = async (userId: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/workout-document/${userId}/latest`);
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(data.error || 'Failed to get latest workout document');
+    const response = await api.get<{ success: boolean; data: WorkoutDocumentResult }>(
+      `/api/workout-document/workout-document/${userId}/latest`,
+    );
+    return response.data.data;
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      return null;
     }
-
-    return data.data;
-  } catch (error) {
-    console.error('Error getting latest workout document:', error);
     throw error;
   }
 };

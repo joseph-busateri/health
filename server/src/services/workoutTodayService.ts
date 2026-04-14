@@ -8,13 +8,27 @@ import type {
   WorkoutTodayPlan,
   WorkoutTodayRecord,
 } from '../types/workoutToday';
+import type { ExerciseProgressState, ProgressionRecordingInput, ReadinessSnapshot } from '../types/progression';
 import { getWorkoutBaseline } from './workoutDocumentService';
 import { getEngineSnapshot } from './engineStateService';
 import { getLatestBodyComposition } from './bodyCompositionService';
+import {
+  getLatestProgressionsForExercises,
+  getRecentProgressions,
+  recordDailyProgression,
+  upsertWeeklyProgressionSummary,
+} from './progressionService';
+import { generateProgressiveOverload } from './overloadPlannerService';
 import { createChangeEvent } from './pointInTimeService';
+import { normalizeUserId } from '../utils/userId';
+import { buildExerciseKey } from '../utils/exerciseKey';
+import { logger } from '../utils/logger';
 
 const workoutTodayStore = new Map<string, WorkoutTodayRecord[]>();
 const workoutBaselineOverrideStore = new Map<string, WorkoutBaseline>();
+
+const ENABLE_AI_OVERLOAD = process.env.ENABLE_AI_OVERLOAD === 'true';
+const AI_OVERLOAD_CONFIDENCE_THRESHOLD = parseFloat(process.env.AI_OVERLOAD_CONFIDENCE_THRESHOLD ?? '0.6');
 
 const dayKey = (date = new Date()): string => {
   return date.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
@@ -120,9 +134,10 @@ export const seedWorkoutBaselineOverride = async (userId: string, baseline: Work
 };
 
 export const getWorkoutToday = async (
-  userId: string,
+  incomingUserId: string,
   options?: { regenerate?: boolean; override?: WorkoutGenerationContextOverride }
 ): Promise<WorkoutTodayRecord> => {
+  const userId = normalizeUserId(incomingUserId);
   const date = new Date().toISOString().slice(0, 10);
   const existing = workoutTodayStore.get(userId)?.find(record => record.date === date);
   if (existing && !options?.regenerate) {
@@ -233,6 +248,7 @@ export const getWorkoutToday = async (
   return record;
 };
 
-export const getWorkoutTodayHistory = async (userId: string): Promise<WorkoutTodayRecord[]> => {
+export const getWorkoutTodayHistory = async (incomingUserId: string): Promise<WorkoutTodayRecord[]> => {
+  const userId = normalizeUserId(incomingUserId);
   return workoutTodayStore.get(userId) ?? [];
 };

@@ -10,11 +10,18 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import type { DocumentPickerAsset } from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+
+import { DEFAULT_USER_ID, useUser } from '../context/UserContext';
+import { uploadSleepNumberData } from '../services/sleepNumberService';
 
 export default function SleepNumberUploadScreen() {
-  const [selectedFile, setSelectedFile] = useState<any>(null);
+  const [selectedFile, setSelectedFile] = useState<DocumentPickerAsset | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploadedSessions, setUploadedSessions] = useState<number>(0);
+  const { userId } = useUser();
+  const resolvedUserId = userId ?? DEFAULT_USER_ID;
 
   const pickDocument = async () => {
     try {
@@ -23,14 +30,13 @@ export default function SleepNumberUploadScreen() {
         copyToCacheDirectory: true,
       });
 
-      if (result.type === 'success') {
-        setSelectedFile(result);
-        Alert.alert(
-          'File Selected',
-          `${result.name} is ready to upload`,
-          [{ text: 'OK' }]
-        );
+      if (result.canceled || !result.assets?.length) {
+        return;
       }
+
+      const asset = result.assets[0];
+      setSelectedFile(asset);
+      Alert.alert('File Selected', `${asset.name ?? 'File'} is ready to upload`, [{ text: 'OK' }]);
     } catch (error) {
       Alert.alert('Error', 'Failed to select file. Please try again.');
     }
@@ -45,28 +51,22 @@ export default function SleepNumberUploadScreen() {
     setLoading(true);
 
     try {
-      // TODO: Implement API call when server is running
-      // const fileType = selectedFile.name.endsWith('.json') ? 'json' : 'csv';
-      // const response = await fetch('http://localhost:3000/sleep-number/upload', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     userId,
-      //     fileContent: await readFile(selectedFile.uri),
-      //     fileType,
-      //   }),
-      // });
+      const fileType = selectedFile.name?.toLowerCase().endsWith('.csv') ? 'csv' : 'json';
+      const fileContent = await FileSystem.readAsStringAsync(selectedFile.uri, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
 
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      const result = await uploadSleepNumberData({
+        userId: resolvedUserId,
+        fileContent,
+        fileType,
+      });
 
-      // Simulate successful upload
-      const sessionCount = Math.floor(Math.random() * 20) + 10; // 10-30 sessions
-      setUploadedSessions(sessionCount);
+      setUploadedSessions(result.sessionCount);
 
       Alert.alert(
         'Success!',
-        `${sessionCount} sleep sessions uploaded successfully!\n\nYour sleep data is now being analyzed.`,
+        `${result.sessionCount} sleep sessions uploaded successfully!\n\nYour sleep data is now being analyzed.`,
         [
           {
             text: 'View Insights',
@@ -114,15 +114,15 @@ export default function SleepNumberUploadScreen() {
           <View style={styles.selectedFile}>
             <View style={styles.fileIcon}>
               <Ionicons 
-                name={selectedFile.name.endsWith('.json') ? 'document-text' : 'document'} 
+                name={selectedFile.name?.toLowerCase().endsWith('.json') ? 'document-text' : 'document'} 
                 size={32} 
                 color="#3b82f6" 
               />
             </View>
             <View style={styles.fileInfo}>
-              <Text style={styles.fileName}>{selectedFile.name}</Text>
+              <Text style={styles.fileName}>{selectedFile.name ?? 'Selected File'}</Text>
               <Text style={styles.fileSize}>
-                {(selectedFile.size / 1024).toFixed(1)} KB
+                {selectedFile.size != null ? `${(selectedFile.size / 1024).toFixed(1)} KB` : 'Size unknown'}
               </Text>
             </View>
             <TouchableOpacity onPress={() => setSelectedFile(null)}>

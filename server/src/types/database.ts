@@ -2,6 +2,249 @@
 export interface Database {
   public: {
     Tables: {
+      baseline_change_log: {
+        Row: {
+          id: string;
+          user_id: string;
+          baseline_profile_id: string;
+          field_name: string;
+          old_value: string | null;
+          new_value: string | null;
+          change_source: 'document_upload' | 'agent_refinement' | 'user_correction' | 'system_update';
+          rationale: string | null;
+          changed_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          baseline_profile_id: string;
+          field_name: string;
+          old_value?: string | null;
+          new_value?: string | null;
+          change_source: 'document_upload' | 'agent_refinement' | 'user_correction' | 'system_update';
+          rationale?: string | null;
+          changed_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          baseline_profile_id?: string;
+          field_name?: string;
+          old_value?: string | null;
+          new_value?: string | null;
+          change_source?: 'document_upload' | 'agent_refinement' | 'user_correction' | 'system_update';
+          rationale?: string | null;
+          changed_at?: string;
+        };
+      };
+      baseline_documents: {
+        Row: {
+          id: string;
+          user_id: string;
+          file_reference: string | null;
+          storage_path: string | null;
+          upload_date: string;
+          document_type: 'pdf' | 'docx' | 'txt' | 'manual_entry';
+          parse_status: 'pending' | 'processing' | 'completed' | 'failed';
+          extraction_confidence: number | null;
+          notes: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          file_reference?: string | null;
+          storage_path?: string | null;
+          upload_date?: string;
+          document_type: 'pdf' | 'docx' | 'txt' | 'manual_entry';
+          parse_status?: 'pending' | 'processing' | 'completed' | 'failed';
+          extraction_confidence?: number | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          file_reference?: string | null;
+          storage_path?: string | null;
+          upload_date?: string;
+          document_type?: 'pdf' | 'docx' | 'txt' | 'manual_entry';
+          parse_status?: 'pending' | 'processing' | 'completed' | 'failed';
+          extraction_confidence?: number | null;
+          notes?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      baseline_extracted_sections: {
+        Row: {
+          id: string;
+          user_id: string;
+          document_id: string;
+          raw_text: string;
+          normalized_name: string;
+          extraction_confidence: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          document_id: string;
+          raw_text: string;
+          normalized_name: string;
+          extraction_confidence?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          document_id?: string;
+          raw_text?: string;
+          normalized_name?: string;
+          extraction_confidence?: number | null;
+          created_at?: string;
+        };
+      };
+      workout_daily_progressions: {
+        Row: {
+          id: string;
+          user_id: string;
+          exercise_key: string;
+          exercise_name: string;
+          plan_date: string;
+          baseline_payload: Record<string, any>;
+          applied_payload: Record<string, any>;
+          progression_step: string | null;
+          adjustment_source: 'baseline' | 'heuristic' | 'ai';
+          readiness_snapshot: Record<string, any> | null;
+          joint_snapshot: Record<string, any> | null;
+          adherence_snapshot: Record<string, any> | null;
+          ai_confidence: number | null;
+          rationale: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          exercise_key: string;
+          exercise_name: string;
+          plan_date: string;
+          baseline_payload: Record<string, any>;
+          applied_payload: Record<string, any>;
+          progression_step?: string | null;
+          adjustment_source: 'baseline' | 'heuristic' | 'ai';
+          readiness_snapshot?: Record<string, any> | null;
+          joint_snapshot?: Record<string, any> | null;
+          adherence_snapshot?: Record<string, any> | null;
+          ai_confidence?: number | null;
+          rationale?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          exercise_key?: string;
+          exercise_name?: string;
+          plan_date?: string;
+          baseline_payload?: Record<string, any>;
+          applied_payload?: Record<string, any>;
+          progression_step?: string | null;
+          adjustment_source?: 'baseline' | 'heuristic' | 'ai';
+          readiness_snapshot?: Record<string, any> | null;
+          joint_snapshot?: Record<string, any> | null;
+          adherence_snapshot?: Record<string, any> | null;
+          ai_confidence?: number | null;
+          rationale?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      workout_weekly_progressions: {
+        Row: {
+          id: string;
+          user_id: string;
+          week_start_date: string;
+          week_label: string | null;
+          block_label: string | null;
+          summary_payload: Record<string, any>;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          week_start_date: string;
+          week_label?: string | null;
+          block_label?: string | null;
+          summary_payload: Record<string, any>;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          week_start_date?: string;
+          week_label?: string | null;
+          block_label?: string | null;
+          summary_payload?: Record<string, any>;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      baseline_profiles: {
+        Row: {
+          id: string;
+          user_id: string;
+          document_id: string;
+          demographics: Record<string, any> | null;
+          training_context: Record<string, any> | null;
+          lifestyle_context: Record<string, any> | null;
+          overall_health_goals: Record<string, any> | null;
+          sexual_performance_goals: Record<string, any> | null;
+          workout_goals: Record<string, any> | null;
+          secondary_goals: Record<string, any> | null;
+          priority_order: Record<string, any> | null;
+          extracted_at: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          document_id: string;
+          demographics?: Record<string, any> | null;
+          training_context?: Record<string, any> | null;
+          lifestyle_context?: Record<string, any> | null;
+          overall_health_goals?: Record<string, any> | null;
+          sexual_performance_goals?: Record<string, any> | null;
+          workout_goals?: Record<string, any> | null;
+          secondary_goals?: Record<string, any> | null;
+          priority_order?: Record<string, any> | null;
+          extracted_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          document_id?: string;
+          demographics?: Record<string, any> | null;
+          training_context?: Record<string, any> | null;
+          lifestyle_context?: Record<string, any> | null;
+          overall_health_goals?: Record<string, any> | null;
+          sexual_performance_goals?: Record<string, any> | null;
+          workout_goals?: Record<string, any> | null;
+          secondary_goals?: Record<string, any> | null;
+          priority_order?: Record<string, any> | null;
+          extracted_at?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
       bloodwork_documents: {
         Row: {
           id: string;

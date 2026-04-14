@@ -16,6 +16,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import bloodworkService from '../services/bloodworkService';
+import { DEFAULT_USER_ID } from '../context/UserContext';
 import type {
   BloodworkDocument,
   BloodworkDocumentListItem,
@@ -32,7 +33,7 @@ import {
   formatFullDate,
 } from '../types/bloodwork';
 
-const TEST_USER_ID = '550e8400-e29b-41d4-a716-446655440000';
+const TEST_USER_ID = DEFAULT_USER_ID;
 
 let actionSheetIOS: typeof import('react-native').ActionSheetIOS | undefined;
 if (Platform.OS === 'ios') {

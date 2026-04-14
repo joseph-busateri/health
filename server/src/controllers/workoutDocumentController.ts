@@ -16,6 +16,7 @@ import {
 import { logger } from '../utils/logger';
 import { uploadFileToStorage } from '../services/storageService';
 import { seedWorkoutBaselineOverride } from '../services/workoutTodayService';
+import { normalizeUserId } from '../utils/userId';
 
 interface WorkoutUploadRequest extends Request {
   file?: Express.Multer.File;
@@ -40,7 +41,7 @@ export const uploadWorkoutMiddleware = multer({
 export const uploadWorkoutDocument = async (req: WorkoutUploadRequest, res: Response) => {
   try {
     const {
-      userId,
+      userId: incomingUserId,
       documentType,
       programStartDate,
       notes,
@@ -48,11 +49,13 @@ export const uploadWorkoutDocument = async (req: WorkoutUploadRequest, res: Resp
     }: CreateWorkoutDocumentRequest = req.body;
     const file = req.file;
 
-    if (!userId || !documentType) {
+    if (!documentType) {
       return res.status(400).json({
-        error: 'Missing required fields: userId and documentType are required',
+        error: 'Missing required field: documentType',
       });
     }
+
+    const userId = normalizeUserId(incomingUserId);
 
     let storagePath: string | undefined;
     let fileReference: string | undefined;
@@ -108,19 +111,15 @@ export const uploadWorkoutDocument = async (req: WorkoutUploadRequest, res: Resp
 
 export const seedWorkoutTodayBaselineHandler = async (req: Request, res: Response) => {
   try {
-    const { user_id: userId } = req.params;
-    if (!userId) {
-      return res.status(400).json({ error: 'Missing required field: user_id' });
-    }
-
+    const userId = normalizeUserId(req.params.user_id);
     const baseline = req.body as WorkoutBaseline;
     if (!baseline || !baseline.id || !baseline.documentId) {
       return res.status(400).json({ error: 'Invalid baseline payload' });
     }
 
-    await seedWorkoutBaselineOverride(Array.isArray(userId) ? userId[0] : userId, {
+    await seedWorkoutBaselineOverride(userId, {
       ...baseline,
-      userId: Array.isArray(userId) ? userId[0] : userId,
+      userId,
     });
 
     res.status(201).json({ success: true });
@@ -135,18 +134,11 @@ export const seedWorkoutTodayBaselineHandler = async (req: Request, res: Respons
 
 export const getWorkoutTodayHandler = async (req: Request, res: Response) => {
   try {
-    const { user_id: userId } = req.params;
-
-    if (!userId) {
-      return res.status(400).json({
-        error: 'Missing required field: user_id',
-      });
-    }
-
+    const userId = normalizeUserId(req.params.user_id);
     const regenerate = req.query.regenerate === 'true';
     const override = req.body?.override;
 
-    const today = await getWorkoutToday(Array.isArray(userId) ? userId[0] : userId, {
+    const today = await getWorkoutToday(userId, {
       regenerate,
       override,
     });
@@ -170,15 +162,9 @@ export const getWorkoutTodayHandler = async (req: Request, res: Response) => {
 
 export const getWorkoutTodayHistoryHandler = async (req: Request, res: Response) => {
   try {
-    const { user_id: userId } = req.params;
+    const userId = normalizeUserId(req.params.user_id);
 
-    if (!userId) {
-      return res.status(400).json({
-        error: 'Missing required field: user_id',
-      });
-    }
-
-    const history = await getWorkoutTodayHistory(Array.isArray(userId) ? userId[0] : userId);
+    const history = await getWorkoutTodayHistory(userId);
 
     res.status(200).json({
       success: true,
@@ -195,15 +181,9 @@ export const getWorkoutTodayHistoryHandler = async (req: Request, res: Response)
 
 export const getWorkoutBaselineHandler = async (req: Request, res: Response) => {
   try {
-    const { userId } = req.params;
+    const userId = normalizeUserId(req.params.userId);
 
-    if (!userId) {
-      return res.status(400).json({
-        error: 'Missing required field: userId',
-      });
-    }
-
-    const baseline = await getWorkoutBaseline(Array.isArray(userId) ? userId[0] : userId);
+    const baseline = await getWorkoutBaseline(userId);
 
     if (!baseline) {
       return res.status(404).json({

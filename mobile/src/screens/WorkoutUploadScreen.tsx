@@ -16,6 +16,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { uploadWorkoutDocument } from '../services/workoutDocumentService';
 import type { ManualWorkoutData } from '../types/workoutDocument';
 import type { RootStackParamList } from '../types/navigation';
+import { useUser, DEFAULT_USER_ID } from '../context/UserContext';
 
 const WorkoutUploadScreen = () => {
   const [loading, setLoading] = useState(false);
@@ -47,6 +48,8 @@ const WorkoutUploadScreen = () => {
   const [mobilityOrRecoveryNotes, setMobilityOrRecoveryNotes] = useState('');
 
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { userId } = useUser();
+  const resolvedUserId = userId ?? DEFAULT_USER_ID;
 
   const weeklyPlans = useMemo(
     () => [
@@ -98,15 +101,13 @@ const WorkoutUploadScreen = () => {
         mobilityOrRecoveryNotes,
       };
 
-      const result = await uploadWorkoutDocument(
-        'current-user', // This should come from auth context
+      const result = await uploadWorkoutDocument({
+        userId: resolvedUserId,
         documentType,
         manualWorkoutData,
-        undefined, // fileReference
-        undefined, // storagePath
-        programStartDate || undefined,
-        notes || undefined
-      );
+        programStartDate: programStartDate || undefined,
+        notes: notes || undefined,
+      });
 
       Alert.alert(
         'Success',

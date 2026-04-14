@@ -13,6 +13,9 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import { Ionicons } from '@expo/vector-icons';
 
+import { DEFAULT_USER_ID, useUser } from '../context/UserContext';
+import { uploadBodyCompositionDocument, submitBodyCompositionScan } from '../services/bodyCompositionService';
+
 interface BodyCompositionData {
   weight?: number;
   bodyFatPercentage?: number;
@@ -20,11 +23,19 @@ interface BodyCompositionData {
   visceralFat?: number;
 }
 
+interface SelectedImage {
+  uri: string;
+  fileName?: string;
+  mimeType?: string;
+}
+
 export default function BodyCompositionUploadScreen() {
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImage, setSelectedImage] = useState<SelectedImage | null>(null);
   const [uploading, setUploading] = useState(false);
   const [manualEntry, setManualEntry] = useState(false);
   const [data, setData] = useState<BodyCompositionData>({});
+  const { userId } = useUser();
+  const resolvedUserId = userId ?? DEFAULT_USER_ID;
 
   const pickImage = async () => {
     const permissionResult = await ImagePicker.requestCameraPermissionsAsync();
@@ -41,7 +52,11 @@ export default function BodyCompositionUploadScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0].uri);
+      setSelectedImage({
+        uri: result.assets[0].uri,
+        fileName: result.assets[0].fileName ?? `body-composition-${Date.now()}.jpg`,
+        mimeType: result.assets[0].mimeType ?? 'image/jpeg',
+      });
     }
   };
 
@@ -53,7 +68,11 @@ export default function BodyCompositionUploadScreen() {
     });
 
     if (!result.canceled && result.assets[0]) {
-      setSelectedImage(result.assets[0].uri);
+      setSelectedImage({
+        uri: result.assets[0].uri,
+        fileName: result.assets[0].fileName ?? result.assets[0].uri.split('/').pop() ?? `body-composition-${Date.now()}.jpg`,
+        mimeType: result.assets[0].mimeType ?? 'image/jpeg',
+      });
     }
   };
 
@@ -66,22 +85,12 @@ export default function BodyCompositionUploadScreen() {
     setUploading(true);
 
     try {
-      // TODO: Implement API call when server is running
-      // const formData = new FormData();
-      // formData.append('file', {
-      //   uri: selectedImage,
-      //   type: 'image/jpeg',
-      //   name: 'body_composition_scan.jpg',
-      // });
-      // formData.append('user_id', userId);
-      
-      // await fetch('http://localhost:3000/body-composition/upload', {
-      //   method: 'POST',
-      //   body: formData,
-      // });
-
-      // Simulate upload
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await uploadBodyCompositionDocument({
+        userId: resolvedUserId,
+        uri: selectedImage.uri,
+        fileName: selectedImage.fileName,
+        mimeType: selectedImage.mimeType,
+      });
 
       Alert.alert(
         'Success',
@@ -112,23 +121,15 @@ export default function BodyCompositionUploadScreen() {
     setUploading(true);
 
     try {
-      // TODO: Implement API call when server is running
-      // await fetch('http://localhost:3000/body-composition/scan', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({
-      //     userId,
-      //     scanDate: new Date().toISOString().split('T')[0],
-      //     scanSource: 'manual_entry',
-      //     weightLb: data.weight,
-      //     bodyFatPercentage: data.bodyFatPercentage,
-      //     skeletalMuscleMassLb: data.muscleMass,
-      //     visceralFatLevel: data.visceralFat,
-      //   }),
-      // });
-
-      // Simulate submission
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await submitBodyCompositionScan({
+        userId: resolvedUserId,
+        scanDate: new Date().toISOString().split('T')[0],
+        scanSource: 'manual_entry',
+        weightLb: data.weight,
+        bodyFatPercentage: data.bodyFatPercentage,
+        skeletalMuscleMassLb: data.muscleMass,
+        visceralFatLevel: data.visceralFat,
+      });
 
       Alert.alert(
         'Success',
@@ -165,7 +166,7 @@ export default function BodyCompositionUploadScreen() {
             
             {selectedImage ? (
               <View style={styles.imageContainer}>
-                <Image source={{ uri: selectedImage }} style={styles.previewImage} />
+                <Image source={{ uri: selectedImage.uri }} style={styles.previewImage} />
                 <TouchableOpacity
                   style={styles.removeButton}
                   onPress={() => setSelectedImage(null)}
@@ -236,9 +237,10 @@ export default function BodyCompositionUploadScreen() {
                     Alert.prompt(
                       'Weight',
                       'Enter your weight in pounds',
-                      (text) => setData({ ...data, weight: parseFloat(text) || undefined }),
-                      'plain-keyboard',
-                      data.weight?.toString() || ''
+                      text => setData({ ...data, weight: parseFloat(text) || undefined }),
+                      'plain-text',
+                      data.weight?.toString() || '',
+                      'numeric'
                     );
                   }}
                 >
@@ -257,9 +259,10 @@ export default function BodyCompositionUploadScreen() {
                     Alert.prompt(
                       'Body Fat Percentage',
                       'Enter your body fat percentage',
-                      (text) => setData({ ...data, bodyFatPercentage: parseFloat(text) || undefined }),
-                      'plain-keyboard',
-                      data.bodyFatPercentage?.toString() || ''
+                      text => setData({ ...data, bodyFatPercentage: parseFloat(text) || undefined }),
+                      'plain-text',
+                      data.bodyFatPercentage?.toString() || '',
+                      'decimal-pad'
                     );
                   }}
                 >
@@ -278,9 +281,10 @@ export default function BodyCompositionUploadScreen() {
                     Alert.prompt(
                       'Muscle Mass',
                       'Enter your muscle mass in pounds',
-                      (text) => setData({ ...data, muscleMass: parseFloat(text) || undefined }),
-                      'plain-keyboard',
-                      data.muscleMass?.toString() || ''
+                      text => setData({ ...data, muscleMass: parseFloat(text) || undefined }),
+                      'plain-text',
+                      data.muscleMass?.toString() || '',
+                      'numeric'
                     );
                   }}
                 >
@@ -299,9 +303,10 @@ export default function BodyCompositionUploadScreen() {
                     Alert.prompt(
                       'Visceral Fat Level',
                       'Enter your visceral fat level (1-20)',
-                      (text) => setData({ ...data, visceralFat: parseFloat(text) || undefined }),
-                      'plain-keyboard',
-                      data.visceralFat?.toString() || ''
+                      text => setData({ ...data, visceralFat: parseFloat(text) || undefined }),
+                      'plain-text',
+                      data.visceralFat?.toString() || '',
+                      'number-pad'
                     );
                   }}
                 >

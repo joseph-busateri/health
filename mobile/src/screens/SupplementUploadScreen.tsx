@@ -11,6 +11,7 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { uploadSupplementDocument, ManualSupplementData } from '../services/supplementDocumentService';
 import type { RootStackParamList } from '../types/navigation';
+import { useUser, DEFAULT_USER_ID } from '../context/UserContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupplementUpload'>;
 
@@ -41,6 +42,9 @@ const SupplementUploadScreen: React.FC<Props> = ({ navigation }) => {
       notes: '',
     },
   ]);
+
+  const { userId } = useUser();
+  const resolvedUserId = userId ?? DEFAULT_USER_ID;
 
   const addSupplement = () => {
     setSupplements([
@@ -114,7 +118,7 @@ const SupplementUploadScreen: React.FC<Props> = ({ navigation }) => {
       };
 
       const result = await uploadSupplementDocument({
-        userId: 'current-user', // TODO: Replace with actual user ID from auth context
+        userId: resolvedUserId,
         documentType: 'manual_entry',
         notes: 'Uploaded from mobile app',
         manualSupplementData,

@@ -1,4 +1,5 @@
 import type { WorkoutBaseline, WorkoutExercise } from './workoutDocument';
+import type { ExerciseProgressState } from './progression';
 
 export type WorkoutReadinessStatus = 'ready' | 'moderate' | 'low';
 
@@ -24,6 +25,11 @@ export interface WorkoutTodayRecord {
   rationale: string;
   adjustments: WorkoutAdjustment[];
   baselineSnapshot: WorkoutBaseline;
+  progressionState?: {
+    exercises: ExerciseProgressState[];
+    weekLabel?: string;
+    blockLabel?: string;
+  };
   createdAt: string;
 }
 

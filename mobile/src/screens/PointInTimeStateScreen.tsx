@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import pointInTimeService from '../services/pointInTimeService';
+import { DEFAULT_USER_ID } from '../context/UserContext';
 import {
   PointInTimeState,
   AvailableDates,
@@ -36,7 +37,7 @@ const PointInTimeStateScreen: React.FC = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedDay, setSelectedDay] = useState(new Date().getDate());
 
-  const testUserId = '550e8400-e29b-41d4-a716-446655440000'; // Test user ID
+  const testUserId = DEFAULT_USER_ID;
 
   // Load current state on mount
   useEffect(() => {

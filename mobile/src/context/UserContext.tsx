@@ -11,7 +11,7 @@ interface UserContextType {
 const UserContext = createContext<UserContextType | undefined>(undefined);
 
 const USER_ID_KEY = '@health_app_user_id';
-const DEFAULT_USER_ID = '550e8400-e29b-41d4-a716-446655440000';
+export const DEFAULT_USER_ID = process.env.EXPO_PUBLIC_DEFAULT_USER_ID ?? '11111';
 
 export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [userId, setUserIdState] = useState<string | null>(null);
@@ -24,12 +24,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadUserId = async () => {
     try {
       const storedUserId = await AsyncStorage.getItem(USER_ID_KEY);
-      if (storedUserId && storedUserId !== '11111') {
-        setUserIdState(storedUserId);
-      } else {
+      const normalized = storedUserId?.trim();
+      if (normalized !== DEFAULT_USER_ID) {
         await AsyncStorage.setItem(USER_ID_KEY, DEFAULT_USER_ID);
-        setUserIdState(DEFAULT_USER_ID);
       }
+      setUserIdState(DEFAULT_USER_ID);
     } catch (error) {
       console.error('Error loading user ID:', error);
     } finally {
@@ -39,9 +38,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const setUserId = async (id: string) => {
     try {
-      const normalized = id || DEFAULT_USER_ID;
-      await AsyncStorage.setItem(USER_ID_KEY, normalized);
-      setUserIdState(normalized);
+      if (id?.trim() !== DEFAULT_USER_ID) {
+        console.warn('Ignoring attempt to set alternate user ID; enforcing default user.');
+      }
+      await AsyncStorage.setItem(USER_ID_KEY, DEFAULT_USER_ID);
+      setUserIdState(DEFAULT_USER_ID);
     } catch (error) {
       console.error('Error saving user ID:', error);
       throw error;

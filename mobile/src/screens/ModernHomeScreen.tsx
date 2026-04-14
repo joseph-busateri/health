@@ -13,7 +13,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useUser } from '../context/UserContext';
+import { DEFAULT_USER_ID, useUser } from '../context/UserContext';
 
 import type { HomeStackParamList, InsightsStackParamList } from '../types/navigation';
 
@@ -100,7 +100,7 @@ export default function ModernHomeScreen() {
   const [loading] = useState(false);
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList & InsightsStackParamList>>();
   const { userId } = useUser();
-  const resolvedUserId = userId && userId !== '11111' ? userId : '550e8400-e29b-41d4-a716-446655440000';
+  const resolvedUserId = userId ?? DEFAULT_USER_ID;
 
   const overallScore = 85;
 

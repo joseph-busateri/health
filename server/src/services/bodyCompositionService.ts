@@ -311,21 +311,30 @@ export const createBodyCompositionScan = async (
 };
 
 export const getLatestBodyComposition = async (userId: string): Promise<BodyCompositionScan | null> => {
-  const { data, error } = await supabase
-    .from('body_composition_scans')
-    .select('*')
-    .eq('user_id', userId)
-    .order('scan_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('body_composition_scans')
+      .select('*')
+      .eq('user_id', userId)
+      .order('scan_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
 
-  if (error) {
-    if (error.code === 'PGRST116') return null; // No rows found
+    if (error) {
+      if (error.code === 'PGRST116') return null; // No rows found
+      throw error;
+    }
+
+    return mapDatabaseToScan(data);
+  } catch (error: any) {
+    const message: string | undefined = error?.message || error?.details;
+    if (message?.includes("body_composition_scans")) {
+      logger.warn('Body composition scans table unavailable, skipping latest scan lookup', { userId, error: message });
+      return null;
+    }
     throw error;
   }
-
-  return mapDatabaseToScan(data);
 };
 
 export const getBodyCompositionScans = async (

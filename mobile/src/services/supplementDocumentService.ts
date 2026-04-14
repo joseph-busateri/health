@@ -1,77 +1,49 @@
-import { 
-  SupplementBaselineWithItems, 
-  SupplementDocumentResult, 
+import api from './api';
+import {
+  SupplementBaselineWithItems,
+  SupplementDocumentResult,
   CreateSupplementDocumentRequest,
-  ManualSupplementData 
+  ManualSupplementData,
 } from '../types/supplementDocument';
 
-const API_BASE_URL = 'http://localhost:3000';
-
 export const uploadSupplementDocument = async (
-  request: CreateSupplementDocumentRequest
+  request: CreateSupplementDocumentRequest,
 ): Promise<SupplementDocumentResult> => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/supplement-document`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(request),
-    });
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      throw new Error(result.error || 'Failed to upload supplement document');
-    }
-
-    return result.data;
-  } catch (error) {
-    console.error('Error uploading supplement document:', error);
-    throw error;
-  }
+  const response = await api.post<{ success: boolean; data: SupplementDocumentResult }>(
+    '/supplement-document',
+    request,
+  );
+  return response.data.data;
 };
 
 export const getSupplementBaseline = async (
-  userId: string
+  userId: string,
 ): Promise<SupplementBaselineWithItems | null> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/supplement-baseline/${userId}`);
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(result.error || 'Failed to get supplement baseline');
+    const response = await api.get<{ success: boolean; data: SupplementBaselineWithItems }>(
+      `/supplement-baseline/${userId}`,
+    );
+    return response.data.data;
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      return null;
     }
-
-    return result.data;
-  } catch (error) {
-    console.error('Error getting supplement baseline:', error);
     throw error;
   }
 };
 
 export const getLatestSupplementDocument = async (
-  userId: string
-): Promise<any | null> => {
+  userId: string,
+): Promise<SupplementDocumentResult | null> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/supplement-document/${userId}/latest`);
-
-    const result = await response.json();
-
-    if (!response.ok) {
-      if (response.status === 404) {
-        return null;
-      }
-      throw new Error(result.error || 'Failed to get latest supplement document');
+    const response = await api.get<{ success: boolean; data: SupplementDocumentResult }>(
+      `/supplement-document/${userId}/latest`,
+    );
+    return response.data.data;
+  } catch (error: any) {
+    if (error?.response?.status === 404) {
+      return null;
     }
-
-    return result.data;
-  } catch (error) {
-    console.error('Error getting latest supplement document:', error);
     throw error;
   }
 };

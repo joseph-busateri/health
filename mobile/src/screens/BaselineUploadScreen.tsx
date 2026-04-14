@@ -14,6 +14,7 @@ import type { StackNavigationProp } from '@react-navigation/stack';
 import type { RootStackParamList } from '../types/navigation';
 import { uploadBaselineDocument } from '../services/baselineDocumentService';
 import type { BaselineUploadRequest, ManualBaselineProfileData } from '../types/baselineDocument';
+import { useUser, DEFAULT_USER_ID } from '../context/UserContext';
 
 type BaselineUploadScreenNavigationProp = StackNavigationProp<RootStackParamList, 'BaselineUpload'>;
 
@@ -23,21 +24,21 @@ export const BaselineUploadScreen: React.FC = () => {
   const [useManualEntry, setUseManualEntry] = useState(false);
   const [notes, setNotes] = useState('');
   const [manualProfileData, setManualProfileData] = useState<ManualBaselineProfileData>({});
+  const { userId } = useUser();
+  const resolvedUserId = userId ?? DEFAULT_USER_ID;
 
   const handleUpload = async () => {
     setLoading(true);
     try {
       // For this implementation, we'll use a placeholder user ID
       // In a real app, this would come from authentication
-      const userId = 'user-123';
-
       const request: BaselineUploadRequest = {
         documentType: useManualEntry ? 'manual_entry' : 'pdf',
         notes: notes || undefined,
         manualProfileData: useManualEntry ? manualProfileData : undefined,
       };
 
-      const result = await uploadBaselineDocument(userId, request);
+      const result = await uploadBaselineDocument(resolvedUserId, request);
 
       Alert.alert(
         'Success',

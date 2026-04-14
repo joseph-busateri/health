@@ -28,6 +28,22 @@ router.post('/:userId/connect', async (req: Request, res: Response) => {
   }
 });
 
+router.post('/:userId/upload', async (req: Request, res: Response) => {
+  try {
+    const userId = req.params.userId as string;
+    const { fileContent, fileType } = req.body as { fileContent?: string; fileType?: 'json' | 'csv' };
+
+    if (!fileContent || !fileType) {
+      return res.status(400).json({ success: false, error: 'fileContent and fileType are required' });
+    }
+
+    const result = await sleepNumberService.uploadSleepData(userId, fileContent, fileType);
+    res.json({ success: true, data: result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
 // Disconnect Sleep Number account
 router.post('/:userId/disconnect', async (req: Request, res: Response) => {
   try {
