@@ -16,6 +16,7 @@ import { logger } from '../utils/logger';
 import { calculateFraminghamRisk, type FraminghamInputs } from './framinghamRiskCalculator';
 import { calculateASCVDRisk, type ASCVDInputs } from './ascvdRiskCalculator';
 import { calculateLifestyleModifiedRisk, type LifestyleFactors } from './lifestyleRiskModifier';
+import { enrichActuarialRecommendation } from './actuarialAIEnrichment';
 import { normalizeActuarialRecommendation } from './actuarialRecommendationNormalizer';
 import { validateActuarialRecommendation } from './actuarialRecommendationValidator';
 import { createRecommendation } from './recommendationEngineService';
@@ -75,12 +76,15 @@ export async function calculateActuarialRisk(
     let recommendation = fallbackRecommendation;
     if (USE_AI_ENRICHMENT) {
       try {
-        // TODO: Implement AI enrichment in Phase 4
-        logger.info('ℹ️ [ACTUARIAL RISK] AI enrichment not yet implemented');
+        recommendation = await enrichActuarialRecommendation(evidence, fallbackRecommendation);
+        logger.info('✅ [ACTUARIAL RISK] AI enrichment complete', {
+          source: recommendation.source,
+        });
       } catch (error) {
         logger.warn('⚠️ [ACTUARIAL RISK] AI enrichment failed, using fallback', {
           error: (error as Error).message,
         });
+        recommendation = { ...fallbackRecommendation, source: 'fallback' };
       }
     }
 
