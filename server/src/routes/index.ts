@@ -15,6 +15,11 @@ import strengthRoutes from './strength.routes';
 import tapeMeasurementsRoutes from './tapeMeasurements.routes';
 import aiAgentRoutes from './aiAgent.routes';
 import recommendationEngineRoutes from './recommendationEngineRoutes';
+import interviewSignalsRoutes from './interviewSignals.routes';
+import unifiedHealthDataRoutes from './unifiedHealthData.routes';
+import correlationHistoryRoutes from './correlationHistory.routes';
+import adaptiveInterviewRoutes from './adaptiveInterview.routes';
+import actuarialRiskRoutes from './actuarialRiskRoutes';
 
 const router = Router();
 
@@ -34,6 +39,11 @@ router.use('/recovery', recoveryRoutes);
 router.use('/injury', injuryRoutes);
 router.use('/goals', goalsRoutes);
 router.use('/recommendations', recommendationEngineRoutes);
+router.use('/interview-signals', interviewSignalsRoutes);
+router.use('/unified-health', unifiedHealthDataRoutes);
+router.use('/correlations', correlationHistoryRoutes);
+router.use('/adaptive-interview', adaptiveInterviewRoutes);
+router.use('/actuarial-risk', actuarialRiskRoutes);
 
 // Device Integration Routes
 router.use('/devices/sleep-number', sleepNumberRoutes);
