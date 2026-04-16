@@ -10,9 +10,23 @@
  * - Recovery Engine (sleep quality)
  * - Stress Engine (stress level)
  * - Baseline Profile (demographics)
+ * 
+ * Architecture:
+ * - Fetches latest data from each engine
+ * - Provides safe fallbacks for missing data
+ * - Logs all data sources and fallbacks
+ * - Supports manual overrides for testing
  */
 
 import { logger } from '../utils/logger';
+import { getCardiovascularToday } from './cardiovascularEngineService';
+import { getMetabolicToday } from './metabolicEngineService';
+import { getRecoveryToday } from './recoveryEngineService';
+import { getStressToday } from './stressEngineService';
+import { getWorkoutToday } from './workoutEngineService';
+import { getLatestBodyCompositionContext } from './bodyCompositionContextService';
+import { getLatestBloodworkContext, getMarkerValue } from './bloodworkContextService';
+import { getBaselineFields } from './baselineContextService';
 import type {
   ActuarialRiskInputs,
   DemographicProfile,
@@ -78,21 +92,48 @@ async function buildDemographicProfile(
   userId: string,
   overrides?: Partial<DemographicProfile>
 ): Promise<DemographicProfile> {
-  // TODO: Integrate with baselineProfileService
-  // For now, use overrides or defaults
-  
-  const defaultProfile: DemographicProfile = {
-    age: 50,
-    gender: 'male',
-    race: 'white',
-    familyHistory: false,
-    smokingStatus: 'never',
-  };
+  logger.info('📋 [DEMOGRAPHIC] Building demographic profile', { userId });
 
-  return {
-    ...defaultProfile,
-    ...overrides,
-  };
+  try {
+    // Fetch baseline profile data
+    const baseline = await getBaselineFields(userId, ['age', 'gender', 'race', 'familyHistory', 'smokingStatus']);
+
+    const profile: DemographicProfile = {
+      age: baseline?.age || 50,
+      gender: (baseline?.gender as 'male' | 'female') || 'male',
+      race: (baseline?.race as 'white' | 'african_american' | 'other') || 'white',
+      familyHistory: baseline?.familyHistory || false,
+      smokingStatus: (baseline?.smokingStatus as 'never' | 'former' | 'current') || 'never',
+    };
+
+    // Apply overrides
+    const finalProfile = {
+      ...profile,
+      ...overrides,
+    };
+
+    logger.info('✅ [DEMOGRAPHIC] Profile built', {
+      userId,
+      hasBaseline: !!baseline,
+      age: finalProfile.age,
+    });
+
+    return finalProfile;
+  } catch (error) {
+    logger.warn('⚠️ [DEMOGRAPHIC] Failed to fetch baseline, using defaults', {
+      userId,
+      error: (error as Error).message,
+    });
+
+    return {
+      age: 50,
+      gender: 'male',
+      race: 'white',
+      familyHistory: false,
+      smokingStatus: 'never',
+      ...overrides,
+    };
+  }
 }
 
 // ============================================================================
@@ -103,24 +144,92 @@ async function buildClinicalRiskFactors(
   userId: string,
   overrides?: Partial<ClinicalRiskFactors>
 ): Promise<ClinicalRiskFactors> {
-  // TODO: Integrate with cardiovascularEngineService and metabolicEngineService
-  // For now, use overrides or defaults
-  
-  const defaultFactors: ClinicalRiskFactors = {
-    systolicBP: 120,
-    diastolicBP: 80,
-    onBPmedication: false,
-    totalCholesterol: 180,
-    hdlCholesterol: 50,
-    ldlCholesterol: 100,
-    triglycerides: 100,
-    diabetesStatus: 'none',
-  };
+  logger.info('🩺 [CLINICAL] Building clinical risk factors', { userId });
 
-  return {
-    ...defaultFactors,
+  const factors: Partial<ClinicalRiskFactors> = {};
+
+  try {
+    // Fetch cardiovascular data for BP and lipids
+    const cardiovascular = await getCardiovascularToday(userId);
+    if (cardiovascular) {
+      // Extract blood pressure
+      if (cardiovascular.evidence?.signals) {
+        const bpSignal = cardiovascular.evidence.signals.find(s => s.type === 'blood_pressure');
+        if (bpSignal?.value && typeof bpSignal.value === 'object') {
+          factors.systolicBP = (bpSignal.value as any).systolic;
+          factors.diastolicBP = (bpSignal.value as any).diastolic;
+        }
+      }
+
+      // Check for BP medication from baseline
+      const baseline = await getBaselineFields(userId, ['onBPmedication']);
+      factors.onBPmedication = baseline?.onBPmedication || false;
+
+      logger.info('✅ [CLINICAL] Cardiovascular data integrated', {
+        userId,
+        hasBP: !!(factors.systolicBP && factors.diastolicBP),
+      });
+    }
+
+    // Fetch bloodwork data for cholesterol
+    const bloodwork = await getLatestBloodworkContext(userId);
+    if (bloodwork && bloodwork.hasBloodwork) {
+      factors.totalCholesterol = getMarkerValue(bloodwork.markers.totalCholesterol) || undefined;
+      factors.hdlCholesterol = getMarkerValue(bloodwork.markers.hdl) || undefined;
+      factors.ldlCholesterol = getMarkerValue(bloodwork.markers.ldl) || undefined;
+      factors.triglycerides = getMarkerValue(bloodwork.markers.triglycerides) || undefined;
+
+      logger.info('✅ [CLINICAL] Bloodwork data integrated', {
+        userId,
+        hasCholesterol: !!factors.totalCholesterol,
+      });
+    }
+
+    // Fetch metabolic data for diabetes status
+    const metabolic = await getMetabolicToday(userId);
+    if (metabolic) {
+      // Map metabolic status to diabetes status
+      const status = (metabolic as any).status;
+      if (status === 'high_risk') {
+        factors.diabetesStatus = 'diabetes';
+      } else if (status === 'elevated_risk') {
+        factors.diabetesStatus = 'prediabetes';
+      } else {
+        factors.diabetesStatus = 'none';
+      }
+
+      logger.info('✅ [CLINICAL] Metabolic data integrated', {
+        userId,
+        diabetesStatus: factors.diabetesStatus,
+      });
+    }
+  } catch (error) {
+    logger.warn('⚠️ [CLINICAL] Error fetching clinical data', {
+      userId,
+      error: (error as Error).message,
+    });
+  }
+
+  // Apply defaults for missing values
+  const finalFactors: ClinicalRiskFactors = {
+    systolicBP: factors.systolicBP || 120,
+    diastolicBP: factors.diastolicBP || 80,
+    onBPmedication: factors.onBPmedication || false,
+    totalCholesterol: factors.totalCholesterol || 180,
+    hdlCholesterol: factors.hdlCholesterol || 50,
+    ldlCholesterol: factors.ldlCholesterol,
+    triglycerides: factors.triglycerides,
+    diabetesStatus: factors.diabetesStatus || 'none',
     ...overrides,
   };
+
+  logger.info('✅ [CLINICAL] Clinical risk factors complete', {
+    userId,
+    systolicBP: finalFactors.systolicBP,
+    diabetesStatus: finalFactors.diabetesStatus,
+  });
+
+  return finalFactors;
 }
 
 // ============================================================================
@@ -131,21 +240,115 @@ async function buildLifestyleRiskFactors(
   userId: string,
   overrides?: Partial<LifestyleRiskFactors>
 ): Promise<LifestyleRiskFactors> {
-  // TODO: Integrate with workoutEngineService, recoveryEngineService, stressEngineService
-  // For now, use overrides or defaults
-  
-  const defaultFactors: LifestyleRiskFactors = {
-    exerciseFrequency: 3,
-    bmi: 25,
-    dietQuality: 'fair',
-    sleepQuality: 70,
-    stressLevel: 50,
-  };
+  logger.info('🏃 [LIFESTYLE] Building lifestyle risk factors', { userId });
 
-  return {
-    ...defaultFactors,
+  const factors: Partial<LifestyleRiskFactors> = {};
+
+  try {
+    // Fetch workout data for exercise frequency and VO2 max
+    const workout = await getWorkoutToday(userId);
+    if (workout) {
+      // Extract exercise frequency from workout evidence
+      if (workout.evidence?.signals) {
+        const freqSignal = workout.evidence.signals.find(s => s.type === 'exercise_frequency');
+        if (freqSignal?.value && typeof freqSignal.value === 'number') {
+          factors.exerciseFrequency = freqSignal.value;
+        }
+
+        const vo2Signal = workout.evidence.signals.find(s => s.type === 'vo2_max');
+        if (vo2Signal?.value && typeof vo2Signal.value === 'number') {
+          factors.vo2Max = vo2Signal.value;
+        }
+      }
+
+      logger.info('✅ [LIFESTYLE] Workout data integrated', {
+        userId,
+        hasExerciseFreq: !!factors.exerciseFrequency,
+        hasVO2Max: !!factors.vo2Max,
+      });
+    }
+
+    // Fetch body composition for BMI and body fat
+    const bodyComp = await getLatestBodyCompositionContext(userId);
+    if (bodyComp) {
+      factors.bmi = bodyComp.bmi || undefined;
+      factors.bodyFatPercentage = bodyComp.bodyFatPercentage || undefined;
+
+      logger.info('✅ [LIFESTYLE] Body composition integrated', {
+        userId,
+        hasBMI: !!factors.bmi,
+        hasBodyFat: !!factors.bodyFatPercentage,
+      });
+    }
+
+    // Fetch recovery data for sleep quality
+    const recovery = await getRecoveryToday(userId);
+    if (recovery) {
+      // Extract sleep quality from recovery evidence
+      const evidence = (recovery as any).evidence;
+      if (evidence?.signals) {
+        const sleepSignal = evidence.signals.find((s: any) => s.type === 'sleep_quality');
+        if (sleepSignal?.value && typeof sleepSignal.value === 'number') {
+          factors.sleepQuality = sleepSignal.value;
+        }
+      }
+
+      logger.info('✅ [LIFESTYLE] Recovery data integrated', {
+        userId,
+        hasSleepQuality: !!factors.sleepQuality,
+      });
+    }
+
+    // Fetch stress data
+    const stress = await getStressToday(userId);
+    if (stress) {
+      // Extract stress level from stress evidence
+      const evidence = (stress as any).evidence;
+      if (evidence?.signals) {
+        const stressSignal = evidence.signals.find((s: any) => s.type === 'stress_level');
+        if (stressSignal?.value && typeof stressSignal.value === 'number') {
+          factors.stressLevel = stressSignal.value;
+        }
+      }
+
+      logger.info('✅ [LIFESTYLE] Stress data integrated', {
+        userId,
+        hasStressLevel: !!factors.stressLevel,
+      });
+    }
+
+    // Diet quality from baseline or nutrition engine
+    const baseline = await getBaselineFields(userId, ['dietQuality']);
+    if (baseline?.dietQuality) {
+      factors.dietQuality = baseline.dietQuality as 'poor' | 'fair' | 'good' | 'excellent';
+    }
+  } catch (error) {
+    logger.warn('⚠️ [LIFESTYLE] Error fetching lifestyle data', {
+      userId,
+      error: (error as Error).message,
+    });
+  }
+
+  // Apply defaults for missing values
+  const finalFactors: LifestyleRiskFactors = {
+    exerciseFrequency: factors.exerciseFrequency || 3,
+    bmi: factors.bmi || 25,
+    dietQuality: factors.dietQuality || 'fair',
+    sleepQuality: factors.sleepQuality || 70,
+    stressLevel: factors.stressLevel || 50,
+    vo2Max: factors.vo2Max,
+    bodyFatPercentage: factors.bodyFatPercentage,
+    alcoholConsumption: factors.alcoholConsumption,
     ...overrides,
   };
+
+  logger.info('✅ [LIFESTYLE] Lifestyle risk factors complete', {
+    userId,
+    exerciseFrequency: finalFactors.exerciseFrequency,
+    bmi: finalFactors.bmi,
+  });
+
+  return finalFactors;
 }
 
 // ============================================================================
@@ -156,14 +359,51 @@ async function buildAdvancedRiskMarkers(
   userId: string,
   overrides?: Partial<AdvancedRiskMarkers>
 ): Promise<AdvancedRiskMarkers | undefined> {
-  // TODO: Integrate with bloodworkContextService
-  // For now, use overrides if provided
-  
-  if (!overrides || Object.keys(overrides).length === 0) {
+  logger.info('🔬 [ADVANCED] Building advanced risk markers', { userId });
+
+  const markers: Partial<AdvancedRiskMarkers> = {};
+
+  try {
+    // Fetch bloodwork data for advanced markers
+    const bloodwork = await getLatestBloodworkContext(userId);
+    if (bloodwork && bloodwork.hasBloodwork) {
+      markers.hsCRP = getMarkerValue(bloodwork.markers.hsCRP) || undefined;
+      markers.lipoproteinA = getMarkerValue(bloodwork.markers.lpa) || undefined;
+      markers.homocysteine = undefined; // Not in standard bloodwork context
+      markers.fibrinogen = undefined; // Not in standard bloodwork context
+      markers.apoB = getMarkerValue(bloodwork.markers.apoB) || undefined;
+
+      logger.info('✅ [ADVANCED] Advanced markers integrated', {
+        userId,
+        hasHsCRP: !!markers.hsCRP,
+        hasLipoA: !!markers.lipoproteinA,
+      });
+    }
+  } catch (error) {
+    logger.warn('⚠️ [ADVANCED] Error fetching advanced markers', {
+      userId,
+      error: (error as Error).message,
+    });
+  }
+
+  // Apply overrides
+  const finalMarkers = {
+    ...markers,
+    ...overrides,
+  };
+
+  // Only return if we have at least one marker
+  if (Object.keys(finalMarkers).length === 0) {
+    logger.info('ℹ️ [ADVANCED] No advanced markers available', { userId });
     return undefined;
   }
 
-  return overrides;
+  logger.info('✅ [ADVANCED] Advanced risk markers complete', {
+    userId,
+    markerCount: Object.keys(finalMarkers).length,
+  });
+
+  return finalMarkers as AdvancedRiskMarkers;
 }
 
 // ============================================================================
@@ -172,16 +412,27 @@ async function buildAdvancedRiskMarkers(
 
 /**
  * Extract blood pressure from cardiovascular data
- * TODO: Implement actual integration
  */
 export async function extractBloodPressure(userId: string): Promise<{ systolic: number; diastolic: number } | null> {
-  // Placeholder for cardiovascular engine integration
+  try {
+    const cardiovascular = await getCardiovascularToday(userId);
+    if (cardiovascular?.evidence?.signals) {
+      const bpSignal = cardiovascular.evidence.signals.find(s => s.type === 'blood_pressure');
+      if (bpSignal?.value && typeof bpSignal.value === 'object') {
+        return {
+          systolic: (bpSignal.value as any).systolic,
+          diastolic: (bpSignal.value as any).diastolic,
+        };
+      }
+    }
+  } catch (error) {
+    logger.warn('⚠️ [HELPER] Failed to extract blood pressure', { userId });
+  }
   return null;
 }
 
 /**
  * Extract cholesterol from bloodwork data
- * TODO: Implement actual integration
  */
 export async function extractCholesterol(userId: string): Promise<{
   total: number;
@@ -189,57 +440,124 @@ export async function extractCholesterol(userId: string): Promise<{
   ldl?: number;
   triglycerides?: number;
 } | null> {
-  // Placeholder for bloodwork context integration
+  try {
+    const bloodwork = await getLatestBloodworkContext(userId);
+    if (bloodwork && bloodwork.hasBloodwork) {
+      const total = getMarkerValue(bloodwork.markers.totalCholesterol);
+      const hdl = getMarkerValue(bloodwork.markers.hdl);
+      if (total && hdl) {
+        return {
+          total,
+          hdl,
+          ldl: getMarkerValue(bloodwork.markers.ldl) || undefined,
+          triglycerides: getMarkerValue(bloodwork.markers.triglycerides) || undefined,
+        };
+      }
+    }
+  } catch (error) {
+    logger.warn('⚠️ [HELPER] Failed to extract cholesterol', { userId });
+  }
   return null;
 }
 
 /**
  * Extract diabetes status from metabolic data
- * TODO: Implement actual integration
  */
 export async function extractDiabetesStatus(userId: string): Promise<'none' | 'prediabetes' | 'diabetes'> {
-  // Placeholder for metabolic engine integration
+  try {
+    const metabolic = await getMetabolicToday(userId);
+    if (metabolic) {
+      const status = (metabolic as any).status;
+      if (status === 'high_risk') return 'diabetes';
+      if (status === 'elevated_risk') return 'prediabetes';
+    }
+  } catch (error) {
+    logger.warn('⚠️ [HELPER] Failed to extract diabetes status', { userId });
+  }
   return 'none';
 }
 
 /**
  * Extract exercise data from workout engine
- * TODO: Implement actual integration
  */
 export async function extractExerciseData(userId: string): Promise<{
   frequency: number;
   vo2Max?: number;
 } | null> {
-  // Placeholder for workout engine integration
+  try {
+    const workout = await getWorkoutToday(userId);
+    if (workout?.evidence?.signals) {
+      const freqSignal = workout.evidence.signals.find(s => s.type === 'exercise_frequency');
+      const vo2Signal = workout.evidence.signals.find(s => s.type === 'vo2_max');
+      
+      if (freqSignal?.value && typeof freqSignal.value === 'number') {
+        return {
+          frequency: freqSignal.value,
+          vo2Max: (vo2Signal?.value && typeof vo2Signal.value === 'number') ? vo2Signal.value : undefined,
+        };
+      }
+    }
+  } catch (error) {
+    logger.warn('⚠️ [HELPER] Failed to extract exercise data', { userId });
+  }
   return null;
 }
 
 /**
  * Extract body composition data
- * TODO: Implement actual integration
  */
 export async function extractBodyComposition(userId: string): Promise<{
   bmi: number;
   bodyFatPercent?: number;
 } | null> {
-  // Placeholder for body composition service integration
+  try {
+    const bodyComp = await getLatestBodyCompositionContext(userId);
+    if (bodyComp?.bmi) {
+      return {
+        bmi: bodyComp.bmi,
+        bodyFatPercent: bodyComp.bodyFatPercentage || undefined,
+      };
+    }
+  } catch (error) {
+    logger.warn('⚠️ [HELPER] Failed to extract body composition', { userId });
+  }
   return null;
 }
 
 /**
  * Extract sleep quality from recovery engine
- * TODO: Implement actual integration
  */
 export async function extractSleepQuality(userId: string): Promise<number | null> {
-  // Placeholder for recovery engine integration
+  try {
+    const recovery = await getRecoveryToday(userId);
+    const evidence = (recovery as any)?.evidence;
+    if (evidence?.signals) {
+      const sleepSignal = evidence.signals.find((s: any) => s.type === 'sleep_quality');
+      if (sleepSignal?.value && typeof sleepSignal.value === 'number') {
+        return sleepSignal.value;
+      }
+    }
+  } catch (error) {
+    logger.warn('⚠️ [HELPER] Failed to extract sleep quality', { userId });
+  }
   return null;
 }
 
 /**
  * Extract stress level from stress engine
- * TODO: Implement actual integration
  */
 export async function extractStressLevel(userId: string): Promise<number | null> {
-  // Placeholder for stress engine integration
+  try {
+    const stress = await getStressToday(userId);
+    const evidence = (stress as any)?.evidence;
+    if (evidence?.signals) {
+      const stressSignal = evidence.signals.find((s: any) => s.type === 'stress_level');
+      if (stressSignal?.value && typeof stressSignal.value === 'number') {
+        return stressSignal.value;
+      }
+    }
+  } catch (error) {
+    logger.warn('⚠️ [HELPER] Failed to extract stress level', { userId });
+  }
   return null;
 }
