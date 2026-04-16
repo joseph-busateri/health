@@ -9,9 +9,9 @@ import {
   ActivityIndicator,
   Alert,
 } from 'react-native';
+import { useUser } from '../context/UserContext';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3020';
-const USER_ID = 'default-user';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 interface Question {
   id: string;
@@ -32,6 +32,7 @@ interface ConversationTurn {
 }
 
 const HybridInterviewScreen: React.FC = () => {
+  const { userId } = useUser();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -59,14 +60,20 @@ const HybridInterviewScreen: React.FC = () => {
   }, [sessionId, isComplete]);
 
   const startInterview = async () => {
+    if (!userId) {
+      setError('Please set your user ID in Settings');
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_BASE_URL}/hybrid-interview/start/${USER_ID}`, {
+      const response = await fetch(`${API_BASE_URL}/hybrid-interview/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          userId: userId,
           context: {
             recovery: { sleepHours: 7, sleepQuality: 3, status: 'Normal' },
             stress: { level: 'moderate' },
@@ -78,12 +85,11 @@ const HybridInterviewScreen: React.FC = () => {
 
       const data = await response.json();
 
-      if (data.success) {
-        setSessionId(data.data.sessionId);
-        setCurrentQuestion(data.data.question);
-        setTimeRemaining(data.data.timeRemaining);
+      if (data.sessionId && data.firstQuestion) {
+        setSessionId(data.sessionId);
+        setCurrentQuestion(data.firstQuestion);
       } else {
-        setError(data.error || 'Failed to start interview');
+        setError('Failed to start interview');
       }
     } catch (err) {
       setError('Failed to start interview');
@@ -102,26 +108,21 @@ const HybridInterviewScreen: React.FC = () => {
       setSubmitting(true);
       setError(null);
 
-      const response = await fetch(`${API_BASE_URL}/hybrid-interview/answer/${sessionId}`, {
+      const response = await fetch(`${API_BASE_URL}/hybrid-interview/answer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          question_id: currentQuestion.id,
+          sessionId: sessionId,
+          questionId: currentQuestion.id,
           question: currentQuestion.text,
           answer: answer.trim(),
           category: currentQuestion.category,
-          context: {
-            recovery: { sleepHours: 7, sleepQuality: 3, status: 'Normal' },
-            stress: { level: 'moderate' },
-            workoutAdherence: 75,
-            supplementAdherence: 80,
-          },
         }),
       });
 
       const data = await response.json();
 
-      if (data.success) {
+      if (data.session) {
         setConversationHistory(prev => [
           ...prev,
           {
@@ -135,20 +136,19 @@ const HybridInterviewScreen: React.FC = () => {
 
         setAnswer('');
 
-        if (data.data.isComplete) {
+        if (data.isComplete) {
           setIsComplete(true);
           setCurrentQuestion(null);
           Alert.alert(
             'Interview Complete!',
-            `You answered ${data.data.summary.totalQuestions} questions in ${Math.floor(data.data.summary.totalTime / 60)}:${(data.data.summary.totalTime % 60).toString().padStart(2, '0')}.`,
+            `You completed the interview in ${formatTime(timeElapsed)}.`,
             [{ text: 'OK' }]
           );
-        } else {
-          setCurrentQuestion(data.data.nextQuestion);
-          setTimeRemaining(data.data.timeRemaining);
+        } else if (data.nextQuestion) {
+          setCurrentQuestion(data.nextQuestion);
         }
       } else {
-        setError(data.error || 'Failed to submit answer');
+        setError('Failed to submit answer');
       }
     } catch (err) {
       setError('Failed to submit answer');

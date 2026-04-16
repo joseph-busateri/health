@@ -20,6 +20,15 @@ import unifiedHealthDataRoutes from './unifiedHealthData.routes';
 import correlationHistoryRoutes from './correlationHistory.routes';
 import adaptiveInterviewRoutes from './adaptiveInterview.routes';
 import actuarialRiskRoutes from './actuarialRiskRoutes';
+import controlTowerRoutes from './controlTowerRoutes';
+import healthDataHubRoutes from './healthDataHubRoutes';
+import baselineConfigRoutes from './baselineConfigRoutes';
+import mealLogRoutes from './mealLogRoutes';
+import nutritionExtractionRoutes from './nutritionExtractionRoutes';
+import bloodworkRecommendationsRoutes from './bloodworkRecommendationsRoutes';
+import bloodworkTrendsRoutes from './bloodworkTrendsRoutes';
+import adherenceEngineRoutes from './adherenceEngineRoutes';
+import autonomousRoutes from './autonomousRoutes';
 
 const router = Router();
 
@@ -44,6 +53,21 @@ router.use('/unified-health', unifiedHealthDataRoutes);
 router.use('/correlations', correlationHistoryRoutes);
 router.use('/adaptive-interview', adaptiveInterviewRoutes);
 router.use('/actuarial-risk', actuarialRiskRoutes);
+router.use('/control-tower', controlTowerRoutes);
+router.use('/health-data-hub', healthDataHubRoutes);
+router.use('/adherence', adherenceEngineRoutes);
+router.use('/autonomous', autonomousRoutes);
+
+// Baseline & Profile Routes
+router.use('/baseline', baselineConfigRoutes);
+
+// Nutrition Routes
+router.use('/meal-logs', mealLogRoutes);
+router.use('/nutrition', nutritionExtractionRoutes);
+
+// Enhanced Bloodwork Routes
+router.use('/bloodwork-recommendations', bloodworkRecommendationsRoutes);
+router.use('/bloodwork-trends', bloodworkTrendsRoutes);
 
 // Device Integration Routes
 router.use('/devices/sleep-number', sleepNumberRoutes);

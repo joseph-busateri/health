@@ -13,6 +13,8 @@ import AppleWatchConnectScreen from '../screens/AppleWatchConnectScreen';
 import OuraConnectScreen from '../screens/OuraConnectScreen';
 import ControlTowerScreen from '../screens/ControlTowerScreen';
 import CorrelationInsightsScreen from '../screens/CorrelationInsightsScreen';
+import AnalyticsDashboardScreen from '../screens/AnalyticsDashboardScreen';
+import MetabolicHealthDashboardScreen from '../screens/MetabolicHealthDashboardScreen';
 import type { InsightsStackParamList } from '../types/navigation';
 
 const InsightsStack = createNativeStackNavigator<InsightsStackParamList>();
@@ -31,6 +33,8 @@ const InsightsStackNavigator: React.FC = () => (
     <InsightsStack.Screen name="OuraConnect" component={OuraConnectScreen} />
     <InsightsStack.Screen name="ControlTower" component={ControlTowerScreen} />
     <InsightsStack.Screen name="CorrelationInsights" component={CorrelationInsightsScreen} />
+    <InsightsStack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />
+    <InsightsStack.Screen name="MetabolicHealthDashboard" component={MetabolicHealthDashboardScreen} />
   </InsightsStack.Navigator>
 );
 

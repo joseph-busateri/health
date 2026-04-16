@@ -1,6 +1,7 @@
 export interface NutritionExtractRequest {
   userId: string;
   rawText: string;
+  photoUri?: string;
   takenAt?: string;
   mealLabel?: string;
   notes?: string;

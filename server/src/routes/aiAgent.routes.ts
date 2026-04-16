@@ -3,12 +3,55 @@ import { aiAgentEngine } from '../services/aiAgentEngine';
 
 const router = Router();
 
-// Generate personalized insights
-router.post('/:userId/insights', async (req: Request, res: Response) => {
+// Chat with AI assistant
+router.post('/:userId/chat', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const insights = await aiAgentEngine.generatePersonalizedInsights(userId);
-    res.json({ success: true, data: insights });
+    const { message, sessionId } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ success: false, error: 'Message is required' });
+    }
+    
+    const response = await aiAgentEngine.chat(userId, message, sessionId);
+    res.json({ success: true, data: response });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Get chat history
+router.get('/:userId/chat/:sessionId/history', async (req: Request, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+    const limit = parseInt(req.query.limit as string) || 20;
+    
+    const history = await aiAgentEngine.getChatHistory(sessionId, limit);
+    res.json({ success: true, data: history });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Get active session
+router.get('/:userId/session/active', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const session = await aiAgentEngine.getActiveSession(userId);
+    res.json({ success: true, data: session });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Create new session
+router.post('/:userId/session', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { sessionType, contextSnapshot } = req.body;
+    
+    const session = await aiAgentEngine.createChatSession(userId, sessionType, contextSnapshot);
+    res.json({ success: true, data: session });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
@@ -26,11 +69,16 @@ router.get('/:userId/recommendations', async (req: Request, res: Response) => {
   }
 });
 
-// Ask AI agent a question
+// Ask AI agent a question (standalone)
 router.post('/:userId/ask', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
     const { question } = req.body;
+    
+    if (!question) {
+      return res.status(400).json({ success: false, error: 'Question is required' });
+    }
+    
     const answer = await aiAgentEngine.askQuestion(userId, question);
     res.json({ success: true, data: { answer } });
   } catch (error) {
@@ -42,48 +90,12 @@ router.post('/:userId/ask', async (req: Request, res: Response) => {
 router.post('/:userId/analyze', async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
-    const { dataType, timeframe } = req.body;
-    const analysis = await aiAgentEngine.analyzeHealthData(userId, dataType, timeframe);
+    const analysis = await aiAgentEngine.analyzeHealth(userId);
     res.json({ success: true, data: analysis });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }
 });
 
-// Generate workout plan
-router.post('/:userId/workout-plan', async (req: Request, res: Response) => {
-  try {
-    const { userId } = req.params;
-    const { goals, preferences } = req.body;
-    const plan = await aiAgentEngine.generateWorkoutPlan(userId, goals, preferences);
-    res.json({ success: true, data: plan });
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
-  }
-});
-
-// Generate nutrition recommendations
-router.post('/:userId/nutrition', async (req: Request, res: Response) => {
-  try {
-    const { userId } = req.params;
-    const { goals } = req.body;
-    const nutrition = await aiAgentEngine.generateNutritionRecommendations(userId, goals);
-    res.json({ success: true, data: nutrition });
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
-  }
-});
-
-// Get daily summary
-router.get('/:userId/daily-summary', async (req: Request, res: Response) => {
-  try {
-    const { userId } = req.params;
-    const { date } = req.query;
-    const summary = await aiAgentEngine.generateDailySummary(userId, date as string);
-    res.json({ success: true, data: summary });
-  } catch (error) {
-    res.status(500).json({ success: false, error: (error as Error).message });
-  }
-});
 
 export default router;

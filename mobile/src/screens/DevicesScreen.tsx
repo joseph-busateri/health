@@ -28,8 +28,8 @@ export default function DevicesScreen() {
   const [lastBPReading, setLastBPReading] = useState<{ systolic: string; diastolic: string; pulse?: string } | null>(null);
 
   const devices = [
-    { id: 'oura', name: 'Oura Ring', iconName: 'ring', color: '#FF6B6B' },
-    { id: 'appleWatch', name: 'Apple Watch', iconName: 'watch-variant', color: '#007AFF' },
+    { id: 'oura', name: 'Oura Ring', iconName: 'ring', color: '#FF6B6B', hasConnectScreen: true },
+    { id: 'appleWatch', name: 'Apple Watch', iconName: 'watch-variant', color: '#007AFF', hasConnectScreen: true },
     { id: 'sleepNumber', name: 'Sleep Number', iconName: 'bed-king', color: '#4CAF50' },
     { id: 'bpMonitor', name: 'Blood Pressure Monitor', iconName: 'heart-pulse', color: '#EC4899' },
   ];
@@ -151,19 +151,34 @@ export default function DevicesScreen() {
                   )}
                 </View>
               </View>
-              <TouchableOpacity
-                style={[styles.syncButton, { backgroundColor: device.color }]}
-                onPress={() => syncDevice(device.id)}
-                disabled={syncing[device.id]}
-              >
-                {syncing[device.id] ? (
-                  <ActivityIndicator size="small" color="white" />
-                ) : (
-                  <Text style={styles.syncButtonText}>
-                    {device.id === 'bpMonitor' ? 'BP Monitor' : 'Sync Now'}
-                  </Text>
-                )}
-              </TouchableOpacity>
+              {device.hasConnectScreen ? (
+                <TouchableOpacity
+                  style={[styles.connectButton, { backgroundColor: device.color }]}
+                  onPress={() => {
+                    if (device.id === 'oura') {
+                      navigation.navigate('OuraConnect');
+                    } else if (device.id === 'appleWatch') {
+                      navigation.navigate('AppleWatchConnect');
+                    }
+                  }}
+                >
+                  <Text style={styles.connectButtonText}>Connect</Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.syncButton, { backgroundColor: device.color }]}
+                  onPress={() => syncDevice(device.id)}
+                  disabled={syncing[device.id]}
+                >
+                  {syncing[device.id] ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Text style={styles.syncButtonText}>
+                      {device.id === 'bpMonitor' ? 'BP Monitor' : 'Sync Now'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
             </View>
 
             <View style={styles.deviceDetails}>
@@ -206,6 +221,21 @@ export default function DevicesScreen() {
             </View>
           </View>
         ))}
+
+        <TouchableOpacity 
+          style={styles.dataHubCard}
+          onPress={() => navigation.navigate('HealthDataHub')}
+          activeOpacity={0.88}
+        >
+          <View style={styles.dataHubIconWrapper}>
+            <MaterialCommunityIcons name="database" size={28} color="#FFFFFF" />
+          </View>
+          <View style={styles.dataHubContent}>
+            <Text style={styles.dataHubTitle}>Health Data Hub</Text>
+            <Text style={styles.dataHubSubtitle}>View all connected data sources and provenance</Text>
+          </View>
+          <MaterialCommunityIcons name="chevron-right" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
 
         <Text style={[styles.sectionLabel, styles.sectionLabelSpacing]}>Manual Uploads</Text>
         {uploads.map((item) => (
@@ -397,6 +427,53 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 13,
+  },
+  connectButton: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+    minWidth: 140,
+    alignItems: 'center',
+  },
+  connectButtonText: {
+    color: 'white',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  dataHubCard: {
+    backgroundColor: '#2563EB',
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  dataHubIconWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dataHubContent: {
+    flex: 1,
+    gap: 4,
+  },
+  dataHubTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  dataHubSubtitle: {
+    fontSize: 13,
+    color: '#E0E7FF',
   },
   deviceDetails: {
     marginTop: 5,

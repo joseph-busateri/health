@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, SafeAreaView } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useUser } from '../context/UserContext';
+import type { RootStackParamList } from '../types/navigation';
 
 export default function UserSettingsScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { userId, setUserId, clearUserId } = useUser();
   const [inputUserId, setInputUserId] = useState(userId || '');
 
@@ -48,6 +52,18 @@ export default function UserSettingsScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>User Configuration</Text>
+        
+        <TouchableOpacity 
+          style={styles.profileCard}
+          onPress={() => navigation.navigate('BaselineProfile')}
+          activeOpacity={0.7}
+        >
+          <View style={styles.profileCardContent}>
+            <Text style={styles.profileCardTitle}>Health Profile</Text>
+            <Text style={styles.profileCardSubtitle}>Edit demographics, medical history, and preferences</Text>
+          </View>
+          <Text style={styles.profileCardArrow}>→</Text>
+        </TouchableOpacity>
         
         <View style={styles.card}>
           <Text style={styles.label}>User ID</Text>
@@ -259,5 +275,38 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5f5f5',
     padding: 10,
     borderRadius: 6,
+  },
+  profileCard: {
+    backgroundColor: '#2563EB',
+    marginHorizontal: 20,
+    marginBottom: 15,
+    padding: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  profileCardContent: {
+    flex: 1,
+  },
+  profileCardTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  profileCardSubtitle: {
+    fontSize: 14,
+    color: '#E0E7FF',
+  },
+  profileCardArrow: {
+    fontSize: 24,
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
 });

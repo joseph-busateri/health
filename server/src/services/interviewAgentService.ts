@@ -4,14 +4,14 @@ import { getDashboardSummary } from './structuredDailyLogService';
 import { sendDailyInterviewNotification } from './notificationService';
 import { selectVerbalPrompt } from './verbalPromptService';
 import { applyInterviewOutputsToEngines, getEngineSnapshot } from './engineStateService';
+import { supabase } from '../config/supabase';
+import { logger } from '../utils/logger';
 import type { ControlTowerSummary } from '../types/dailyLog';
 import type {
   DailyInterviewSession,
   EngineSnapshot,
   InterviewSubmissionInput,
 } from '../types/interviewAgent';
-
-const sessionStore = new Map<string, DailyInterviewSession[]>();
 
 const todayIsoDate = (): string => new Date().toISOString().slice(0, 10);
 
@@ -57,9 +57,38 @@ export const createOrRefreshDailyInterviewSession = async (userId: string): Prom
   const selection = selectVerbalPrompt({ controlTower });
 
   const date = todayIsoDate();
-  const existing = (sessionStore.get(userId) ?? []).find(session => session.date === date && session.status === 'pending');
-  if (existing) {
-    return existing;
+  
+  // Check for existing session in database
+  try {
+    const { data: existingData, error: fetchError } = await supabase
+      .from('daily_interview_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', date)
+      .eq('status', 'pending')
+      .single();
+
+    if (existingData && !fetchError) {
+      logger.info('📋 [INTERVIEW] Returning existing session', { userId, date });
+      return {
+        id: existingData.id,
+        userId: existingData.user_id,
+        date: existingData.date,
+        primaryPrompt: existingData.primary_prompt,
+        followUpPrompt: existingData.follow_up_prompt,
+        dynamicQuestions: existingData.dynamic_questions || [],
+        focusComponents: existingData.focus_components || [],
+        reason: existingData.reason,
+        status: existingData.status,
+        createdAt: existingData.created_at,
+        submission: existingData.submission,
+        completedAt: existingData.completed_at,
+      };
+    }
+  } catch (error) {
+    logger.warn('⚠️ [INTERVIEW] Error checking for existing session', {
+      error: (error as Error).message,
+    });
   }
 
   const session: DailyInterviewSession = {
@@ -75,8 +104,35 @@ export const createOrRefreshDailyInterviewSession = async (userId: string): Prom
     createdAt: new Date().toISOString(),
   };
 
-  const sessions = sessionStore.get(userId) ?? [];
-  sessionStore.set(userId, [session, ...sessions]);
+  // Persist to database
+  try {
+    const { error: insertError } = await supabase
+      .from('daily_interview_sessions')
+      .insert({
+        id: session.id,
+        user_id: session.userId,
+        date: session.date,
+        status: session.status,
+        primary_prompt: session.primaryPrompt,
+        follow_up_prompt: session.followUpPrompt,
+        dynamic_questions: session.dynamicQuestions,
+        focus_components: session.focusComponents,
+        reason: session.reason,
+        created_at: session.createdAt,
+      });
+
+    if (insertError) {
+      logger.error('❌ [INTERVIEW] Failed to persist session to database', {
+        error: insertError.message,
+      });
+    } else {
+      logger.info('✅ [INTERVIEW] Session persisted to database', { sessionId: session.id });
+    }
+  } catch (error) {
+    logger.error('❌ [INTERVIEW] Database error', {
+      error: (error as Error).message,
+    });
+  }
 
   await sendDailyInterviewNotification(userId, {
     sessionId: session.id,
@@ -90,9 +146,49 @@ export const createOrRefreshDailyInterviewSession = async (userId: string): Prom
 };
 
 export const getTodayInterviewSession = async (userId: string): Promise<DailyInterviewSession | null> => {
-  const sessions = sessionStore.get(userId) ?? [];
   const today = todayIsoDate();
-  return sessions.find(session => session.date === today) ?? null;
+  
+  try {
+    const { data, error } = await supabase
+      .from('daily_interview_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', today)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') {
+        logger.info('📋 [INTERVIEW] No session found for today', { userId, date: today });
+        return null;
+      }
+      logger.error('❌ [INTERVIEW] Failed to fetch today session', {
+        error: error.message,
+      });
+      return null;
+    }
+
+    return {
+      id: data.id,
+      userId: data.user_id,
+      date: data.date,
+      primaryPrompt: data.primary_prompt,
+      followUpPrompt: data.follow_up_prompt,
+      dynamicQuestions: data.dynamic_questions || [],
+      focusComponents: data.focus_components || [],
+      reason: data.reason,
+      status: data.status,
+      createdAt: data.created_at,
+      submission: data.submission,
+      completedAt: data.completed_at,
+    };
+  } catch (error) {
+    logger.error('❌ [INTERVIEW] Database error fetching today session', {
+      error: (error as Error).message,
+    });
+    return null;
+  }
 };
 
 export const submitInterviewSession = async (
@@ -100,28 +196,85 @@ export const submitInterviewSession = async (
   sessionId: string,
   submission: InterviewSubmissionInput
 ): Promise<{ session: DailyInterviewSession; engineSnapshot: EngineSnapshot }> => {
-  const sessions = sessionStore.get(userId) ?? [];
-  const target = sessions.find(session => session.id === sessionId);
+  // Fetch session from database
+  try {
+    const { data: target, error: fetchError } = await supabase
+      .from('daily_interview_sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .eq('user_id', userId)
+      .single();
 
-  if (!target) {
-    throw new Error('Interview session not found.');
-  }
+    if (fetchError || !target) {
+      logger.error('❌ [INTERVIEW] Session not found', { sessionId, userId });
+      throw new Error('Interview session not found.');
+    }
 
-  if (target.status === 'completed') {
+    // If already completed, return existing data
+    if (target.status === 'completed') {
+      logger.info('📋 [INTERVIEW] Session already completed', { sessionId });
+      return {
+        session: {
+          id: target.id,
+          userId: target.user_id,
+          date: target.date,
+          primaryPrompt: target.primary_prompt,
+          followUpPrompt: target.follow_up_prompt,
+          dynamicQuestions: target.dynamic_questions || [],
+          focusComponents: target.focus_components || [],
+          reason: target.reason,
+          status: target.status,
+          createdAt: target.created_at,
+          submission: target.submission,
+          completedAt: target.completed_at,
+        },
+        engineSnapshot: await getEngineSnapshot(userId),
+      };
+    }
+
+    // Apply interview outputs to engines
+    const engineSnapshot = await applyInterviewOutputsToEngines(userId, submission);
+
+    // Update session in database
+    const completedAt = new Date().toISOString();
+    const { error: updateError } = await supabase
+      .from('daily_interview_sessions')
+      .update({
+        status: 'completed',
+        completed_at: completedAt,
+        submission: submission,
+      })
+      .eq('id', sessionId);
+
+    if (updateError) {
+      logger.error('❌ [INTERVIEW] Failed to update session', {
+        error: updateError.message,
+      });
+    } else {
+      logger.info('✅ [INTERVIEW] Session completed and persisted', { sessionId });
+    }
+
     return {
-      session: target,
-      engineSnapshot: await getEngineSnapshot(userId),
+      session: {
+        id: target.id,
+        userId: target.user_id,
+        date: target.date,
+        primaryPrompt: target.primary_prompt,
+        followUpPrompt: target.follow_up_prompt,
+        dynamicQuestions: target.dynamic_questions || [],
+        focusComponents: target.focus_components || [],
+        reason: target.reason,
+        status: 'completed',
+        createdAt: target.created_at,
+        submission: submission,
+        completedAt: completedAt,
+      },
+      engineSnapshot,
     };
+  } catch (error) {
+    logger.error('❌ [INTERVIEW] Error submitting session', {
+      error: (error as Error).message,
+    });
+    throw error;
   }
-
-  const engineSnapshot = await applyInterviewOutputsToEngines(userId, submission);
-
-  target.status = 'completed';
-  target.completedAt = new Date().toISOString();
-  target.submission = submission;
-
-  return {
-    session: target,
-    engineSnapshot,
-  };
 };

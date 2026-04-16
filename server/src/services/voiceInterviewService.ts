@@ -3,6 +3,10 @@ import OpenAI from 'openai';
 import fs from 'fs';
 import path from 'path';
 import type { InterviewContext } from './hybridInterviewService';
+import { selectNextQuestion } from './hybridInterviewService';
+import { supabase } from '../config/supabase';
+import { logger } from '../utils/logger';
+import { parseInterviewAnswer, saveInterviewSignal } from './interviewAnswerParserService';
 
 let openai: OpenAI | null = null;
 
@@ -38,6 +42,102 @@ export interface VoiceInterviewSession {
 }
 
 const sessionStore = new Map<string, VoiceInterviewSession>();
+
+/**
+ * Load voice interview session from database
+ */
+const loadVoiceSessionFromDatabase = async (sessionId: string): Promise<VoiceInterviewSession | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('voice_interview_transcripts')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('created_at', { ascending: true })
+      .single();
+
+    if (error || !data) {
+      return null;
+    }
+
+    // Parse conversation history from transcript
+    let conversationHistory: VoiceTranscript[] = [];
+    if (data.extracted_signals && Array.isArray(data.extracted_signals)) {
+      conversationHistory = data.extracted_signals;
+    }
+
+    return {
+      sessionId: data.session_id,
+      userId: data.user_id,
+      startedAt: data.created_at,
+      completedAt: data.processed_at || undefined,
+      conversationHistory,
+      totalTimeElapsed: data.audio_duration_seconds || 0,
+      isComplete: data.processing_status === 'completed',
+      questionCount: conversationHistory.length,
+    };
+  } catch (error) {
+    logger.error('❌ [VOICE INTERVIEW] Error loading session from database', {
+      error: (error as Error).message,
+    });
+    return null;
+  }
+};
+
+/**
+ * Save voice interview session to database
+ */
+const saveVoiceSessionToDatabase = async (
+  sessionId: string,
+  userId: string,
+  conversationHistory: VoiceTranscript[],
+  isComplete: boolean = false
+): Promise<void> => {
+  try {
+    const existingSession = await loadVoiceSessionFromDatabase(sessionId);
+
+    if (existingSession) {
+      // Update existing session
+      const { error } = await supabase
+        .from('voice_interview_transcripts')
+        .update({
+          extracted_signals: conversationHistory,
+          processing_status: isComplete ? 'completed' : 'processing',
+          processed_at: isComplete ? new Date().toISOString() : null,
+        })
+        .eq('session_id', sessionId);
+
+      if (error) {
+        logger.error('❌ [VOICE INTERVIEW] Error updating session in database', {
+          error: error.message,
+        });
+      }
+    } else {
+      // Insert new session
+      const { error } = await supabase
+        .from('voice_interview_transcripts')
+        .insert({
+          session_id: sessionId,
+          user_id: userId,
+          transcript_text: conversationHistory.map(t => `Q: ${t.question}\nA: ${t.answer}`).join('\n\n'),
+          extracted_signals: conversationHistory,
+          processing_status: isComplete ? 'completed' : 'processing',
+          processed_at: isComplete ? new Date().toISOString() : null,
+        });
+
+      if (error) {
+        logger.error('❌ [VOICE INTERVIEW] Error inserting session to database', {
+          error: error.message,
+        });
+      } else {
+        logger.info('✅ [VOICE INTERVIEW] Session saved to database', { sessionId });
+      }
+    }
+  } catch (error) {
+    logger.error('❌ [VOICE INTERVIEW] Database error', {
+      error: (error as Error).message,
+    });
+  }
+};
 
 const TIME_CONSTRAINTS = {
   MAX_INTERVIEW_DURATION: 300, // 5 minutes
@@ -95,27 +195,17 @@ export const generateSpeech = async (text: string, voice: 'alloy' | 'echo' | 'fa
 };
 
 /**
- * Generate voice-optimized question using AI
+ * Generate voice-optimized question using enhanced AI with dynamic question generation
  */
 export const generateVoiceQuestion = async (
   context: InterviewContext,
   conversationHistory: VoiceTranscript[],
   isFinalQuestion: boolean = false
 ): Promise<string> => {
-  const client = getOpenAI();
-  
-  if (!client) {
-    throw new Error('OpenAI API key not configured');
-  }
-
   // Always return final question if flagged
   if (isFinalQuestion) {
     return TIME_CONSTRAINTS.FINAL_QUESTION;
   }
-
-  const conversationSummary = conversationHistory
-    .map(t => `Q: ${t.question}\nA: ${t.answer}`)
-    .join('\n\n');
 
   // Check if it's Saturday
   const today = new Date();
@@ -138,52 +228,62 @@ export const generateVoiceQuestion = async (
                      lastAnswer.toLowerCase().includes('low') ||
                      /\b[1-3]\b/.test(lastAnswer); // Low numbers (1-3)
 
-  const prompt = `You are a warm, empathetic health coach having a voice conversation with a user.
+  // Voice-specific priority: Saturday sexual health check-in
+  if (isSaturday && !askedAboutSexualHealth) {
+    return "How would you rate your libido this week on a scale of 1 to 5?";
+  }
 
-CONTEXT:
-User's Health Data:
-- Sleep: ${context.recovery?.sleepHours ?? 'unknown'} hours, quality: ${context.recovery?.sleepQuality ?? 'unknown'}/5
-- Recovery status: ${context.recovery?.status ?? 'unknown'}
-- Stress level: ${context.stress?.level ?? 'unknown'}
-- Workout adherence: ${context.workoutAdherence ?? 'unknown'}%
-- Supplement adherence: ${context.supplementAdherence ?? 'unknown'}%
-- Sexual health libido: ${context.sexualHealth?.libido ?? 'unknown'}
+  // Voice-specific priority: Follow up on concerns
+  if (hasConcern) {
+    const client = getOpenAI();
+    if (client) {
+      try {
+        const prompt = `The user just expressed a concern in their answer: "${lastAnswer}"
 
-Conversation So Far:
-${conversationSummary || 'No questions asked yet'}
+Generate ONE warm, empathetic follow-up question to understand this concern better.
+Keep it short (10-15 seconds) and conversational.
+Return ONLY the question text.`;
 
-CRITICAL PRIORITY RULES (MUST FOLLOW):
-${isSaturday && !askedAboutSexualHealth ? '🔴 TODAY IS SATURDAY - YOU MUST ASK ABOUT SEXUAL HEALTH! Ask about libido, satisfaction, or stress impact on intimacy.' : ''}
-${hasConcern ? '🔴 USER EXPRESSED CONCERN IN LAST ANSWER - ASK A FOLLOW-UP QUESTION about what they just mentioned!' : ''}
+        const response = await client.chat.completions.create({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.8,
+          max_tokens: 80,
+        });
 
-TASK:
-Generate ONE conversational question for a voice interview that:
-1. ${isSaturday && !askedAboutSexualHealth ? 'MUST ask about sexual health (libido/satisfaction/stress impact)' : 'Addresses an important health area not yet explored'}
-2. ${hasConcern ? 'MUST follow up on the concern they just mentioned' : 'Flows naturally from previous responses'}
-3. Can be answered in 10-20 seconds
-4. Is warm and empathetic (like talking to a friend)
-5. Uses natural speech patterns (contractions, casual language)
-6. Is SHORT and CLEAR for voice delivery
+        return response.choices[0].message.content?.trim() || "Can you tell me more about that?";
+      } catch (error) {
+        logger.warn('⚠️ [VOICE INTERVIEW] Follow-up question generation failed, using fallback');
+      }
+    }
+    return "Can you tell me more about that?";
+  }
 
-Examples of good questions:
-- "How would you rate your libido this week?" (Saturday)
-- "What's making it hard to get good sleep?" (follow-up to poor sleep)
-- "How are your stress levels today?"
-- "Did you complete your workout?"
-
-Return ONLY the spoken question text (no JSON, no formatting, just the question).`;
-
+  // Use enhanced dynamic question generation from hybrid interview service
   try {
-    const response = await client.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.8,
-      max_tokens: 100,
+    // Convert VoiceTranscript to ConversationTurn format
+    const conversationTurns = conversationHistory.map(t => ({
+      questionId: t.questionId,
+      question: t.question,
+      answer: t.answer,
+      timestamp: t.timestamp,
+      timeElapsed: t.timeElapsed,
+    }));
+
+    const selectedQuestion = await selectNextQuestion(context, conversationTurns);
+    
+    logger.info('✅ [VOICE INTERVIEW] Using dynamic question generation', {
+      category: selectedQuestion.category,
+      source: selectedQuestion.source,
     });
 
-    return response.choices[0].message.content?.trim() || "How are you feeling today?";
+    return selectedQuestion.text;
   } catch (error) {
-    console.error('Error generating voice question:', error);
+    logger.warn('⚠️ [VOICE INTERVIEW] Dynamic question generation failed, using fallback', {
+      error: (error as Error).message,
+    });
+    
+    // Fallback to simple question
     return "How are you feeling today?";
   }
 };
@@ -207,14 +307,20 @@ export const startVoiceInterviewSession = async (
     questionCount: 0,
   };
   
+  // Save to in-memory store for quick access
   sessionStore.set(sessionId, session);
+
+  // Save initial session to database
+  await saveVoiceSessionToDatabase(sessionId, userId, [], false);
 
   // Generate first question
   let firstQuestion: string;
   try {
     firstQuestion = await generateVoiceQuestion(context, []);
   } catch (error) {
-    console.error('Error generating question:', error);
+    logger.error('❌ [VOICE INTERVIEW] Error generating first question', {
+      error: (error as Error).message,
+    });
     // Fallback question
     firstQuestion = "Good morning! How are you feeling today, and how did you sleep last night?";
   }
@@ -224,9 +330,13 @@ export const startVoiceInterviewSession = async (
   try {
     audioBuffer = await generateSpeech(firstQuestion);
   } catch (error) {
-    console.error('Error generating speech:', error);
+    logger.error('❌ [VOICE INTERVIEW] Error generating speech', {
+      error: (error as Error).message,
+    });
     // Continue without audio
   }
+
+  logger.info('✅ [VOICE INTERVIEW] Session started', { sessionId, userId });
 
   return { sessionId, firstQuestion, audioBuffer };
 };
@@ -237,7 +347,8 @@ export const startVoiceInterviewSession = async (
 export const processVoiceResponse = async (
   sessionId: string,
   audioFilePath: string,
-  context: InterviewContext
+  context: InterviewContext,
+  currentQuestion: string
 ): Promise<{ 
   nextQuestion: string; 
   audioBuffer: Buffer; 
@@ -259,12 +370,41 @@ export const processVoiceResponse = async (
   session.totalTimeElapsed = timeElapsed;
   session.questionCount++;
 
+  // Record the Q&A in session history
+  const questionId = randomUUID();
+  session.conversationHistory.push({
+    questionId,
+    question: currentQuestion,
+    answer: transcript,
+    timestamp: new Date().toISOString(),
+    timeElapsed,
+  });
+
+  // Save updated conversation history to database
+  await saveVoiceSessionToDatabase(sessionId, session.userId, session.conversationHistory, false);
+
+  // Phase 22: Parse answer and extract structured signals
+  try {
+    const parsedAnswer = await parseInterviewAnswer(currentQuestion, transcript, questionId);
+    await saveInterviewSignal(session.userId, sessionId, parsedAnswer);
+    logger.info('✅ [VOICE INTERVIEW] Signal extracted and saved', {
+      category: parsedAnswer.category,
+      confidence: parsedAnswer.confidence,
+      method: parsedAnswer.extractionMethod,
+    });
+  } catch (error) {
+    logger.warn('⚠️ [VOICE INTERVIEW] Signal extraction failed, continuing interview', {
+      error: (error as Error).message,
+    });
+    // Non-blocking: Continue interview even if signal extraction fails
+  }
+
   // Determine if this should be the final question
   const shouldBeFinalQuestion = 
     session.questionCount >= TIME_CONSTRAINTS.MAX_QUESTIONS - 1 ||
     timeElapsed >= TIME_CONSTRAINTS.MAX_INTERVIEW_DURATION - 30; // 30 seconds buffer
 
-  // Generate next question
+  // Generate next question using enhanced dynamic generation
   const nextQuestion = await generateVoiceQuestion(
     context, 
     session.conversationHistory,
@@ -273,12 +413,16 @@ export const processVoiceResponse = async (
 
   // Generate audio for next question
   const audioBuffer = await generateSpeech(nextQuestion);
-
-  // Record the current Q&A (we'll record the question that was just answered)
-  // Note: The question text needs to be tracked separately or passed in
   
   const isFinalQuestion = nextQuestion === TIME_CONSTRAINTS.FINAL_QUESTION;
   const isComplete = false; // Will be complete after final question is answered
+
+  logger.info('✅ [VOICE INTERVIEW] Response processed', {
+    sessionId,
+    questionCount: session.questionCount,
+    timeElapsed,
+    isFinalQuestion,
+  });
 
   return {
     nextQuestion,
@@ -318,7 +462,7 @@ export const recordVoiceAnswer = (
 /**
  * Complete voice interview session
  */
-export const completeVoiceInterviewSession = (sessionId: string): VoiceInterviewSession => {
+export const completeVoiceInterviewSession = async (sessionId: string): Promise<VoiceInterviewSession> => {
   const session = sessionStore.get(sessionId);
   
   if (!session) {
@@ -327,6 +471,16 @@ export const completeVoiceInterviewSession = (sessionId: string): VoiceInterview
 
   session.isComplete = true;
   session.completedAt = new Date().toISOString();
+
+  // Save final session state to database
+  await saveVoiceSessionToDatabase(sessionId, session.userId, session.conversationHistory, true);
+
+  logger.info('✅ [VOICE INTERVIEW] Session completed', {
+    sessionId,
+    userId: session.userId,
+    questionCount: session.questionCount,
+    totalTimeElapsed: session.totalTimeElapsed,
+  });
 
   return session;
 };

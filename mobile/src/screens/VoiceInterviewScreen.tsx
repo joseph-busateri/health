@@ -10,15 +10,16 @@ import {
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
+import { useUser } from '../context/UserContext';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-const USER_ID = 'default-user';
 
 interface VoiceInterviewScreenProps {
   navigation?: any;
 }
 
 const VoiceInterviewScreen: React.FC<VoiceInterviewScreenProps> = ({ navigation }) => {
+  const { userId } = useUser();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [currentQuestion, setCurrentQuestion] = useState<string>('');
   const [isRecording, setIsRecording] = useState(false);
@@ -102,12 +103,17 @@ const VoiceInterviewScreen: React.FC<VoiceInterviewScreenProps> = ({ navigation 
   };
 
   const startInterview = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'Please set your user ID in Settings');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/api/voice-interview/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID }),
+        body: JSON.stringify({ userId: userId }),
       });
 
       const data = await response.json();
@@ -221,7 +227,7 @@ const VoiceInterviewScreen: React.FC<VoiceInterviewScreenProps> = ({ navigation 
 
     try {
       const formData = new FormData();
-      formData.append('userId', USER_ID);
+      formData.append('userId', userId || '');
       formData.append('sessionId', sessionId);
       formData.append('currentQuestion', currentQuestion);
       formData.append('questionId', `q${questionCount}`);
@@ -275,7 +281,7 @@ const VoiceInterviewScreen: React.FC<VoiceInterviewScreenProps> = ({ navigation 
       const response = await fetch(`${API_BASE_URL}/api/voice-interview/complete`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: USER_ID, sessionId }),
+        body: JSON.stringify({ userId: userId, sessionId }),
       });
 
       const data = await response.json();

@@ -14,10 +14,9 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../types/navigation';
 import api from '../services/api';
+import { useUser } from '../context/UserContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Agent'>;
-
-const USER_ID = 'demo-user-123';
 
 interface Message {
   id: string;
@@ -35,6 +34,7 @@ interface QuestionCandidate {
 }
 
 const DynamicInterviewScreen: React.FC<Props> = ({ navigation }) => {
+  const { userId } = useUser();
   const [loading, setLoading] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -44,15 +44,26 @@ const DynamicInterviewScreen: React.FC<Props> = ({ navigation }) => {
   const [summary, setSummary] = useState<any>(null);
 
   const startInterview = useCallback(async () => {
+    if (!userId) {
+      setMessages([{
+        id: 'error',
+        type: 'system',
+        text: 'Please set your user ID in Settings',
+        timestamp: new Date().toISOString(),
+      }]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     try {
-      const contextResponse = await api.get(`/dashboard/${USER_ID}/summary`);
+      const contextResponse = await api.get(`/dashboard/${userId}/summary`);
       const context = contextResponse.data.data;
 
       const response = await api.post<{ success: boolean; data: { sessionId: string; firstQuestion: QuestionCandidate } }>('/interview/start', {
-        userId: USER_ID,
+        userId: userId,
         context: {
-          userId: USER_ID,
+          userId: userId,
           recovery: context.latestLog ? {
             score: context.recoveryScore,
             sleepHours: context.latestLog.sleepHours,
@@ -112,7 +123,7 @@ const DynamicInterviewScreen: React.FC<Props> = ({ navigation }) => {
     setLoading(true);
 
     try {
-      const contextResponse = await api.get(`/dashboard/${USER_ID}/summary`);
+      const contextResponse = await api.get(`/dashboard/${userId}/summary`);
       const context = contextResponse.data.data;
 
       const response = await api.post<{
@@ -129,7 +140,7 @@ const DynamicInterviewScreen: React.FC<Props> = ({ navigation }) => {
         question: currentQuestion.text,
         answer,
         context: {
-          userId: USER_ID,
+          userId: userId,
           recovery: context.latestLog ? {
             score: context.recoveryScore,
             sleepHours: context.latestLog.sleepHours,
@@ -198,12 +209,12 @@ const DynamicInterviewScreen: React.FC<Props> = ({ navigation }) => {
     setLoading(true);
 
     try {
-      const contextResponse = await api.get(`/dashboard/${USER_ID}/summary`);
+      const contextResponse = await api.get(`/dashboard/${userId}/summary`);
       const context = contextResponse.data.data;
 
       const response = await api.post<{ success: boolean; data: any }>(`/interview/${sessionId}/finalize`, {
         context: {
-          userId: USER_ID,
+          userId: userId,
           recovery: context.latestLog ? {
             score: context.recoveryScore,
             sleepHours: context.latestLog.sleepHours,

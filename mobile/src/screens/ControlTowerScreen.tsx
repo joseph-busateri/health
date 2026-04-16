@@ -94,7 +94,7 @@ const ControlTowerScreen: React.FC<Props> = ({ navigation }) => {
       headerRight: () => (
         <TouchableOpacity
           style={styles.checkInButton}
-          onPress={() => navigation.navigate('DailyCheckIn')}
+          onPress={() => navigation.navigate('InterviewSelector')}
         >
           <Text style={styles.checkInButtonText}>Daily Check-In</Text>
         </TouchableOpacity>
@@ -185,6 +185,25 @@ const ControlTowerScreen: React.FC<Props> = ({ navigation }) => {
         {/* SECTION 6: GOAL PROGRESS */}
         <GoalProgressSection goals={controlTower.goalProgress} />
 
+        {/* NUTRITION QUICK ACCESS */}
+        <TouchableOpacity
+          style={styles.nutritionCard}
+          onPress={() => navigation.navigate('NutritionDashboard' as never)}
+        >
+          <View style={styles.nutritionHeader}>
+            <View style={styles.nutritionIconContainer}>
+              <Text style={styles.nutritionIcon}>🥗</Text>
+            </View>
+            <View style={styles.nutritionContent}>
+              <Text style={styles.nutritionTitle}>Nutrition Plan</Text>
+              <Text style={styles.nutritionSubtitle}>View today's targets & log meals</Text>
+            </View>
+            <View style={styles.nutritionArrow}>
+              <Text style={styles.arrowText}>→</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+
         {/* SECTION 7: ADVANCED INTELLIGENCE */}
         <AdvancedIntelligenceSection
           sections={controlTower.advancedIntelligence}
@@ -267,7 +286,54 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   footerSpacer: {
-    height: 20,
+    height: 24,
+  },
+  nutritionCard: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  nutritionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  nutritionIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  nutritionIcon: {
+    fontSize: 24,
+  },
+  nutritionContent: {
+    flex: 1,
+  },
+  nutritionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F1F5F9',
+    marginBottom: 2,
+  },
+  nutritionSubtitle: {
+    fontSize: 13,
+    color: '#94A3B8',
+  },
+  nutritionArrow: {
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  arrowText: {
+    fontSize: 20,
+    color: '#64748B',
   },
 });
 

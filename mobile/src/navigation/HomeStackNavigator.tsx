@@ -17,6 +17,12 @@ import DailyLogsScreen from '../screens/DailyLogsScreen';
 import CardiovascularDashboardScreen from '../screens/CardiovascularDashboardScreen';
 import SexualHealthDashboardScreen from '../screens/SexualHealthDashboardScreen';
 import ActuarialRiskDashboardScreen from '../screens/ActuarialRiskDashboardScreen';
+import MealLogScreen from '../screens/MealLogScreen';
+import NutritionDashboardScreen from '../screens/NutritionDashboardScreen';
+import NutritionExtractionScreen from '../screens/NutritionExtractionScreen';
+import AIAssistantScreen from '../screens/AIAssistantScreen';
+import AIChatScreen from '../screens/AIChatScreen';
+import AnalyticsDashboardScreen from '../screens/AnalyticsDashboardScreen';
 import type { HomeStackParamList } from '../types/navigation';
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
@@ -39,6 +45,12 @@ const HomeStackNavigator: React.FC = () => (
     <HomeStack.Screen name="CardiovascularDashboard" component={CardiovascularDashboardScreen} />
     <HomeStack.Screen name="SexualHealthDashboard" component={SexualHealthDashboardScreen} />
     <HomeStack.Screen name="ActuarialRiskDashboard" component={ActuarialRiskDashboardScreen} />
+    <HomeStack.Screen name="NutritionDashboard" component={NutritionDashboardScreen} />
+    <HomeStack.Screen name="MealLog" component={MealLogScreen} />
+    <HomeStack.Screen name="NutritionExtraction" component={NutritionExtractionScreen} />
+    <HomeStack.Screen name="AIAssistant" component={AIAssistantScreen} />
+    <HomeStack.Screen name="AIChat" component={AIChatScreen} />
+    <HomeStack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />
   </HomeStack.Navigator>
 );
 

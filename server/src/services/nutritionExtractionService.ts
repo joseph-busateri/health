@@ -1,12 +1,9 @@
-import { randomUUID } from 'crypto';
-
+import { supabase } from '../config/supabase';
 import type {
   NutritionExtractRequest,
   NutritionExtractionRecord,
   NutritionMacros,
 } from '../types/nutritionExtraction';
-
-const nutritionStore = new Map<string, NutritionExtractionRecord[]>();
 
 const extractNumber = (text: string, patterns: RegExp[]): number | undefined => {
   for (const pattern of patterns) {
@@ -87,35 +84,120 @@ const estimateConfidence = (macros: NutritionMacros, foods: string[]): number =>
 export const extractNutritionFromText = async (
   request: NutritionExtractRequest
 ): Promise<NutritionExtractionRecord> => {
-  const takenAt = request.takenAt ? new Date(request.takenAt).toISOString() : new Date().toISOString();
+  const timestamp = request.takenAt ? new Date(request.takenAt).toISOString() : new Date().toISOString();
   const foods = parseFoods(request.rawText);
   const macros = extractMacros(request.rawText);
   const confidence = estimateConfidence(macros, foods);
 
+  const { data, error } = await supabase
+    .from('nutrition_extractions')
+    .insert({
+      user_id: request.userId,
+      photo_uri: request.photoUri || '',
+      timestamp,
+      extracted_foods: foods,
+      calories: macros.calories,
+      protein_g: macros.proteinG,
+      carbs_g: macros.carbsG,
+      fat_g: macros.fatG,
+      fiber_g: macros.fiberG,
+      confidence,
+      extraction_status: 'completed',
+    })
+    .select()
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to create nutrition extraction: ${error.message}`);
+  }
+
   const record: NutritionExtractionRecord = {
-    id: randomUUID(),
-    userId: request.userId,
-    takenAt,
+    id: data.id,
+    userId: data.user_id,
+    takenAt: data.timestamp,
     mealLabel: request.mealLabel,
     rawText: request.rawText,
-    foods,
-    macros,
-    confidence,
+    foods: data.extracted_foods || [],
+    macros: {
+      calories: data.calories,
+      proteinG: data.protein_g,
+      carbsG: data.carbs_g,
+      fatG: data.fat_g,
+      fiberG: data.fiber_g,
+    },
+    confidence: data.confidence,
     notes: request.notes,
-    createdAt: new Date().toISOString(),
+    createdAt: data.created_at,
   };
-
-  const existing = nutritionStore.get(request.userId) ?? [];
-  nutritionStore.set(request.userId, [record, ...existing]);
 
   return record;
 };
 
 export const getNutritionExtractionsForUser = async (userId: string): Promise<NutritionExtractionRecord[]> => {
-  return nutritionStore.get(userId) ?? [];
+  const { data, error } = await supabase
+    .from('nutrition_extractions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('timestamp', { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to fetch nutrition extractions: ${error.message}`);
+  }
+
+  return (data || []).map(row => ({
+    id: row.id,
+    userId: row.user_id,
+    takenAt: row.timestamp,
+    mealLabel: undefined,
+    rawText: '',
+    foods: row.extracted_foods || [],
+    macros: {
+      calories: row.calories,
+      proteinG: row.protein_g,
+      carbsG: row.carbs_g,
+      fatG: row.fat_g,
+      fiberG: row.fiber_g,
+    },
+    confidence: row.confidence,
+    createdAt: row.created_at,
+  }));
 };
 
 export const getLatestNutritionExtraction = async (userId: string): Promise<NutritionExtractionRecord | null> => {
-  const records = nutritionStore.get(userId) ?? [];
-  return records.length > 0 ? records[0] : null;
+  const { data, error } = await supabase
+    .from('nutrition_extractions')
+    .select('*')
+    .eq('user_id', userId)
+    .order('timestamp', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (error) {
+    if (error.code === 'PGRST116') {
+      return null;
+    }
+    throw new Error(`Failed to fetch latest nutrition extraction: ${error.message}`);
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    takenAt: data.timestamp,
+    mealLabel: undefined,
+    rawText: '',
+    foods: data.extracted_foods || [],
+    macros: {
+      calories: data.calories,
+      proteinG: data.protein_g,
+      carbsG: data.carbs_g,
+      fatG: data.fat_g,
+      fiberG: data.fiber_g,
+    },
+    confidence: data.confidence,
+    createdAt: data.created_at,
+  };
 };

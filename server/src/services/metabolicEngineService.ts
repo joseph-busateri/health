@@ -8,6 +8,7 @@
 
 import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger';
+import { supabase } from '../config/supabase';
 import { enrichMetabolicRecommendation } from './metabolicAIEnrichment';
 import { normalizeMetabolicRecommendation } from './metabolicRecommendationNormalizer';
 import { validateMetabolicRecommendation } from './metabolicRecommendationValidator';
@@ -27,10 +28,8 @@ import type {
 const USE_AI_ENRICHMENT = process.env.USE_AI_ENRICHMENT_METABOLIC === 'true';
 
 // ============================================================================
-// IN-MEMORY PERSISTENCE
+// DATABASE PERSISTENCE (Supabase)
 // ============================================================================
-
-const metabolicRecordStore = new Map<string, MetabolicRecord[]>();
 
 // ============================================================================
 // DETERMINISTIC METABOLIC STATUS LOGIC
@@ -389,9 +388,43 @@ export async function getMetabolicRecommendation(
     createdAt: new Date().toISOString(),
   };
 
-  // Step 8: Persist to in-memory store
-  const userRecords = metabolicRecordStore.get(userId) ?? [];
-  metabolicRecordStore.set(userId, [record, ...userRecords]);
+  // Step 8: Persist to database
+  try {
+    const { error: dbError } = await supabase
+      .from('metabolic_records')
+      .upsert({
+        user_id: userId,
+        date: record.date,
+        metabolic_score: Math.round((metabolicStatus === 'optimal' ? 90 : metabolicStatus === 'moderate' ? 70 : metabolicStatus === 'elevated_risk' ? 50 : 30)),
+        metabolic_status: metabolicStatus === 'optimal' ? 'optimal' : metabolicStatus === 'moderate' ? 'healthy' : metabolicStatus === 'elevated_risk' ? 'at_risk' : 'impaired',
+        metabolic_risk: metabolicStatus === 'high_risk' ? 'very_high' : metabolicStatus === 'elevated_risk' ? 'high' : metabolicStatus === 'moderate' ? 'moderate' : 'low',
+        glucose_metrics: {
+          fastingGlucose: inputs.fastingGlucose,
+          a1c: inputs.a1c,
+          glucoseStatus: inputs.fastingGlucose && inputs.fastingGlucose >= 126 ? 'high' : inputs.fastingGlucose && inputs.fastingGlucose >= 100 ? 'elevated' : 'normal',
+        },
+        insulin_metrics: {
+          insulinSensitivity: inputs.insulinResistance || 'unknown',
+          estimatedHOMAIR: null,
+        },
+        inputs: inputs,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,date',
+      });
+
+    if (dbError) {
+      logger.error('❌ [METABOLIC ENGINE] Failed to persist to database', {
+        error: dbError.message,
+      });
+    } else {
+      logger.info('✅ [METABOLIC ENGINE] Persisted to database');
+    }
+  } catch (error) {
+    logger.error('❌ [METABOLIC ENGINE] Database error', {
+      error: (error as Error).message,
+    });
+  }
 
   // Step 9: Persist to RecommendationEngine
   try {
@@ -428,15 +461,51 @@ export async function getMetabolicRecommendation(
 
 export async function getMetabolicToday(userId: string): Promise<MetabolicRecord | null> {
   const today = new Date().toISOString().slice(0, 10);
-  const userRecords = metabolicRecordStore.get(userId) ?? [];
-  const existing = userRecords.find(record => record.date === today);
+  
+  // Try to fetch from database first
+  try {
+    const { data, error } = await supabase
+      .from('metabolic_records')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', today)
+      .single();
 
-  if (existing) {
-    logger.info('📋 [METABOLIC ENGINE] Returning cached record', { userId, date: today });
-    return existing;
+    if (data && !error) {
+      logger.info('📋 [METABOLIC ENGINE] Returning database record', { userId, date: today });
+      
+      // Map database record to MetabolicRecord format
+      const inputs = data.inputs as MetabolicInputs;
+      const metabolicStatus = data.metabolic_status === 'optimal' ? 'optimal' : 
+                             data.metabolic_status === 'healthy' ? 'moderate' :
+                             data.metabolic_status === 'at_risk' ? 'elevated_risk' : 'high_risk';
+      
+      return {
+        id: data.id,
+        userId: data.user_id,
+        date: data.date,
+        metabolicStatus,
+        evidence: {
+          signals: [],
+          summary: `Metabolic status: ${data.metabolic_status}`,
+        },
+        recommendation: {
+          priority: data.metabolic_risk === 'very_high' ? 'high' : data.metabolic_risk === 'high' ? 'medium' : 'low',
+          summary: `Metabolic health assessment for ${data.date}`,
+          actions: [],
+          rationale: `Based on metabolic score: ${data.metabolic_score}`,
+          source: 'deterministic',
+        },
+        createdAt: data.created_at,
+      };
+    }
+  } catch (error) {
+    logger.warn('⚠️ [METABOLIC ENGINE] Database fetch failed, will generate new', {
+      error: (error as Error).message,
+    });
   }
 
-  logger.info('🔄 [METABOLIC ENGINE] No cached record, generating new', { userId });
+  logger.info('🔄 [METABOLIC ENGINE] No database record, generating new', { userId });
   
   // Default inputs for demo
   const inputs: MetabolicInputs = {
@@ -451,5 +520,50 @@ export async function getMetabolicToday(userId: string): Promise<MetabolicRecord
 }
 
 export async function getMetabolicHistory(userId: string): Promise<MetabolicRecord[]> {
-  return metabolicRecordStore.get(userId) ?? [];
+  try {
+    const { data, error } = await supabase
+      .from('metabolic_records')
+      .select('*')
+      .eq('user_id', userId)
+      .order('date', { ascending: false })
+      .limit(30);
+
+    if (error) {
+      logger.error('❌ [METABOLIC ENGINE] Failed to fetch history', {
+        error: error.message,
+      });
+      return [];
+    }
+
+    // Map database records to MetabolicRecord format
+    return (data || []).map(row => {
+      const metabolicStatus = row.metabolic_status === 'optimal' ? 'optimal' : 
+                             row.metabolic_status === 'healthy' ? 'moderate' :
+                             row.metabolic_status === 'at_risk' ? 'elevated_risk' : 'high_risk';
+      
+      return {
+        id: row.id,
+        userId: row.user_id,
+        date: row.date,
+        metabolicStatus,
+        evidence: {
+          signals: [],
+          summary: `Metabolic status: ${row.metabolic_status}`,
+        },
+        recommendation: {
+          priority: row.metabolic_risk === 'very_high' ? 'high' : row.metabolic_risk === 'high' ? 'medium' : 'low',
+          summary: `Metabolic health assessment for ${row.date}`,
+          actions: [],
+          rationale: `Based on metabolic score: ${row.metabolic_score}`,
+          source: 'deterministic',
+        },
+        createdAt: row.created_at,
+      };
+    });
+  } catch (error) {
+    logger.error('❌ [METABOLIC ENGINE] Database error fetching history', {
+      error: (error as Error).message,
+    });
+    return [];
+  }
 }

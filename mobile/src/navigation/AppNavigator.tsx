@@ -37,9 +37,10 @@ import GoalManagementScreen from '../screens/GoalManagementScreen';
 import HealthDataHubScreen from '../screens/HealthDataHubScreen';
 import AppleWatchConnectScreen from '../screens/AppleWatchConnectScreen';
 import OuraConnectScreen from '../screens/OuraConnectScreen';
-import AgentInterviewScreen from '../screens/AgentInterviewScreen';
-import DynamicInterviewScreen from '../screens/DynamicInterviewScreen';
-import HybridInterviewScreen from '../screens/HybridInterviewScreen';
+// DEPRECATED: Legacy interview modes - preserved for recovery, use VoiceInterviewScreen instead
+// import AgentInterviewScreen from '../screens/AgentInterviewScreen';
+// import DynamicInterviewScreen from '../screens/DynamicInterviewScreen';
+// import HybridInterviewScreen from '../screens/HybridInterviewScreen';
 import BodyCompositionUploadScreen from '../screens/BodyCompositionUploadScreen';
 import InjuryPreventionScreen from '../screens/InjuryPreventionScreen';
 import StrengthTrackingScreen from '../screens/StrengthTrackingScreen';
@@ -48,6 +49,13 @@ import AnalyticsDashboardScreen from '../screens/AnalyticsDashboardScreen';
 import TapeMeasurementsScreen from '../screens/TapeMeasurementsScreen';
 import AutonomousAdjustmentsScreen from '../screens/AutonomousAdjustmentsScreen';
 import InterviewSelectorScreen from '../screens/InterviewSelectorScreen';
+import NutritionDashboardScreen from '../screens/NutritionDashboardScreen';
+import MealLogScreen from '../screens/MealLogScreen';
+import NutritionExtractionScreen from '../screens/NutritionExtractionScreen';
+import ProgressionHistoryScreen from '../screens/ProgressionHistoryScreen';
+import OverloadRecommendationsScreen from '../screens/OverloadRecommendationsScreen';
+import SupplementBulkUploadScreen from '../screens/SupplementBulkUploadScreen';
+import MetabolicHealthDashboardScreen from '../screens/MetabolicHealthDashboardScreen';
 import SourceProvenanceScreen from '../screens/SourceProvenanceScreen';
 import type { RootStackParamList } from '../types/navigation';
 
@@ -252,21 +260,22 @@ const AppNavigator: React.FC = () => {
       component={OuraConnectScreen}
       options={{ title: 'Connect Oura Ring' }}
     />
-    <Stack.Screen
+    {/* DEPRECATED: Legacy interview modes - routes removed, use VoiceInterview instead */}
+    {/* <Stack.Screen
       name="AgentInterview"
       component={AgentInterviewScreen}
-      options={{ title: 'Agent Interview' }}
+      options={{ title: 'Agent Interview (DEPRECATED)' }}
     />
     <Stack.Screen
       name="DynamicInterview"
       component={DynamicInterviewScreen}
-      options={{ title: 'Dynamic Interview' }}
+      options={{ title: 'Dynamic Interview (DEPRECATED)' }}
     />
     <Stack.Screen
       name="HybridInterview"
       component={HybridInterviewScreen}
-      options={{ title: 'Hybrid Interview' }}
-    />
+      options={{ title: 'Hybrid Interview (DEPRECATED)' }}
+    /> */}
     <Stack.Screen
       name="BodyCompositionUpload"
       component={BodyCompositionUploadScreen}
@@ -296,6 +305,41 @@ const AppNavigator: React.FC = () => {
       name="TapeMeasurements"
       component={TapeMeasurementsScreen}
       options={{ title: 'Body Measurements' }}
+    />
+    <Stack.Screen
+      name="NutritionDashboard"
+      component={NutritionDashboardScreen}
+      options={{ title: 'Nutrition Dashboard' }}
+    />
+    <Stack.Screen
+      name="MealLog"
+      component={MealLogScreen}
+      options={{ title: 'Log Meal' }}
+    />
+    <Stack.Screen
+      name="NutritionExtraction"
+      component={NutritionExtractionScreen}
+      options={{ title: 'AI Food Scanner' }}
+    />
+    <Stack.Screen
+      name="ProgressionHistory"
+      component={ProgressionHistoryScreen}
+      options={{ title: 'Progression History' }}
+    />
+    <Stack.Screen
+      name="OverloadRecommendations"
+      component={OverloadRecommendationsScreen}
+      options={{ title: 'AI Overload Planner' }}
+    />
+    <Stack.Screen
+      name="SupplementBulkUpload"
+      component={SupplementBulkUploadScreen}
+      options={{ title: 'Bulk Upload Supplements' }}
+    />
+    <Stack.Screen
+      name="MetabolicHealthDashboard"
+      component={MetabolicHealthDashboardScreen}
+      options={{ title: 'Metabolic Health' }}
     />
     <Stack.Screen
       name="AutonomousAdjustments"

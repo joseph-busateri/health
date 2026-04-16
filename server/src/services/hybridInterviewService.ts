@@ -1,5 +1,7 @@
 import { randomUUID } from 'crypto';
 import OpenAI from 'openai';
+import { supabase } from '../config/supabase';
+import { logger } from '../utils/logger';
 
 let openai: OpenAI | null = null;
 
@@ -202,7 +204,7 @@ const STATIC_QUESTION_BANK: Omit<Question, 'id'>[] = [
   },
 ];
 
-const sessionStore = new Map<string, InterviewSession>();
+// Database persistence via Supabase (hybrid_interview_sessions table)
 
 const isCommonScenario = (context: InterviewContext): boolean => {
   const priorities = calculatePriorities(context);
@@ -444,7 +446,7 @@ export const selectNextQuestion = async (
   return selectStaticQuestion(context, conversationHistory);
 };
 
-export const startInterviewSession = (userId: string): InterviewSession => {
+export const startInterviewSession = async (userId: string, context: InterviewContext): Promise<InterviewSession> => {
   const sessionId = randomUUID();
   
   const session: InterviewSession = {
@@ -463,25 +465,60 @@ export const startInterviewSession = (userId: string): InterviewSession => {
     isComplete: false,
   };
   
-  sessionStore.set(sessionId, session);
+  // Persist to database
+  try {
+    const { error } = await supabase
+      .from('hybrid_interview_sessions')
+      .insert({
+        id: sessionId,
+        user_id: userId,
+        started_at: session.startedAt,
+        interview_context: context,
+        conversation_history: session.conversationHistory,
+        signals_collected: session.signalCollected,
+        total_time_elapsed: session.totalTimeElapsed,
+        is_complete: session.isComplete,
+      });
+
+    if (error) {
+      logger.error('❌ [HYBRID INTERVIEW] Failed to persist session', {
+        error: error.message,
+      });
+    } else {
+      logger.info('✅ [HYBRID INTERVIEW] Session created', { sessionId });
+    }
+  } catch (error) {
+    logger.error('❌ [HYBRID INTERVIEW] Database error', {
+      error: (error as Error).message,
+    });
+  }
+  
   return session;
 };
 
-export const recordAnswer = (
+export const recordAnswer = async (
   sessionId: string,
   questionId: string,
   question: string,
   answer: string,
   category: string
-): InterviewSession => {
-  const session = sessionStore.get(sessionId);
-  if (!session) {
+): Promise<InterviewSession> => {
+  // Fetch session from database
+  const { data: session, error: fetchError } = await supabase
+    .from('hybrid_interview_sessions')
+    .select('*')
+    .eq('id', sessionId)
+    .single();
+
+  if (fetchError || !session) {
+    logger.error('❌ [HYBRID INTERVIEW] Session not found', { sessionId });
     throw new Error(`Session ${sessionId} not found`);
   }
   
-  const timeElapsed = Math.floor((Date.now() - new Date(session.startedAt).getTime()) / 1000);
+  const timeElapsed = Math.floor((Date.now() - new Date(session.started_at).getTime()) / 1000);
   
-  session.conversationHistory.push({
+  const conversationHistory = session.conversation_history || [];
+  conversationHistory.push({
     questionId,
     question,
     answer,
@@ -489,16 +526,46 @@ export const recordAnswer = (
     timeElapsed,
   });
   
-  session.totalTimeElapsed = timeElapsed;
+  const signalsCollected = session.signals_collected || {
+    recovery: false,
+    stress: false,
+    workout: false,
+    nutrition: false,
+    supplements: false,
+  };
   
-  if (category === 'recovery') session.signalCollected.recovery = true;
-  if (category === 'stress') session.signalCollected.stress = true;
-  if (category === 'workout') session.signalCollected.workout = true;
-  if (category === 'nutrition') session.signalCollected.nutrition = true;
-  if (category === 'supplements') session.signalCollected.supplements = true;
+  if (category === 'recovery') signalsCollected.recovery = true;
+  if (category === 'stress') signalsCollected.stress = true;
+  if (category === 'workout') signalsCollected.workout = true;
+  if (category === 'nutrition') signalsCollected.nutrition = true;
+  if (category === 'supplements') signalsCollected.supplements = true;
   
-  sessionStore.set(sessionId, session);
-  return session;
+  // Update database
+  const { error: updateError } = await supabase
+    .from('hybrid_interview_sessions')
+    .update({
+      conversation_history: conversationHistory,
+      signals_collected: signalsCollected,
+      total_time_elapsed: timeElapsed,
+    })
+    .eq('id', sessionId);
+
+  if (updateError) {
+    logger.error('❌ [HYBRID INTERVIEW] Failed to update session', {
+      error: updateError.message,
+    });
+  }
+  
+  return {
+    sessionId: session.id,
+    userId: session.user_id,
+    startedAt: session.started_at,
+    conversationHistory,
+    signalCollected: signalsCollected,
+    totalTimeElapsed: timeElapsed,
+    isComplete: session.is_complete,
+    completedAt: session.completed_at,
+  };
 };
 
 export const shouldContinueInterview = (session: InterviewSession): boolean => {
@@ -523,19 +590,64 @@ export const shouldContinueInterview = (session: InterviewSession): boolean => {
   return true;
 };
 
-export const completeInterviewSession = (sessionId: string): InterviewSession => {
-  const session = sessionStore.get(sessionId);
-  if (!session) {
+export const completeInterviewSession = async (sessionId: string): Promise<InterviewSession> => {
+  const completedAt = new Date().toISOString();
+  
+  const { data: session, error: updateError } = await supabase
+    .from('hybrid_interview_sessions')
+    .update({
+      is_complete: true,
+      completed_at: completedAt,
+    })
+    .eq('id', sessionId)
+    .select()
+    .single();
+
+  if (updateError || !session) {
+    logger.error('❌ [HYBRID INTERVIEW] Failed to complete session', { sessionId });
     throw new Error(`Session ${sessionId} not found`);
   }
   
-  session.isComplete = true;
-  session.completedAt = new Date().toISOString();
+  logger.info('✅ [HYBRID INTERVIEW] Session completed', { sessionId });
   
-  sessionStore.set(sessionId, session);
-  return session;
+  return {
+    sessionId: session.id,
+    userId: session.user_id,
+    startedAt: session.started_at,
+    conversationHistory: session.conversation_history || [],
+    signalCollected: session.signals_collected || {},
+    totalTimeElapsed: session.total_time_elapsed,
+    isComplete: session.is_complete,
+    completedAt: session.completed_at,
+  };
 };
 
-export const getInterviewSession = (sessionId: string): InterviewSession | null => {
-  return sessionStore.get(sessionId) ?? null;
+export const getInterviewSession = async (sessionId: string): Promise<InterviewSession | null> => {
+  try {
+    const { data: session, error } = await supabase
+      .from('hybrid_interview_sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .single();
+
+    if (error || !session) {
+      return null;
+    }
+
+    return {
+      sessionId: session.id,
+      userId: session.user_id,
+      startedAt: session.started_at,
+      conversationHistory: session.conversation_history || [],
+      signalCollected: session.signals_collected || {},
+      totalTimeElapsed: session.total_time_elapsed,
+      isComplete: session.is_complete,
+      completedAt: session.completed_at,
+    };
+  } catch (error) {
+    logger.error('❌ [HYBRID INTERVIEW] Error fetching session', {
+      error: (error as Error).message,
+    });
+    return null;
+  }
 };

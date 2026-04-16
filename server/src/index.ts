@@ -54,8 +54,12 @@ import healthDataHubRoutes from './routes/healthDataHubRoutes';
 import controlTowerRoutes from './routes/controlTowerRoutes';
 import hybridInterviewRoutes from './routes/hybridInterview.routes';
 import voiceInterviewRoutes from './routes/voiceInterview';
+import aiAgentRoutes from './routes/aiAgent.routes';
 import sleepNumberRoutes from './routes/sleepNumber.routes';
 import healthDataRoutes from './routes/healthData.routes';
+import progressionRoutes from './routes/progressionRoutes';
+import supplementBulkUploadRoutes from './routes/supplementBulkUploadRoutes';
+import baselineRoutes from './routes/baseline.routes';
 
 // New API Routes - Health Optimization Systems
 import apiRoutes from './routes/index';
@@ -137,8 +141,12 @@ app.use('/health-data', healthDataHubRoutes);
 app.use('/', controlTowerRoutes);
 app.use('/hybrid-interview', hybridInterviewRoutes);
 app.use('/api/voice-interview', voiceInterviewRoutes);
+app.use('/api/ai-agent', aiAgentRoutes);
 app.use('/sleep-number', sleepNumberRoutes);
 app.use('/api/health-data', healthDataRoutes);
+app.use('/api/progression', progressionRoutes);
+app.use('/api/supplements', supplementBulkUploadRoutes);
+app.use('/baseline', baselineRoutes);
 
 // Mount new API routes under /api prefix
 app.use('/api', apiRoutes);

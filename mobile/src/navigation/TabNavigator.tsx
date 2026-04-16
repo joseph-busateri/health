@@ -8,6 +8,7 @@ import InsightsStackNavigator from './InsightsStackNavigator';
 import WorkoutsStackNavigator from './WorkoutsStackNavigator';
 import DevicesScreen from '../screens/DevicesScreen';
 import UserSettingsScreen from '../screens/UserSettingsScreen';
+import GoalManagementScreen from '../screens/GoalManagementScreen';
 
 // import HealthDataHubScreen from '../screens/HealthDataHubScreen'; // Not used in tabs
 // import TrendsScreen from '../screens/TrendsScreen'; // DEPRECATED - use AnalyticsDashboardScreen
@@ -59,6 +60,14 @@ const TabNavigator: React.FC = () => {
           tabBarLabel: 'Today',
           tabBarIcon: ({ color, size }) => <Ionicons name="fitness" size={size} color={color} />,
           headerShown: false,
+        }}
+      />
+      <Tab.Screen
+        name="GoalsTab"
+        component={GoalManagementScreen}
+        options={{
+          tabBarLabel: 'Goals',
+          tabBarIcon: ({ color, size }) => <Ionicons name="trophy" size={size} color={color} />,
         }}
       />
       <Tab.Screen

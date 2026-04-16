@@ -83,26 +83,18 @@ export const startVoiceInterview = async (req: Request, res: Response) => {
  */
 export const submitVoiceResponse = async (req: Request, res: Response) => {
   try {
-    const { userId, sessionId, currentQuestion, questionId } = req.body;
+    const { userId, sessionId, currentQuestion } = req.body;
     const audioFile = req.file;
 
-    if (!userId || !sessionId || !audioFile) {
-      return res.status(400).json({ error: 'userId, sessionId, and audio file are required' });
+    if (!userId || !sessionId || !audioFile || !currentQuestion) {
+      return res.status(400).json({ error: 'userId, sessionId, currentQuestion, and audio file are required' });
     }
 
     // Build context
     const context = await buildInterviewContext(userId);
 
-    // Process voice response
-    const result = await processVoiceResponse(sessionId, audioFile.path, context);
-
-    // Record the answer
-    recordVoiceAnswer(
-      sessionId,
-      questionId || 'unknown',
-      currentQuestion || 'Unknown question',
-      result.transcript
-    );
+    // Process voice response with enhanced dynamic question generation
+    const result = await processVoiceResponse(sessionId, audioFile.path, context, currentQuestion);
 
     // Save audio for next question
     const audioFilename = `${sessionId}_q${Date.now()}.mp3`;
@@ -137,8 +129,8 @@ export const completeVoiceInterview = async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'userId and sessionId are required' });
     }
 
-    // Complete session
-    const session = completeVoiceInterviewSession(sessionId);
+    // Complete session (now async with database persistence)
+    const session = await completeVoiceInterviewSession(sessionId);
 
     // Save interview data to database
     await saveInterviewToDatabase(

@@ -10,8 +10,9 @@ import {
   Alert,
 } from 'react-native';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3020';
-const USER_ID = 'default-user';
+import { useUser } from '../context/UserContext';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
 
 interface DailyInterviewSession {
   id: string;
@@ -39,6 +40,7 @@ interface InterviewAnswers {
 }
 
 const AgentInterviewScreen: React.FC = () => {
+  const { userId } = useUser();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [session, setSession] = useState<DailyInterviewSession | null>(null);
@@ -61,17 +63,23 @@ const AgentInterviewScreen: React.FC = () => {
   }, []);
 
   const fetchTodayInterview = async () => {
+    if (!userId) {
+      setError('Please set your user ID in Settings');
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
 
-      const response = await fetch(`${API_BASE_URL}/agent/interview/today/${USER_ID}`);
+      const response = await fetch(`${API_BASE_URL}/agent/interview/today/${userId}`);
       const data = await response.json();
 
-      if (data.success && data.data) {
-        setSession(data.data);
+      if (data.success && data.session) {
+        setSession(data.session);
         
-        if (data.data.status === 'completed') {
+        if (data.session.status === 'completed') {
           setCurrentStep(999);
         }
       } else {
@@ -93,9 +101,10 @@ const AgentInterviewScreen: React.FC = () => {
       setError(null);
 
       const submission = {
-        primaryResponse: answers.primaryResponse,
-        followUpResponse: answers.followUpResponse,
-        recoveryCluster: {
+        user_id: userId,
+        primary_response: answers.primaryResponse,
+        follow_up_response: answers.followUpResponse,
+        recovery_cluster: {
           sleepHours: answers.sleepHours ? parseFloat(answers.sleepHours) : undefined,
           recoveryFeeling: answers.recoveryFeeling ? parseInt(answers.recoveryFeeling) : undefined,
           stressLevel: answers.stressLevel ? parseInt(answers.stressLevel) : undefined,

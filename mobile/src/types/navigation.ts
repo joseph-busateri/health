@@ -85,6 +85,12 @@ export type HomeStackParamList = {
   CardiovascularDashboard: undefined;
   SexualHealthDashboard: undefined;
   ActuarialRiskDashboard: undefined;
+  NutritionDashboard: undefined;
+  MealLog: undefined;
+  NutritionExtraction: undefined;
+  AIAssistant: undefined;
+  AIChat: undefined;
+  AnalyticsDashboard: undefined;
 };
 
 export type InsightsStackParamList = {
@@ -101,6 +107,8 @@ export type InsightsStackParamList = {
   ControlTower: undefined;
   CorrelationInsights: undefined;
   CorrelationDetail: { correlation: any };
+  AnalyticsDashboard: undefined;
+  MetabolicHealthDashboard: undefined;
 };
 
 export type DashboardScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;

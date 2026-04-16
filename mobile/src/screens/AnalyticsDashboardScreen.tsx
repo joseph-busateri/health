@@ -9,6 +9,9 @@ import {
   Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../types/navigation';
 
 const { width } = Dimensions.get('window');
 
@@ -54,6 +57,7 @@ interface GoalProgress {
 }
 
 export default function AnalyticsDashboardScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<'insights' | 'correlations' | 'trends' | 'goals'>('insights');
   
@@ -396,6 +400,37 @@ export default function AnalyticsDashboardScreen() {
         <Text style={styles.title}>Analytics Dashboard</Text>
         <Text style={styles.subtitle}>AI-powered insights and predictions</Text>
       </View>
+
+      {/* Health Domains */}
+      <ScrollView 
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        style={styles.domainsScroll}
+        contentContainerStyle={styles.domainsContent}
+      >
+        <TouchableOpacity 
+          style={styles.domainCard}
+          onPress={() => navigation.navigate('SexualHealthDashboard')}
+        >
+          <Text style={styles.domainIcon}>🌡️</Text>
+          <Text style={styles.domainName}>Sexual Health</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={[styles.domainCard, styles.domainCardDisabled]}>
+          <Text style={styles.domainIcon}>❤️</Text>
+          <Text style={styles.domainName}>Cardiovascular</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={[styles.domainCard, styles.domainCardDisabled]}>
+          <Text style={styles.domainIcon}>💪</Text>
+          <Text style={styles.domainName}>Recovery</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={[styles.domainCard, styles.domainCardDisabled]}>
+          <Text style={styles.domainIcon}>🍽️</Text>
+          <Text style={styles.domainName}>Nutrition</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
       {/* Health Score Summary */}
       <View style={styles.scoreCard}>
@@ -901,13 +936,42 @@ const styles = StyleSheet.create({
   },
   recommendationsList: {
     gap: 6,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#f3f4f6',
   },
   goalRecommendation: {
-    fontSize: 12,
+    fontSize: 13,
     color: '#6b7280',
-    lineHeight: 18,
+    marginBottom: 4,
+  },
+  domainsScroll: {
+    marginVertical: 16,
+  },
+  domainsContent: {
+    paddingHorizontal: 20,
+    gap: 12,
+  },
+  domainCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    alignItems: 'center',
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  domainCardDisabled: {
+    opacity: 0.5,
+  },
+  domainIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  domainName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1f2937',
+    textAlign: 'center',
   },
 });
