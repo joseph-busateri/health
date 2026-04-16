@@ -13,6 +13,10 @@ import BodyCompositionUploadScreen from '../screens/BodyCompositionUploadScreen'
 import VoiceInterviewScreen from '../screens/VoiceInterviewScreen';
 import RecommendationsScreen from '../screens/RecommendationsScreen';
 import SupplementRecommendationsScreen from '../screens/SupplementRecommendationsScreen';
+import DailyLogsScreen from '../screens/DailyLogsScreen';
+import CardiovascularDashboardScreen from '../screens/CardiovascularDashboardScreen';
+import SexualHealthDashboardScreen from '../screens/SexualHealthDashboardScreen';
+import ActuarialRiskDashboardScreen from '../screens/ActuarialRiskDashboardScreen';
 import type { HomeStackParamList } from '../types/navigation';
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
@@ -31,6 +35,10 @@ const HomeStackNavigator: React.FC = () => (
     <HomeStack.Screen name="SupplementRecommendations" component={SupplementRecommendationsScreen} />
     <HomeStack.Screen name="VoiceInterview" component={VoiceInterviewScreen} />
     <HomeStack.Screen name="Recommendations" component={RecommendationsScreen} />
+    <HomeStack.Screen name="DailyLogs" component={DailyLogsScreen} />
+    <HomeStack.Screen name="CardiovascularDashboard" component={CardiovascularDashboardScreen} />
+    <HomeStack.Screen name="SexualHealthDashboard" component={SexualHealthDashboardScreen} />
+    <HomeStack.Screen name="ActuarialRiskDashboard" component={ActuarialRiskDashboardScreen} />
   </HomeStack.Navigator>
 );
 

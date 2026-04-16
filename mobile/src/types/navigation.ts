@@ -53,6 +53,14 @@ export type RootStackParamList = {
   AutonomousAdjustments: undefined;
   InterviewSelector: undefined;
   SourceProvenance: undefined;
+  NutritionDashboard: undefined;
+  MealLog: undefined;
+  NutritionExtraction: undefined;
+  SexualHealthDashboard: undefined;
+  ProgressionHistory: undefined;
+  OverloadRecommendations: undefined;
+  SupplementBulkUpload: undefined;
+  MetabolicHealthDashboard: undefined;
   // Future routes: set to undefined for now to keep extension lightweight.
   Reminders?: undefined;
   Nutrition?: undefined;
@@ -73,15 +81,26 @@ export type HomeStackParamList = {
   SupplementRecommendations: { userId: string };
   VoiceInterview: undefined;
   Recommendations: undefined;
+  DailyLogs: undefined;
   CardiovascularDashboard: undefined;
   SexualHealthDashboard: undefined;
+  ActuarialRiskDashboard: undefined;
 };
 
 export type InsightsStackParamList = {
   InsightsHome: undefined;
   CardiovascularDashboard: undefined;
   SexualHealthDashboard: undefined;
+  ActuarialRiskDashboard: undefined;
   VoiceInterview: undefined;
+  GoalManagement: undefined;
+  BaselineProfile: undefined;
+  HealthDataHub: undefined;
+  AppleWatchConnect: undefined;
+  OuraConnect: undefined;
+  ControlTower: undefined;
+  CorrelationInsights: undefined;
+  CorrelationDetail: { correlation: any };
 };
 
 export type DashboardScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;
