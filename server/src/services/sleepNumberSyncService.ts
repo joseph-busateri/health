@@ -10,6 +10,11 @@ import crypto from 'crypto';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-32-character-encryption-key!!';
 const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
 
+// Warn if using placeholder encryption key
+if (!process.env.ENCRYPTION_KEY) {
+  logger.warn('WARNING: Using placeholder ENCRYPTION_KEY. Set ENCRYPTION_KEY environment variable for production security.');
+}
+
 export interface SyncResult {
   success: boolean;
   sessionsFetched: number;

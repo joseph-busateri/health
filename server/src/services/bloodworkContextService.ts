@@ -95,8 +95,7 @@ export async function getLatestBloodworkContext(userId: string): Promise<Bloodwo
       .select('normalized_test_name, value_numeric, value_text, unit, test_date, reference_range_low, reference_range_high, abnormal_flag, category')
       .eq('user_id', userId)
       .not('test_date', 'is', null)
-      .order('test_date', { ascending: false })
-      .limit(100); // Get recent results
+      .order('test_date', { ascending: false });
 
     if (error) {
       logger.error('❌ [BLOODWORK CONTEXT] Query error', { userId, error: error.message });

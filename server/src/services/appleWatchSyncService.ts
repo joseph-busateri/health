@@ -1,9 +1,22 @@
 // Apple Watch Automatic Sync Service
 // Handles automatic daily sync of Apple Watch data via iOS app background sync
 
+import apn from 'apn';
 import { supabase } from '../config/supabase';
 import { logger } from '../utils/logger';
 import { appleWatchClient } from './appleWatchClient';
+
+// APNs Configuration
+const APNS_KEY = process.env.APNS_KEY || '';
+const APNS_KEY_ID = process.env.APNS_KEY_ID || '';
+const APNS_TEAM_ID = process.env.APNS_TEAM_ID || '';
+const APNS_BUNDLE_ID = process.env.APNS_BUNDLE_ID || 'com.yourcompany.healthapp';
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+
+// Warn if APNs credentials are not configured
+if (!APNS_KEY || !APNS_KEY_ID || !APNS_TEAM_ID) {
+  logger.warn('WARNING: APNs credentials not configured. Set APNS_KEY, APNS_KEY_ID, and APNS_TEAM_ID environment variables for push notifications.');
+}
 
 export class AppleWatchSyncService {
   
@@ -158,35 +171,92 @@ export class AppleWatchSyncService {
 
   /**
    * Send Apple Push Notification
+   * Sends silent background notification to iOS app to trigger HealthKit sync
    */
   private async sendAPNSNotification(deviceToken: string, payload: any): Promise<void> {
     try {
-      // TODO: Implement APNs integration
-      // This would use the apn library or HTTP/2 APNs API
-      // For now, we'll log that we would send the notification
-      
-      logger.info('Would send APNs notification', { deviceToken, payload });
-      
-      // Example implementation:
-      // const apnProvider = new apn.Provider({
-      //   token: {
-      //     key: process.env.APNS_KEY,
-      //     keyId: process.env.APNS_KEY_ID,
-      //     teamId: process.env.APNS_TEAM_ID,
-      //   },
-      //   production: process.env.NODE_ENV === 'production',
-      // });
-      //
-      // const notification = new apn.Notification({
-      //   contentAvailable: payload.contentAvailable,
-      //   payload: payload.data,
-      //   topic: 'com.yourapp.health',
-      // });
-      //
-      // await apnProvider.send(notification, deviceToken);
+      // Check if APNs is configured
+      if (!APNS_KEY || !APNS_KEY_ID || !APNS_TEAM_ID) {
+        logger.warn('APNs not configured, skipping notification', { deviceToken });
+        return;
+      }
+
+      // Decode base64 APNs key if needed
+      let apnsKeyContent = APNS_KEY;
+      if (APNS_KEY.includes('base64:')) {
+        apnsKeyContent = Buffer.from(APNS_KEY.replace('base64:', ''), 'base64').toString('utf8');
+      }
+
+      // Create APNs provider
+      const apnProvider = new apn.Provider({
+        token: {
+          key: apnsKeyContent,
+          keyId: APNS_KEY_ID,
+          teamId: APNS_TEAM_ID,
+        },
+        production: IS_PRODUCTION,
+      });
+
+      // Create silent notification
+      const notification = new apn.Notification({
+        contentAvailable: 1, // Silent notification
+        payload: payload.data,
+        topic: APNS_BUNDLE_ID,
+        priority: 5, // Send immediately
+        pushType: 'background',
+      });
+
+      // Send notification
+      const result = await apnProvider.send(notification, deviceToken);
+
+      // Check for failures
+      if (result.failed && result.failed.length > 0) {
+        const failure = result.failed[0];
+        logger.error('APNs notification failed', {
+          deviceToken,
+          status: failure.status,
+          response: failure.response,
+        });
+
+        // Handle invalid device token
+        if (failure.status === '410' || failure.response?.reason === 'Unregistered') {
+          await this.handleInvalidDeviceToken(deviceToken);
+        }
+
+        throw new Error(`APNs failed: ${failure.response?.reason || 'Unknown error'}`);
+      }
+
+      logger.info('APNs notification sent successfully', {
+        deviceToken: deviceToken.substring(0, 10) + '...',
+        sent: result.sent?.length || 0,
+      });
+
+      // Shutdown provider
+      apnProvider.shutdown();
     } catch (error) {
       logger.error('Error sending APNs notification', { error });
       throw error;
+    }
+  }
+
+  /**
+   * Handle invalid device token
+   * Disables push notifications for user when token is invalid
+   */
+  private async handleInvalidDeviceToken(deviceToken: string): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .update({ ios_push_enabled: false })
+        .eq('ios_device_token', deviceToken);
+
+      if (error) throw error;
+
+      logger.info('Disabled push notifications for invalid device token', {
+        deviceToken: deviceToken.substring(0, 10) + '...',
+      });
+    } catch (error) {
+      logger.error('Error handling invalid device token', { error });
     }
   }
 
@@ -322,17 +392,17 @@ export class AppleWatchSyncService {
   }
 
   /**
-   * Get activity rings for today
+   * Get activity rings for today or specific date
    */
-  async getTodayActivityRings(userId: string): Promise<any> {
+  async getTodayActivityRings(userId: string, date?: string): Promise<any> {
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const targetDate = date || new Date().toISOString().split('T')[0];
 
       const { data, error } = await supabase
         .from('apple_watch_health_data')
         .select('move_ring_percentage, exercise_ring_percentage, stand_ring_percentage, move_goal, exercise_goal, stand_goal')
         .eq('user_id', userId)
-        .eq('data_date', today)
+        .eq('data_date', targetDate)
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
@@ -347,6 +417,123 @@ export class AppleWatchSyncService {
       };
     } catch (error) {
       logger.error('Error getting activity rings', { error, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Connect Apple Watch device
+   * Called when user authorizes HealthKit
+   */
+  async connectDevice(userId: string, deviceInfo: any): Promise<void> {
+    try {
+      logger.info('Connecting Apple Watch device', { userId });
+
+      await appleWatchClient.updateConnection(userId, {
+        deviceName: deviceInfo.deviceName,
+        deviceModel: deviceInfo.deviceModel,
+        watchOsVersion: deviceInfo.watchOsVersion,
+        pairedIphoneModel: deviceInfo.pairedIphoneModel,
+        healthkitAuthorized: true,
+        authorizedDataTypes: deviceInfo.authorizedDataTypes || [
+          'heart_rate',
+          'hrv',
+          'activity',
+          'sleep',
+          'workouts',
+        ],
+      });
+
+      logger.info('Apple Watch device connected', { userId });
+    } catch (error) {
+      logger.error('Error connecting device', { error, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Disconnect Apple Watch device
+   */
+  async disconnectDevice(userId: string): Promise<void> {
+    try {
+      logger.info('Disconnecting Apple Watch device', { userId });
+      await appleWatchClient.disconnect(userId);
+      logger.info('Apple Watch device disconnected', { userId });
+    } catch (error) {
+      logger.error('Error disconnecting device', { error, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Save HealthKit data from iOS app
+   * Called by iOS app after reading from HealthKit
+   */
+  async saveHealthKitData(userId: string, healthKitData: any): Promise<void> {
+    try {
+      logger.info('Saving HealthKit data', { userId });
+
+      // Save daily aggregated data
+      if (healthKitData.dailyData) {
+        for (const dayData of healthKitData.dailyData) {
+          await appleWatchClient.saveHealthKitData({
+            userId,
+            dataDate: dayData.date,
+            ...dayData,
+          });
+        }
+      }
+
+      // Save workouts
+      if (healthKitData.workouts && healthKitData.workouts.length > 0) {
+        for (const workout of healthKitData.workouts) {
+          await appleWatchClient.saveWorkout({
+            userId,
+            ...workout,
+          });
+        }
+      }
+
+      // Save heart rate samples (if detailed data provided)
+      if (healthKitData.heartRateSamples && healthKitData.heartRateSamples.length > 0) {
+        await appleWatchClient.saveHeartRateSamples(
+          healthKitData.heartRateSamples.map((sample: any) => ({
+            userId,
+            ...sample,
+          }))
+        );
+      }
+
+      logger.info('HealthKit data saved successfully', { userId });
+    } catch (error) {
+      logger.error('Error saving HealthKit data', { error, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Get workout summary
+   */
+  async getWorkoutSummary(userId: string, startDate?: string, endDate?: string): Promise<any> {
+    try {
+      const end = endDate || new Date().toISOString().split('T')[0];
+      const start = startDate || new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+
+      return await appleWatchClient.getWorkoutSummary(userId, start, end);
+    } catch (error) {
+      logger.error('Error getting workout summary', { error, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Get HRV trend
+   */
+  async getHRVTrend(userId: string, days: number = 30): Promise<any> {
+    try {
+      return await appleWatchClient.getHRVTrend(userId, days);
+    } catch (error) {
+      logger.error('Error getting HRV trend', { error, userId });
       throw error;
     }
   }

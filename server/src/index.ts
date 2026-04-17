@@ -60,9 +60,16 @@ import healthDataRoutes from './routes/healthData.routes';
 import progressionRoutes from './routes/progressionRoutes';
 import supplementBulkUploadRoutes from './routes/supplementBulkUploadRoutes';
 import baselineRoutes from './routes/baseline.routes';
+import monitoringRoutes from './routes/monitoring.routes';
 
 // New API Routes - Health Optimization Systems
 import apiRoutes from './routes/index';
+
+// Device Integration Cron Jobs
+import { initializeOuraCronJobs } from './cron/ouraSync';
+import { initializeAppleWatchCronJobs } from './cron/appleWatchSync';
+import { initializeSleepNumberCronJobs } from './cron/sleepNumberSync';
+import { initializeDeviceMonitoringCronJob } from './cron/deviceMonitoring';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -147,6 +154,7 @@ app.use('/api/health-data', healthDataRoutes);
 app.use('/api/progression', progressionRoutes);
 app.use('/api/supplements', supplementBulkUploadRoutes);
 app.use('/baseline', baselineRoutes);
+app.use('/monitoring', monitoringRoutes);
 
 // Mount new API routes under /api prefix
 app.use('/api', apiRoutes);
@@ -159,6 +167,12 @@ app.use((err: Error, req: express.Request, res: express.Response, next: express.
   console.error(err.stack);
   res.status(500).json({ error: 'Something went wrong!' });
 });
+
+// Initialize device integration cron jobs
+initializeOuraCronJobs();
+initializeAppleWatchCronJobs();
+initializeSleepNumberCronJobs();
+initializeDeviceMonitoringCronJob();
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
