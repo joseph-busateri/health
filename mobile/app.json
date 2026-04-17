@@ -3,6 +3,7 @@
     "name": "Personal Health Agent",
     "slug": "personal-health-agent",
     "version": "1.0.0",
+    "scheme": "healthapp",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -16,9 +17,17 @@
     ],
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.health.optimization",
       "infoPlist": {
         "NSMicrophoneUsageDescription": "This app needs access to your microphone for voice interviews.",
-        "NSSpeechRecognitionUsageDescription": "This app uses speech recognition for voice interviews."
+        "NSSpeechRecognitionUsageDescription": "This app uses speech recognition for voice interviews.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "healthapp"
+            ]
+          }
+        ]
       }
     },
     "android": {
@@ -26,9 +35,26 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
+      "package": "com.health.optimization",
       "permissions": [
         "RECORD_AUDIO",
         "NOTIFICATIONS"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "healthapp",
+              "host": "oura-callback"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
       ]
     },
     "web": {
