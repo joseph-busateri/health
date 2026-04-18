@@ -60,6 +60,9 @@ export class HealthDataService {
         case 'hrv':
           recordsSaved = await this.saveHRVData(userId, data, source);
           break;
+        case 'blood_pressure':
+          recordsSaved = await this.saveBloodPressureData(userId, data, source);
+          break;
         default:
           logger.warn('Unknown data type', { dataType });
           recordsSkipped = data.length;
@@ -324,6 +327,50 @@ export class HealthDataService {
         if (!error) saved++;
       } catch (error) {
         logger.error('Error saving HRV record', { error, record });
+      }
+    }
+
+    return saved;
+  }
+
+  /**
+   * Save blood pressure data
+   */
+  private async saveBloodPressureData(userId: string, data: any[], source: string): Promise<number> {
+    let saved = 0;
+
+    for (const record of data) {
+      try {
+        // Validate blood pressure values
+        if (!record.systolic || !record.diastolic) {
+          logger.warn('Skipping BP record with missing values', { record });
+          continue;
+        }
+
+        if (record.systolic < 50 || record.systolic > 300 || 
+            record.diastolic < 30 || record.diastolic > 200) {
+          logger.warn('Skipping BP record with out-of-range values', { record });
+          continue;
+        }
+
+        const { error } = await supabase
+          .from('blood_pressure_readings')
+          .insert({
+            user_id: userId,
+            systolic: record.systolic,
+            diastolic: record.diastolic,
+            reading_date: record.startDate,
+            source: source,
+            synced_at: new Date().toISOString(),
+          });
+
+        if (!error) {
+          saved++;
+        } else {
+          logger.error('Error saving blood pressure record', { error, record });
+        }
+      } catch (error) {
+        logger.error('Error saving blood pressure record', { error, record });
       }
     }
 

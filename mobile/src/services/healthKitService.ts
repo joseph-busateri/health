@@ -189,6 +189,14 @@ export const syncAllHealthData = async (days: number = 7): Promise<HealthKitSync
       syncedDataTypes.push('hrv');
     }
 
+    // Sync Blood Pressure Data
+    const bpData = await getBloodPressureData(options);
+    if (bpData.length > 0) {
+      await uploadToBackend('blood_pressure', bpData);
+      totalRecords += bpData.length;
+      syncedDataTypes.push('blood_pressure');
+    }
+
     console.log('HealthKit sync complete', {
       dataTypes: syncedDataTypes,
       totalRecords,
@@ -396,6 +404,42 @@ const getHRVData = (options: any): Promise<any[]> => {
 };
 
 /**
+ * Get blood pressure data from HealthKit
+ */
+const getBloodPressureData = async (options: any): Promise<any[]> => {
+  const bpData: any[] = [];
+
+  try {
+    // Get Systolic Pressure
+    const systolic = await new Promise<any[]>((resolve, reject) => {
+      AppleHealthKit.getBloodPressureSamples(options, (err: Object, results: any[]) => {
+        if (err) reject(err);
+        else resolve(results || []);
+      });
+    });
+
+    // HealthKit returns both systolic and diastolic in the same sample
+    // Map to our expected format
+    systolic.forEach(sample => {
+      if (sample.bloodPressureSystolicValue && sample.bloodPressureDiastolicValue) {
+        bpData.push({
+          systolic: sample.bloodPressureSystolicValue,
+          diastolic: sample.bloodPressureDiastolicValue,
+          startDate: sample.startDate,
+          endDate: sample.endDate,
+          source: 'apple_health',
+        });
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching blood pressure data:', error);
+  }
+
+  return bpData;
+};
+
+/**
  * Upload health data to backend
  */
 const uploadToBackend = async (dataType: string, data: any[]): Promise<void> => {
@@ -445,4 +489,40 @@ export const getLastSyncTime = async (): Promise<Date | null> => {
 export const enableBackgroundSync = async (): Promise<void> => {
   // TODO: Implement background task for periodic syncing
   console.log('Background sync enabled');
+};
+
+/**
+ * Sync blood pressure data specifically
+ */
+export const syncBloodPressure = async (days: number = 30): Promise<HealthKitSyncResult> => {
+  try {
+    const endDate = new Date();
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+
+    const options = {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+    };
+
+    const bpData = await getBloodPressureData(options);
+    
+    if (bpData.length > 0) {
+      await uploadToBackend('blood_pressure', bpData);
+    }
+
+    return {
+      success: true,
+      dataTypes: ['blood_pressure'],
+      recordCount: bpData.length,
+    };
+  } catch (error: any) {
+    console.error('Blood pressure sync error:', error);
+    return {
+      success: false,
+      dataTypes: [],
+      recordCount: 0,
+      error: error.message,
+    };
+  }
 };

@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useUser } from '../context/UserContext';
 import { healthApi } from '../services/api';
+import { initializeHealthKit, syncBloodPressure } from '../services/healthKitService';
 import type { HomeStackParamList } from '../types/navigation';
 
 export default function DevicesScreen() {
@@ -23,9 +24,6 @@ export default function DevicesScreen() {
   const { userId } = useUser();
   const [syncing, setSyncing] = useState<{ [key: string]: boolean }>({});
   const [lastSync, setLastSync] = useState<{ [key: string]: string }>({});
-  const [bpModalVisible, setBpModalVisible] = useState(false);
-  const [bpReading, setBpReading] = useState({ systolic: '', diastolic: '', pulse: '' });
-  const [lastBPReading, setLastBPReading] = useState<{ systolic: string; diastolic: string; pulse?: string } | null>(null);
 
   const devices = [
     { id: 'oura', name: 'Oura Ring', iconName: 'ring', color: '#FF6B6B', hasConnectScreen: true },
@@ -60,7 +58,15 @@ export default function DevicesScreen() {
     }
 
     if (deviceId === 'bpMonitor') {
-      setBpModalVisible(true);
+      try {
+        await initializeHealthKit();
+        const result = await syncBloodPressure(30);
+        setLastSync(prev => ({ ...prev, [deviceId]: new Date().toLocaleTimeString() }));
+        Alert.alert('Success', `Synced ${result.recordCount} blood pressure readings from Apple Health`);
+      } catch (error: any) {
+        Alert.alert('Sync Failed', error.message || 'Failed to sync blood pressure from Apple Health');
+      }
+      setSyncing({ ...syncing, [deviceId]: false });
       return;
     }
 
@@ -85,37 +91,6 @@ export default function DevicesScreen() {
     }
   };
 
-  const handleSaveBPReading = () => {
-    const systolic = Number(bpReading.systolic.trim());
-    const diastolic = Number(bpReading.diastolic.trim());
-    const pulseValue = bpReading.pulse.trim();
-
-    if (!systolic || !diastolic) {
-      Alert.alert('Invalid reading', 'Please enter both systolic and diastolic values.');
-      return;
-    }
-
-    if (systolic < 70 || systolic > 250 || diastolic < 40 || diastolic > 150) {
-      Alert.alert('Check values', 'Entered blood pressure values are out of expected range.');
-      return;
-    }
-
-    const now = new Date();
-    setLastBPReading({
-      systolic: systolic.toString(),
-      diastolic: diastolic.toString(),
-      pulse: pulseValue ? pulseValue : undefined,
-    });
-    setLastSync(prev => ({ ...prev, bpMonitor: now.toLocaleTimeString() }));
-    setBpModalVisible(false);
-    setBpReading({ systolic: '', diastolic: '', pulse: '' });
-    Alert.alert('Success', 'Blood pressure reading logged.');
-  };
-
-  const closeBpModal = () => {
-    setBpModalVisible(false);
-    setBpReading({ systolic: '', diastolic: '', pulse: '' });
-  };
 
   if (!userId) {
     return (
@@ -204,17 +179,7 @@ export default function DevicesScreen() {
                 {device.id === 'bpMonitor' && (
                   <>
                     <MaterialCommunityIcons name="stethoscope" size={16} color="#666" style={styles.detailIcon} />
-                    <View style={styles.bpDetailColumn}>
-                      <Text style={styles.detailText}>Log systolic / diastolic manually</Text>
-                      {lastBPReading ? (
-                        <Text style={styles.detailTextSecondary}>
-                          Last reading: {lastBPReading.systolic}/{lastBPReading.diastolic}
-                          {lastBPReading.pulse ? ` · Pulse ${lastBPReading.pulse} bpm` : ''}
-                        </Text>
-                      ) : (
-                        <Text style={styles.detailTextSecondary}>No readings logged yet</Text>
-                      )}
-                    </View>
+                    <Text style={styles.detailText}>Sync from Omron Evolv via Apple Health</Text>
                   </>
                 )}
               </View>
@@ -272,66 +237,6 @@ export default function DevicesScreen() {
           </Text>
         </View>
       </ScrollView>
-
-      <Modal
-        visible={bpModalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={closeBpModal}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Log Blood Pressure</Text>
-            <Text style={styles.modalSubtitle}>Manual entry helps the AI calibrate cardiovascular readiness.</Text>
-
-            <View style={styles.modalRow}>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Systolic</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="number-pad"
-                  placeholder="120"
-                  value={bpReading.systolic}
-                  onChangeText={(value) => setBpReading(current => ({ ...current, systolic: value }))}
-                />
-              </View>
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Diastolic</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="number-pad"
-                  placeholder="80"
-                  value={bpReading.diastolic}
-                  onChangeText={(value) => setBpReading(current => ({ ...current, diastolic: value }))}
-                />
-              </View>
-            </View>
-
-            <View style={styles.modalRow}>
-              <View style={[styles.inputGroup, styles.inputGroupFull]}>
-                <Text style={styles.inputLabel}>Pulse (optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  keyboardType="number-pad"
-                  placeholder="68"
-                  value={bpReading.pulse}
-                  onChangeText={(value) => setBpReading(current => ({ ...current, pulse: value }))}
-                />
-              </View>
-            </View>
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={styles.modalCancel} onPress={closeBpModal} activeOpacity={0.85}>
-                <Text style={styles.modalCancelText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSave} onPress={handleSaveBPReading} activeOpacity={0.85}>
-                <Text style={styles.modalSaveText}>Save Reading</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
     </SafeAreaView>
   );
 }
