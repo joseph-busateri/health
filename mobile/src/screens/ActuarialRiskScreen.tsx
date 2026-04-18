@@ -93,9 +93,20 @@ export default function ActuarialRiskScreen() {
       if (historyResponse.data?.data) {
         setHistory(historyResponse.data.data);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error loading risk data:', err);
-      setError('Failed to load risk data. Please try again.');
+      // 404 means no data exists yet - this is not an error, just show empty state
+      if (err.response?.status === 404) {
+        setRiskRecord(null);
+        setHistory([]);
+        setError(null);
+      } else {
+        const isNetworkError = err.code === 'ECONNREFUSED' || err.code === 'ENOTFOUND' || err.message?.includes('Network Error');
+        const errorMessage = isNetworkError 
+          ? 'Backend server not accessible. Please ensure the server is running at the configured API URL.'
+          : err.response?.data?.error || 'Failed to load risk data. Please try again.';
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
