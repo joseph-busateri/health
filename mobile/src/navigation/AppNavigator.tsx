@@ -35,6 +35,7 @@ import RecommendationsScreen from '../screens/RecommendationsScreen';
 import BaselineProfileScreen from '../screens/BaselineProfileScreen';
 import GoalManagementScreen from '../screens/GoalManagementScreen';
 import HealthDataHubScreen from '../screens/HealthDataHubScreen';
+import ActuarialRiskScreen from '../screens/ActuarialRiskScreen';
 import AppleWatchConnectScreenV2 from '../screens/AppleWatchConnectScreenV2';
 import OuraConnectScreenV2 from '../screens/OuraConnectScreenV2';
 // DEPRECATED: Legacy interview modes - preserved for recovery, use VoiceInterviewScreen instead
@@ -249,6 +250,11 @@ const AppNavigator: React.FC = () => {
       name="HealthDataHub"
       component={HealthDataHubScreen}
       options={{ title: 'Health Data Hub' }}
+    />
+    <Stack.Screen
+      name="ActuarialRisk"
+      component={ActuarialRiskScreen}
+      options={{ title: 'Cardiovascular Risk' }}
     />
     <Stack.Screen
       name="AppleWatchConnect"

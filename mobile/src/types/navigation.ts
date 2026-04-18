@@ -39,6 +39,7 @@ export type RootStackParamList = {
   BaselineProfile: undefined;
   GoalManagement: undefined;
   HealthDataHub: undefined;
+  ActuarialRisk: undefined;
   AppleWatchConnect: undefined;
   OuraConnect: undefined;
   AgentInterview: undefined;

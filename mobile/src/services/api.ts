@@ -210,6 +210,16 @@ export const healthApi = {
     getDailySummary: (userId: string, date?: string) => 
       api.get(`/api/ai-agent/${userId}/daily-summary${date ? `?date=${date}` : ''}`),
   },
+
+  // Actuarial Risk endpoints
+  actuarial: {
+    calculate: (userId: string, data: any) => 
+      api.post(`/api/actuarial-risk/${userId}/calculate`, data),
+    getRecord: (userId: string, date?: string) => 
+      api.get(`/api/actuarial-risk/${userId}/record${date ? `?date=${date}` : ''}`),
+    getHistory: (userId: string, days = 30) => 
+      api.get(`/api/actuarial-risk/${userId}/history?days=${days}`),
+  },
 };
 
 export default api;
