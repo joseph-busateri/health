@@ -384,7 +384,7 @@ const parseCSVRow = (
   // Parse and validate date
   const date = parseDate(dateValue);
   if (!date) {
-    throw new Error(`Invalid date format: ${dateValue}. Expected YYYY-MM-DD`);
+    throw new Error(`Invalid date format: ${dateValue}. Expected YYYY-MM-DD, YYYYMMDD, MM/DD/YYYY, or DD/MM/YYYY`);
   }
 
   // Parse and validate weight
@@ -492,6 +492,13 @@ const parseCSVRow = (
 };
 
 const parseDate = (value: string): string | null => {
+  // Try YYYYMMDD format (e.g., 20260418)
+  const compactMatch = value.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (compactMatch) {
+    const [, year, month, day] = compactMatch;
+    return `${year}-${month}-${day}`;
+  }
+
   // Try YYYY-MM-DD format
   const isoMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (isoMatch) {
