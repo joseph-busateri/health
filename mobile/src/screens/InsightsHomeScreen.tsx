@@ -106,6 +106,8 @@ const InsightsHomeScreen: React.FC = () => {
 
   const navigateToCardio = () => navigation.navigate('CardiovascularDashboard');
   const navigateToSexualHealth = () => navigation.navigate('SexualHealthDashboard');
+  const navigateToControlTower = () => navigation.navigate('ControlTower');
+  const navigateToHealthDataHub = () => navigation.navigate('HealthDataHub');
 
   return (
     <SafeAreaView style={styles.container}>
@@ -113,6 +115,35 @@ const InsightsHomeScreen: React.FC = () => {
         <View style={styles.header}>
           <Text style={styles.greeting}>Insights Hub</Text>
           <Text style={styles.subtitle}>Review readiness signals, quick wins, and deeper recommendations in one place.</Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Quick Access</Text>
+          <View style={styles.quickAccessRow}>
+            <TouchableOpacity
+              style={styles.quickAccessCard}
+              onPress={navigateToControlTower}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.quickAccessIconWrap, { backgroundColor: '#3B82F61A' }]}>
+                <MaterialCommunityIcons name="view-dashboard" size={24} color="#3B82F6" />
+              </View>
+              <Text style={styles.quickAccessTitle}>Control Tower</Text>
+              <Text style={styles.quickAccessSubtitle}>AI health operating system</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickAccessCard}
+              onPress={navigateToHealthDataHub}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.quickAccessIconWrap, { backgroundColor: '#10B9811A' }]}>
+                <MaterialCommunityIcons name="database" size={24} color="#10B981" />
+              </View>
+              <Text style={styles.quickAccessTitle}>Health Data Hub</Text>
+              <Text style={styles.quickAccessSubtitle}>Manage all health inputs</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -381,6 +412,43 @@ const styles = StyleSheet.create({
     color: '#4338CA',
     fontSize: 13,
     fontWeight: '600',
+  },
+  quickAccessRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  quickAccessCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickAccessIconWrap: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  quickAccessTitle: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  quickAccessSubtitle: {
+    fontSize: 12,
+    color: '#6B7280',
+    lineHeight: 16,
   },
 });
 
