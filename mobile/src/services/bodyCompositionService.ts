@@ -104,8 +104,9 @@ export const uploadBodyCompositionCSV = async (
     formData,
     {
       headers: {
-        // Don't set Content-Type - let the browser set it with the boundary parameter
-        // 'Content-Type': 'multipart/form-data',
+        // Explicitly set to undefined to override default application/json header
+        // This allows the browser to set multipart/form-data with boundary parameter
+        'Content-Type': undefined,
       },
     }
   );
