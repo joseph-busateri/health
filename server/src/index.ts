@@ -97,6 +97,9 @@ app.get('/health', (_req, res) => {
   });
 });
 
+// Mount new API routes under /api prefix FIRST to ensure they take precedence
+app.use('/api', apiRoutes);
+
 app.use('/health/metrics', healthRoutes);
 app.use('/daily-logs', dailyLogsRoutes);
 app.use('/reminders', reminderRoutes);
@@ -154,9 +157,6 @@ app.use('/api/progression', progressionRoutes);
 app.use('/api/supplements', supplementBulkUploadRoutes);
 app.use('/baseline', baselineRoutes);
 app.use('/monitoring', monitoringRoutes);
-
-// Mount new API routes under /api prefix
-app.use('/api', apiRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'Health API Server is running!' });
