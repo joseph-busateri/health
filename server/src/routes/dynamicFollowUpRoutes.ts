@@ -13,14 +13,6 @@ const router = Router();
 
 // DEPRECATED: Dynamic Interview mode - Use Voice Interview instead
 // Routes preserved for data recovery and testing only
-router.use((req, res, next) => {
-  logger.warn('⚠️ [DEPRECATED] Dynamic Interview route accessed - Use Voice Interview instead', {
-    path: req.path,
-    method: req.method,
-  });
-  next();
-});
-
 router.post('/interview/start', startInterviewHandler);
 
 router.post('/interview/:session_id/response', submitResponseHandler);
