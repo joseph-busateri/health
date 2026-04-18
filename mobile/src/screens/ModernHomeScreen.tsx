@@ -216,7 +216,7 @@ export default function ModernHomeScreen() {
 
   const cardiovascularRiskAction: QuickAction = {
     title: 'Cardiovascular Risk',
-    subtitle: riskRecord
+    subtitle: riskRecord?.overallRisk !== undefined
       ? `10-year risk: ${riskRecord.overallRisk.toFixed(1)}%`
       : '10-year CVD risk assessment',
     icon: 'heart-pulse',
