@@ -113,7 +113,6 @@ app.use('/bloodwork', bloodworkRoutes);
 app.use('/bloodwork', bloodworkResultsRoutes);
 app.use('/bloodwork', bloodworkTrendsRoutes);
 app.use('/bloodwork', bloodworkRecommendationsRoutes);
-app.use('/', bodyCompositionRoutes);
 app.use('/', workoutBaselineRoutes);
 app.use('/', supplementBaselineRoutes);
 app.use('/', strengthTrackingRoutes);

@@ -82,7 +82,7 @@ export const uploadBodyCompositionCSV = async (
   }
 
   const response = await api.post<UploadBodyCompositionCSVResponse>(
-    `/body-composition/${input.userId}/upload-csv`,
+    `/api/body-composition/${input.userId}/upload-csv`,
     formData,
     {
       headers: {
