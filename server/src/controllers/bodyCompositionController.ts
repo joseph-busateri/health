@@ -11,6 +11,7 @@ import {
   getActiveGoals,
   calculateGoalProgress,
   detectAnomalies,
+  uploadBodyCompositionCSV,
 } from '../services/bodyCompositionService';
 
 // Multer configuration for file uploads
@@ -226,6 +227,40 @@ export const detectAnomaliesHandler = async (req: Request, res: Response, next: 
     };
 
     res.json({ success: true, data: { anomalies, ...summary } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ============================================================================
+// CSV UPLOAD
+// ============================================================================
+
+export const uploadBodyCompositionCSVHandler = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = Array.isArray(req.params.user_id) ? req.params.user_id[0] : req.params.user_id;
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'user_id is required' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'file is required' });
+    }
+
+    const detectedSource = req.body.detected_source || 'other_scale';
+
+    const result = await uploadBodyCompositionCSV({
+      userId,
+      file: req.file.buffer,
+      fileName: req.file.originalname,
+      detectedSource,
+    });
+
+    if (result.success) {
+      res.status(201).json(result);
+    } else {
+      res.status(400).json(result);
+    }
   } catch (error) {
     next(error);
   }

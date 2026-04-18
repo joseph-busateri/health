@@ -5,6 +5,7 @@ import { parseInBodyScan } from '../utils/inbodyParser';
 import { tryPatternMatching, shouldSkipAIParsing } from './bodyCompositionPatternMatching';
 import { parseWithAI } from './bodyCompositionAIParser';
 import { logger } from '../utils/logger';
+import { parseBodyCompositionCSV, convertCSVParsedToScanInputs, type CSVParseResult } from '../utils/csvBodyCompositionParser';
 
 import type {
   BodyCompositionScan,
@@ -526,6 +527,133 @@ const mapDatabaseToTrend = (data: any): BodyCompositionTrend => ({
   muscleChangeLb: data.muscle_change_lb,
   daysSinceLastScan: data.days_since_last_scan,
 });
+
+// ============================================================================
+// CSV UPLOAD
+// ============================================================================
+
+export interface UploadBodyCompositionCSVRequest {
+  userId: string;
+  file: Buffer;
+  fileName: string;
+  detectedSource?: 'inbody_s2' | 'inbody_570' | 'inbody_770' | 'dexa' | 'other_scale';
+}
+
+export interface UploadBodyCompositionCSVResponse {
+  success: boolean;
+  scanIds: string[];
+  message: string;
+  errors?: Array<{ row: number; field: string; message: string }>;
+}
+
+export const uploadBodyCompositionCSV = async (
+  request: UploadBodyCompositionCSVRequest
+): Promise<UploadBodyCompositionCSVResponse> => {
+  const { userId, file, fileName, detectedSource } = request;
+
+  try {
+    logger.info('Processing body composition CSV upload', { userId, fileName });
+
+    // Validate file extension
+    if (!fileName.toLowerCase().endsWith('.csv')) {
+      return {
+        success: false,
+        scanIds: [],
+        message: 'Invalid file type. Please upload a CSV file.',
+        errors: [{ row: 0, field: 'file', message: 'File must have .csv extension' }],
+      };
+    }
+
+    // Validate file size (max 1MB)
+    if (file.length > 1024 * 1024) {
+      return {
+        success: false,
+        scanIds: [],
+        message: 'File too large. Maximum size is 1MB.',
+        errors: [{ row: 0, field: 'file', message: 'File size exceeds 1MB limit' }],
+      };
+    }
+
+    // Convert buffer to string
+    const csvContent = file.toString('utf-8');
+
+    // Parse CSV
+    const parseResult = parseBodyCompositionCSV(csvContent, userId, detectedSource);
+
+    if (!parseResult.success) {
+      return {
+        success: false,
+        scanIds: [],
+        message: 'Failed to parse CSV file.',
+        errors: parseResult.errors,
+      };
+    }
+
+    // Limit to 100 rows
+    const MAX_ROWS = 100;
+    if (parseResult.scans.length > MAX_ROWS) {
+      logger.warn(`CSV has ${parseResult.scans.length} rows, limiting to ${MAX_ROWS}`, { userId });
+      parseResult.scans = parseResult.scans.slice(0, MAX_ROWS);
+    }
+
+    // Convert to scan inputs
+    const scanInputs = convertCSVParsedToScanInputs(parseResult.scans, userId);
+
+    // Batch insert scans
+    const scanIds: string[] = [];
+    const errors: Array<{ row: number; field: string; message: string }> = [];
+
+    for (let i = 0; i < scanInputs.length; i++) {
+      try {
+        const scan = await createBodyCompositionScan(scanInputs[i]);
+        scanIds.push(scan.id);
+      } catch (error) {
+        const rowNumber = i + 2; // Header is row 1
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        errors.push({ row: rowNumber, field: 'database', message });
+        logger.error('Failed to create scan from CSV row', { 
+          userId, 
+          row: rowNumber, 
+          error: message 
+        });
+      }
+    }
+
+    // If all scans failed, return error
+    if (scanIds.length === 0) {
+      return {
+        success: false,
+        scanIds: [],
+        message: 'Failed to create any scans from CSV data.',
+        errors: parseResult.errors.concat(errors),
+      };
+    }
+
+    logger.info('CSV upload completed successfully', { 
+      userId, 
+      totalRows: scanInputs.length,
+      successfulScans: scanIds.length,
+      failedScans: errors.length 
+    });
+
+    return {
+      success: true,
+      scanIds,
+      message: errors.length > 0 
+        ? `Successfully imported ${scanIds.length} of ${scanInputs.length} scans. ${errors.length} rows had errors.`
+        : `Successfully imported ${scanIds.length} scans.`,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  } catch (error) {
+    logger.error('CSV upload failed', { error, userId, fileName });
+    return {
+      success: false,
+      scanIds: [],
+      message: 'An unexpected error occurred while processing the CSV file.',
+      errors: [{ row: 0, field: 'file', message: error instanceof Error ? error.message : 'Unknown error' }],
+    };
+  }
+};
 
 // Backward compatibility
 export const createBodyCompositionUpload = createBodyCompositionScan;

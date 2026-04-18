@@ -18,6 +18,20 @@ interface SubmitBodyCompositionScanInput {
   notes?: string;
 }
 
+interface UploadBodyCompositionCSVInput {
+  userId: string;
+  uri: string;
+  fileName: string;
+  detectedSource?: 'inbody_s2' | 'inbody_570' | 'inbody_770' | 'dexa' | 'other_scale';
+}
+
+interface UploadBodyCompositionCSVResponse {
+  success: boolean;
+  scanIds: string[];
+  message: string;
+  errors?: Array<{ row: number; field: string; message: string }>;
+}
+
 export const uploadBodyCompositionDocument = async (
   input: UploadBodyCompositionDocumentInput,
 ): Promise<void> => {
@@ -50,4 +64,32 @@ export const submitBodyCompositionScan = async (
     visceralFatLevel: input.visceralFatLevel,
     notes: input.notes,
   });
+};
+
+export const uploadBodyCompositionCSV = async (
+  input: UploadBodyCompositionCSVInput,
+): Promise<UploadBodyCompositionCSVResponse> => {
+  const formData = new FormData();
+
+  formData.append('file', {
+    uri: input.uri,
+    name: input.fileName,
+    type: 'text/csv',
+  } as any);
+
+  if (input.detectedSource) {
+    formData.append('detected_source', input.detectedSource);
+  }
+
+  const response = await api.post<UploadBodyCompositionCSVResponse>(
+    `/body-composition/${input.userId}/upload-csv`,
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }
+  );
+
+  return response.data;
 };

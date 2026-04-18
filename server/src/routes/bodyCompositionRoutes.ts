@@ -11,12 +11,16 @@ import {
   getActiveGoalsHandler,
   getGoalProgressHandler,
   detectAnomaliesHandler,
+  uploadBodyCompositionCSVHandler,
 } from '../controllers/bodyCompositionController';
 
 const router = Router();
 
 // Document upload
 router.post('/body-composition/upload', uploadMiddleware, uploadBodyCompositionDocumentHandler);
+
+// CSV upload
+router.post('/body-composition/:user_id/upload-csv', uploadMiddleware, uploadBodyCompositionCSVHandler);
 
 // Scan CRUD
 router.post('/body-composition/scan', createBodyCompositionScanHandler);

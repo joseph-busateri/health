@@ -1,0 +1,4 @@
+date,weight_lb,body_fat_percentage,skeletal_muscle_mass_lb,visceral_fat_level,bmi,basal_metabolic_rate_kcal,height_inches,age,gender
+2024-01-15,180.5,18.5,85.2,8,24.5,1850,70,30,male
+2024-02-01,179.2,17.8,86.1,7,24.2,1865,70,30,male
+2024-03-01,178.0,17.2,87.0,6,23.9,1880,70,30,male
