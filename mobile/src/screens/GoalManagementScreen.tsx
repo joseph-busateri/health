@@ -11,6 +11,8 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useUser } from '../context/UserContext';
+import { healthApi } from '../services/api';
 
 interface Goal {
   id: string;
@@ -54,6 +56,7 @@ interface Achievement {
 }
 
 export default function GoalManagementScreen() {
+  const { userId } = useUser();
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<'active' | 'templates' | 'achievements'>('active');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -61,101 +64,83 @@ export default function GoalManagementScreen() {
   const [showCelebrationModal, setShowCelebrationModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<GoalTemplate | null>(null);
   const [celebrationData, setCelebrationData] = useState<Achievement | null>(null);
+  const [creating, setCreating] = useState(false);
 
-  // Mock data - replace with API calls
-  const [activeGoals, setActiveGoals] = useState<Goal[]>([
-    {
-      id: '1',
-      goalName: 'Lose 10 Pounds',
-      category: 'weight_loss',
-      progress: 65,
-      daysRemaining: 32,
-      onTrack: true,
-      targetDate: '2026-04-30',
-      status: 'active',
-    },
-    {
-      id: '2',
-      goalName: 'Bench Press 225 lbs',
-      category: 'strength',
-      progress: 42,
-      daysRemaining: 75,
-      onTrack: true,
-      targetDate: '2026-06-15',
-      status: 'active',
-    },
-  ]);
-
-  const [templates, setTemplates] = useState<GoalTemplate[]>([
-    {
-      id: '1',
-      templateName: 'Lose 10 Pounds',
-      category: 'weight_loss',
-      description: 'Lose 10 pounds through healthy diet and exercise',
-      difficultyLevel: 'beginner',
-      defaultDurationDays: 90,
-      successTips: ['Track calories daily', 'Exercise 3-4x per week', 'Stay hydrated'],
-    },
-    {
-      id: '2',
-      templateName: 'Gain 10 Pounds of Muscle',
-      category: 'muscle_gain',
-      description: 'Build 10 pounds of lean muscle mass',
-      difficultyLevel: 'intermediate',
-      defaultDurationDays: 180,
-      successTips: ['Progressive overload', 'Eat in caloric surplus', 'Prioritize protein'],
-    },
-    {
-      id: '3',
-      templateName: 'Bench Press 225 lbs',
-      category: 'strength',
-      description: 'Achieve a 225 lb bench press 1RM',
-      difficultyLevel: 'intermediate',
-      defaultDurationDays: 120,
-      successTips: ['Follow structured program', 'Focus on form', 'Progressive overload'],
-    },
-  ]);
-
-  const [achievements, setAchievements] = useState<Achievement[]>([
-    {
-      id: '1',
-      achievementName: '50% Complete - Lose 10 Pounds',
-      achievementType: 'milestone_reached',
-      achievementDate: '2026-03-15',
-      badgeIcon: '🔥',
-      celebrationMessage: "Halfway there! You're crushing it!",
-      pointsEarned: 50,
-    },
-    {
-      id: '2',
-      achievementName: '25% Complete - Bench Press 225 lbs',
-      achievementType: 'milestone_reached',
-      achievementDate: '2026-03-01',
-      badgeIcon: '🌟',
-      celebrationMessage: "Great start! You're 25% there!",
-      pointsEarned: 25,
-    },
-  ]);
+  // Real data from API
+  const [activeGoals, setActiveGoals] = useState<Goal[]>([]);
+  const [templates, setTemplates] = useState<GoalTemplate[]>([]);
+  const [achievements, setAchievements] = useState<Achievement[]>([]);
+  
+  // Custom goal form state
+  const [customGoalName, setCustomGoalName] = useState('');
+  const [customCategory, setCustomCategory] = useState('');
+  const [customTargetDate, setCustomTargetDate] = useState('');
+  const [customMotivation, setCustomMotivation] = useState('');
 
   const [goalStats, setGoalStats] = useState({
-    totalGoals: 5,
-    activeGoals: 2,
-    completedGoals: 3,
-    completionRate: 75,
-    totalPoints: 875,
+    totalGoals: 0,
+    activeGoals: 0,
+    completedGoals: 0,
+    completionRate: 0,
+    totalPoints: 0,
   });
 
   useEffect(() => {
-    loadGoalData();
-  }, []);
+    if (userId) {
+      loadGoalData();
+    }
+  }, [userId]);
 
   const loadGoalData = async () => {
+    if (!userId) return;
+    
     setLoading(true);
     try {
-      // TODO: Implement API calls when server is running
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Load templates
+      const templatesResponse = await healthApi.goals.getTemplates();
+      if (templatesResponse.data?.data) {
+        setTemplates(templatesResponse.data.data);
+      }
+
+      // Load active goals
+      const goalsResponse = await healthApi.goals.getActive(userId);
+      if (goalsResponse.data?.data) {
+        const goals = goalsResponse.data.data || [];
+        setActiveGoals(goals);
+        
+        // Update stats
+        setGoalStats({
+          totalGoals: goals.length,
+          activeGoals: goals.filter((g: any) => g.status === 'active').length,
+          completedGoals: goals.filter((g: any) => g.status === 'completed').length,
+          completionRate: goals.length > 0 ? Math.round((goals.filter((g: any) => g.status === 'completed').length / goals.length) * 100) : 0,
+          totalPoints: goals.reduce((sum: number, g: any) => sum + (g.pointsEarned || 0), 0),
+        });
+      }
+
+      // Load achievements (from goal progress)
+      // For now, achievements are derived from goal milestones
+      const achievementsList: Achievement[] = [];
+      const goals = goalsResponse.data?.data || [];
+      goals.forEach((goal: any) => {
+        if (goal.milestones) {
+          goal.milestones.filter((m: any) => m.achieved).forEach((milestone: any) => {
+            achievementsList.push({
+              id: milestone.id,
+              achievementName: `${milestone.milestoneName} - ${goal.goalName}`,
+              achievementType: 'milestone_reached',
+              achievementDate: milestone.achievedDate,
+              badgeIcon: milestone.celebrationEmoji || '🎉',
+              celebrationMessage: milestone.celebrationMessage || 'Great job!',
+              pointsEarned: milestone.pointsEarned || 10,
+            });
+          });
+        }
+      });
+      setAchievements(achievementsList);
     } catch (error) {
       console.error('Error loading goal data:', error);
+      Alert.alert('Error', 'Failed to load goal data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -201,14 +186,72 @@ export default function GoalManagementScreen() {
   };
 
   const handleTemplateSubmit = async () => {
+    if (!userId || !selectedTemplate) return;
+    
+    setCreating(true);
     try {
-      // TODO: Implement API call
-      console.log('Creating goal from template:', selectedTemplate);
-      Alert.alert('Success', 'Goal created successfully!');
-      setShowTemplateModal(false);
-      setSelectedTemplate(null);
+      const response = await healthApi.goals.createFromTemplate(userId, {
+        templateId: selectedTemplate.id,
+        customizations: {
+          goalName: selectedTemplate.templateName,
+          targetDate: new Date(Date.now() + selectedTemplate.defaultDurationDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        },
+      });
+      
+      if (response.data) {
+        Alert.alert('Success', 'Goal created successfully!');
+        setShowTemplateModal(false);
+        setSelectedTemplate(null);
+        // Reload goals
+        await loadGoalData();
+      }
     } catch (error) {
-      Alert.alert('Error', 'Failed to create goal');
+      console.error('Error creating goal from template:', error);
+      Alert.alert('Error', 'Failed to create goal. Please try again.');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleCustomGoalSubmit = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'User ID required');
+      return;
+    }
+    
+    if (!customGoalName || !customCategory || !customTargetDate) {
+      Alert.alert('Error', 'Please fill in all required fields');
+      return;
+    }
+    
+    setCreating(true);
+    try {
+      const response = await healthApi.goals.createCustom(userId, {
+        goalData: {
+          goalName: customGoalName,
+          goalCategory: customCategory,
+          targetDate: customTargetDate,
+          description: customMotivation,
+        },
+        metrics: [],
+      });
+      
+      if (response.data) {
+        Alert.alert('Success', 'Goal created successfully!');
+        setShowCreateModal(false);
+        // Clear form
+        setCustomGoalName('');
+        setCustomCategory('');
+        setCustomTargetDate('');
+        setCustomMotivation('');
+        // Reload goals
+        await loadGoalData();
+      }
+    } catch (error) {
+      console.error('Error creating custom goal:', error);
+      Alert.alert('Error', 'Failed to create goal. Please try again.');
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -236,7 +279,14 @@ export default function GoalManagementScreen() {
 
       {/* Active Goals */}
       <Text style={styles.sectionTitle}>Active Goals</Text>
-      {activeGoals.map((goal) => (
+      {activeGoals.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="flag-outline" size={48} color="#9ca3af" />
+          <Text style={styles.emptyStateTitle}>No active goals</Text>
+          <Text style={styles.emptyStateText}>Create your first goal to start tracking your progress</Text>
+        </View>
+      ) : (
+        activeGoals.map((goal) => (
         <TouchableOpacity key={goal.id} style={styles.goalCard}>
           <View style={styles.goalHeader}>
             <View style={styles.goalTitleRow}>
@@ -274,7 +324,8 @@ export default function GoalManagementScreen() {
             </View>
           </View>
         </TouchableOpacity>
-      ))}
+      ))
+      )}
 
       {/* Create Goal Button */}
       <TouchableOpacity style={styles.createButton} onPress={() => setShowCreateModal(true)}>
@@ -289,7 +340,14 @@ export default function GoalManagementScreen() {
       <Text style={styles.sectionTitle}>Goal Templates</Text>
       <Text style={styles.sectionSubtitle}>Choose a template to get started quickly</Text>
 
-      {templates.map((template) => (
+      {templates.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="apps-outline" size={48} color="#9ca3af" />
+          <Text style={styles.emptyStateTitle}>No templates available</Text>
+          <Text style={styles.emptyStateText}>Check back later for new goal templates</Text>
+        </View>
+      ) : (
+        templates.map((template) => (
         <View key={template.id} style={styles.templateCard}>
           <View style={styles.templateHeader}>
             <View style={[styles.categoryIcon, { backgroundColor: getCategoryColor(template.category) }]}>
@@ -327,7 +385,8 @@ export default function GoalManagementScreen() {
             <Text style={styles.useTemplateButtonText}>Use This Template</Text>
           </TouchableOpacity>
         </View>
-      ))}
+      ))
+      )}
     </View>
   );
 
@@ -336,7 +395,14 @@ export default function GoalManagementScreen() {
       <Text style={styles.sectionTitle}>Achievements</Text>
       <Text style={styles.sectionSubtitle}>Celebrate your progress!</Text>
 
-      {achievements.map((achievement) => (
+      {achievements.length === 0 ? (
+        <View style={styles.emptyState}>
+          <Ionicons name="trophy-outline" size={48} color="#9ca3af" />
+          <Text style={styles.emptyStateTitle}>No achievements yet</Text>
+          <Text style={styles.emptyStateText}>Complete milestones to earn achievements</Text>
+        </View>
+      ) : (
+        achievements.map((achievement) => (
         <View key={achievement.id} style={styles.achievementCard}>
           <View style={styles.achievementHeader}>
             <Text style={styles.achievementEmoji}>{achievement.badgeIcon}</Text>
@@ -351,7 +417,8 @@ export default function GoalManagementScreen() {
 
           <Text style={styles.celebrationMessage}>{achievement.celebrationMessage}</Text>
         </View>
-      ))}
+      ))
+      )}
     </View>
   );
 
@@ -419,13 +486,28 @@ export default function GoalManagementScreen() {
 
             <ScrollView>
               <Text style={styles.inputLabel}>Goal Name *</Text>
-              <TextInput style={styles.input} placeholder="e.g., Lose 10 pounds" />
+              <TextInput 
+                style={styles.input} 
+                placeholder="e.g., Lose 10 pounds"
+                value={customGoalName}
+                onChangeText={setCustomGoalName}
+              />
 
               <Text style={styles.inputLabel}>Category *</Text>
-              <TextInput style={styles.input} placeholder="e.g., weight_loss" />
+              <TextInput 
+                style={styles.input} 
+                placeholder="e.g., weight_loss"
+                value={customCategory}
+                onChangeText={setCustomCategory}
+              />
 
               <Text style={styles.inputLabel}>Target Date *</Text>
-              <TextInput style={styles.input} placeholder="YYYY-MM-DD" />
+              <TextInput 
+                style={styles.input} 
+                placeholder="YYYY-MM-DD"
+                value={customTargetDate}
+                onChangeText={setCustomTargetDate}
+              />
 
               <Text style={styles.inputLabel}>Why is this important to you?</Text>
               <TextInput
@@ -433,10 +515,18 @@ export default function GoalManagementScreen() {
                 placeholder="Your personal motivation..."
                 multiline
                 numberOfLines={4}
+                value={customMotivation}
+                onChangeText={setCustomMotivation}
               />
 
-              <TouchableOpacity style={styles.submitButton}>
-                <Text style={styles.submitButtonText}>Create Goal</Text>
+              <TouchableOpacity 
+                style={styles.submitButton} 
+                onPress={handleCustomGoalSubmit}
+                disabled={creating}
+              >
+                <Text style={styles.submitButtonText}>
+                  {creating ? 'Creating...' : 'Create Goal'}
+                </Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -481,8 +571,14 @@ export default function GoalManagementScreen() {
                   numberOfLines={4}
                 />
 
-                <TouchableOpacity style={styles.submitButton} onPress={handleTemplateSubmit}>
-                  <Text style={styles.submitButtonText}>Create Goal</Text>
+                <TouchableOpacity 
+                  style={styles.submitButton} 
+                  onPress={handleTemplateSubmit}
+                  disabled={creating}
+                >
+                  <Text style={styles.submitButtonText}>
+                    {creating ? 'Creating...' : 'Create Goal'}
+                  </Text>
                 </TouchableOpacity>
               </ScrollView>
             )}
@@ -527,6 +623,25 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#6b7280',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#374151',
+    marginTop: 16,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 8,
+    textAlign: 'center',
   },
   header: {
     padding: 20,
