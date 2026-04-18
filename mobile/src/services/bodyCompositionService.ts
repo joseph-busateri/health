@@ -71,11 +71,21 @@ export const uploadBodyCompositionCSV = async (
 ): Promise<UploadBodyCompositionCSVResponse> => {
   const formData = new FormData();
 
-  formData.append('file', {
-    uri: input.uri,
-    name: input.fileName,
-    type: 'text/csv',
-  } as any);
+  // For web, we need to fetch the file as a Blob
+  // For native, we use the URI directly
+  if (input.uri.startsWith('blob:') || input.uri.startsWith('http')) {
+    // Web: fetch the blob
+    const response = await fetch(input.uri);
+    const blob = await response.blob();
+    formData.append('file', blob, input.fileName);
+  } else {
+    // Native: use URI
+    formData.append('file', {
+      uri: input.uri,
+      name: input.fileName,
+      type: 'text/csv',
+    } as any);
+  }
 
   if (input.detectedSource) {
     formData.append('detected_source', input.detectedSource);
