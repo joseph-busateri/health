@@ -8,7 +8,7 @@ import {
   Alert,
   Animated,
 } from 'react-native';
-import { Audio } from 'expo-av';
+// import { Audio } from 'expo-av';
 import * as FileSystem from 'expo-file-system';
 import { useUser } from '../context/UserContext';
 
@@ -29,8 +29,10 @@ const VoiceInterviewScreen: React.FC<VoiceInterviewScreenProps> = ({ navigation 
   const [transcript, setTranscript] = useState<string>('');
   const [questionCount, setQuestionCount] = useState(0);
   
-  const recording = useRef<Audio.Recording | null>(null);
-  const sound = useRef<Audio.Sound | null>(null);
+  // const recording = useRef<Audio.Recording | null>(null);
+  // const sound = useRef<Audio.Sound | null>(null);
+  const recording = useRef<any>(null);
+  const sound = useRef<any>(null);
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -52,11 +54,12 @@ const VoiceInterviewScreen: React.FC<VoiceInterviewScreenProps> = ({ navigation 
 
   const setupAudio = async () => {
     try {
-      await Audio.requestPermissionsAsync();
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+      // await Audio.requestPermissionsAsync();
+      // await Audio.setAudioModeAsync({
+      //   allowsRecordingIOS: true,
+      //   playsInSilentModeIOS: true,
+      // });
+      console.log('Audio setup skipped - expo-av not available in Expo Go');
     } catch (error) {
       console.error('Error setting up audio:', error);
       Alert.alert('Error', 'Failed to set up audio permissions');
@@ -146,24 +149,27 @@ const VoiceInterviewScreen: React.FC<VoiceInterviewScreenProps> = ({ navigation 
         await sound.current.unloadAsync();
       }
 
-      const fullUrl = audioUrl.startsWith('http') 
-        ? audioUrl 
+      const fullUrl = audioUrl.startsWith('http')
+        ? audioUrl
         : `${API_BASE_URL}${audioUrl}`;
 
-      const { sound: newSound } = await Audio.Sound.createAsync(
-        { uri: fullUrl },
-        { shouldPlay: true }
-      );
+      // const { sound: newSound } = await Audio.Sound.createAsync(
+      //   { uri: fullUrl },
+      //   { shouldPlay: true }
+      // );
 
-      sound.current = newSound;
+      // sound.current = newSound;
 
-      newSound.setOnPlaybackStatusUpdate((status) => {
-        if (status.isLoaded && status.didJustFinish) {
-          setIsAISpeaking(false);
-          // Auto-start recording after AI finishes speaking
-          setTimeout(() => startRecording(), 500);
-        }
-      });
+      // newSound.setOnPlaybackStatusUpdate((status) => {
+      //   if (status.isLoaded && status.didJustFinish) {
+      //     setIsAISpeaking(false);
+      //     // Auto-start recording after AI finishes speaking
+      //     setTimeout(() => startRecording(), 500);
+      //   }
+      // });
+      
+      console.log('Audio playback skipped - expo-av not available in Expo Go');
+      setIsAISpeaking(false);
     } catch (error) {
       console.error('Error playing audio:', error);
       setIsAISpeaking(false);
@@ -173,24 +179,25 @@ const VoiceInterviewScreen: React.FC<VoiceInterviewScreenProps> = ({ navigation 
 
   const startRecording = async () => {
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Microphone permission is required to record your response');
-        return;
-      }
+      // const { status } = await Audio.requestPermissionsAsync();
+      // if (status !== 'granted') {
+      //   Alert.alert('Permission Required', 'Microphone permission is required to record your response');
+      //   return;
+      // }
 
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
+      // await Audio.setAudioModeAsync({
+      //   allowsRecordingIOS: true,
+      //   playsInSilentModeIOS: true,
+      // });
 
-      const { recording: newRecording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
+      // const { recording: newRecording } = await Audio.Recording.createAsync(
+      //   Audio.RecordingOptionsPresets.HIGH_QUALITY
+      // );
 
-      recording.current = newRecording;
+      // recording.current = newRecording;
       setIsRecording(true);
       setTranscript('');
+      console.log('Recording skipped - expo-av not available in Expo Go');
     } catch (error) {
       console.error('Error starting recording:', error);
       Alert.alert('Error', 'Failed to start recording');

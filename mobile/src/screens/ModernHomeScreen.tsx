@@ -180,8 +180,8 @@ export default function ModernHomeScreen() {
       },
     },
     {
-      title: 'Review supplements',
-      subtitle: 'Confirm current stack',
+      title: 'View supplements',
+      subtitle: 'Current stack & recommendations',
       icon: 'pill',
       color: '#059669',
       onPress: () => navigation.navigate('SupplementRecommendations', { userId: resolvedUserId }),

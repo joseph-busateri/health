@@ -473,20 +473,22 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   emptyState: {
-    alignItems: 'center',
+    flex: 1,
     justifyContent: 'center',
-    padding: 24,
-    gap: 12,
+    alignItems: 'center',
+    padding: 40,
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '600',
     color: '#0F172A',
+    marginTop: 16,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#475569',
+    color: '#64748B',
     textAlign: 'center',
+    marginTop: 8,
     lineHeight: 20,
   },
 });

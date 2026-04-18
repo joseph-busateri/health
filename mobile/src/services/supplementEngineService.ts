@@ -113,9 +113,11 @@ export const getCurrentSupplementStack = async (userId: string): Promise<Supplem
       adherenceSummary,
     };
   } catch (error: any) {
+    // 404 is expected for users without supplement stacks
     if (error.response?.status === 404) {
       return null;
     }
-    throw error;
+    console.warn('Failed to get supplement stack:', error.message);
+    return null;
   }
 };
