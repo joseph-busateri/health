@@ -42,7 +42,7 @@ import OuraConnectScreenV2 from '../screens/OuraConnectScreenV2';
 // import AgentInterviewScreen from '../screens/AgentInterviewScreen';
 // import DynamicInterviewScreen from '../screens/DynamicInterviewScreen';
 // import HybridInterviewScreen from '../screens/HybridInterviewScreen';
-import BodyCompositionUploadScreen from '../screens/BodyCompositionUploadScreen';
+import BodyCompositionUploadScreenV2 from '../screens/BodyCompositionUploadScreenV2';
 import InjuryPreventionScreen from '../screens/InjuryPreventionScreen';
 import StrengthTrackingScreen from '../screens/StrengthTrackingScreen';
 import RecoveryDashboardScreen from '../screens/RecoveryDashboardScreen';
@@ -284,7 +284,7 @@ const AppNavigator: React.FC = () => {
     /> */}
     <Stack.Screen
       name="BodyCompositionUpload"
-      component={BodyCompositionUploadScreen}
+      component={BodyCompositionUploadScreenV2}
       options={{ title: 'Upload Body Composition' }}
     />
     <Stack.Screen
