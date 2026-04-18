@@ -166,13 +166,17 @@ export default function BodyCompositionUploadScreenV2() {
     setUploading(true);
 
     try {
+      console.log('[CSV Upload Screen] Starting CSV upload');
       const response = await uploadBodyCompositionCSV({
         userId: resolvedUserId,
         uri: selectedCSV.uri,
         fileName: selectedCSV.fileName,
       });
 
+      console.log('[CSV Upload Screen] Response received:', response);
+
       if (response.success) {
+        console.log('[CSV Upload Screen] Upload successful, showing alert');
         Alert.alert(
           'Success',
           response.message,
@@ -180,6 +184,7 @@ export default function BodyCompositionUploadScreenV2() {
             {
               text: 'OK',
               onPress: () => {
+                console.log('[CSV Upload Screen] Resetting CSV selection');
                 setSelectedCSV(null);
                 setCsvPreview(null);
                 setShowCSVPreview(false);
@@ -188,6 +193,7 @@ export default function BodyCompositionUploadScreenV2() {
           ]
         );
       } else {
+        console.log('[CSV Upload Screen] Upload failed:', response.message);
         Alert.alert(
           'Upload Failed',
           response.message,
@@ -210,6 +216,7 @@ export default function BodyCompositionUploadScreenV2() {
         );
       }
     } catch (error) {
+      console.error('[CSV Upload Screen] Upload error:', error);
       Alert.alert('Error', 'Failed to upload CSV. Please try again.');
     } finally {
       setUploading(false);
