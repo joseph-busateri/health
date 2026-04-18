@@ -86,6 +86,7 @@ export type HomeStackParamList = {
   CardiovascularDashboard: undefined;
   SexualHealthDashboard: undefined;
   ActuarialRiskDashboard: undefined;
+  ActuarialRisk: undefined;
   NutritionDashboard: undefined;
   MealLog: undefined;
   NutritionExtraction: undefined;

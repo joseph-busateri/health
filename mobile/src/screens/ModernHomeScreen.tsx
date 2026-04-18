@@ -171,6 +171,13 @@ export default function ModernHomeScreen() {
 
   const quickActions: QuickAction[] = [
     {
+      title: 'Cardiovascular Risk',
+      subtitle: '10-year CVD risk assessment',
+      icon: 'heart-pulse',
+      color: '#EF4444',
+      onPress: () => navigation.navigate('ActuarialRisk' as any),
+    },
+    {
       title: 'Today\'s Workout',
       subtitle: 'View today\'s plan',
       icon: 'calendar-today',

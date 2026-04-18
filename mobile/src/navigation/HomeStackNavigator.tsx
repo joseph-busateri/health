@@ -17,6 +17,7 @@ import DailyLogsScreen from '../screens/DailyLogsScreen';
 import CardiovascularDashboardScreen from '../screens/CardiovascularDashboardScreen';
 import SexualHealthDashboardScreen from '../screens/SexualHealthDashboardScreen';
 import ActuarialRiskDashboardScreen from '../screens/ActuarialRiskDashboardScreen';
+import ActuarialRiskScreen from '../screens/ActuarialRiskScreen';
 import MealLogScreen from '../screens/MealLogScreen';
 import NutritionDashboardScreen from '../screens/NutritionDashboardScreen';
 import NutritionExtractionScreen from '../screens/NutritionExtractionScreen';
@@ -45,6 +46,7 @@ const HomeStackNavigator: React.FC = () => (
     <HomeStack.Screen name="CardiovascularDashboard" component={CardiovascularDashboardScreen} />
     <HomeStack.Screen name="SexualHealthDashboard" component={SexualHealthDashboardScreen} />
     <HomeStack.Screen name="ActuarialRiskDashboard" component={ActuarialRiskDashboardScreen} />
+    <HomeStack.Screen name="ActuarialRisk" component={ActuarialRiskScreen} />
     <HomeStack.Screen name="NutritionDashboard" component={NutritionDashboardScreen} />
     <HomeStack.Screen name="MealLog" component={MealLogScreen} />
     <HomeStack.Screen name="NutritionExtraction" component={NutritionExtractionScreen} />
