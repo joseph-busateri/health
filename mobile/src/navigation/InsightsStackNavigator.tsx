@@ -5,6 +5,7 @@ import InsightsHomeScreen from '../screens/InsightsHomeScreen';
 import CardiovascularDashboardScreen from '../screens/CardiovascularDashboardScreen';
 import SexualHealthDashboardScreen from '../screens/SexualHealthDashboardScreen';
 import ActuarialRiskDashboardScreen from '../screens/ActuarialRiskDashboardScreen';
+import ActuarialRiskScreen from '../screens/ActuarialRiskScreen';
 import VoiceInterviewScreen from '../screens/VoiceInterviewScreen';
 import GoalManagementScreen from '../screens/GoalManagementScreen';
 import BaselineProfileScreen from '../screens/BaselineProfileScreen';
@@ -25,6 +26,7 @@ const InsightsStackNavigator: React.FC = () => (
     <InsightsStack.Screen name="CardiovascularDashboard" component={CardiovascularDashboardScreen} />
     <InsightsStack.Screen name="SexualHealthDashboard" component={SexualHealthDashboardScreen} />
     <InsightsStack.Screen name="ActuarialRiskDashboard" component={ActuarialRiskDashboardScreen} />
+    <InsightsStack.Screen name="ActuarialRisk" component={ActuarialRiskScreen} />
     <InsightsStack.Screen name="VoiceInterview" component={VoiceInterviewScreen} />
     <InsightsStack.Screen name="GoalManagement" component={GoalManagementScreen} />
     <InsightsStack.Screen name="BaselineProfile" component={BaselineProfileScreen} />

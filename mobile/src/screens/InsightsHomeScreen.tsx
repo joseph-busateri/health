@@ -108,6 +108,7 @@ const InsightsHomeScreen: React.FC = () => {
   const navigateToSexualHealth = () => navigation.navigate('SexualHealthDashboard');
   const navigateToControlTower = () => navigation.navigate('ControlTower');
   const navigateToHealthDataHub = () => navigation.navigate('HealthDataHub');
+  const navigateToActuarialRisk = () => navigation.navigate('ActuarialRisk' as never);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -142,6 +143,18 @@ const InsightsHomeScreen: React.FC = () => {
               </View>
               <Text style={styles.quickAccessTitle}>Health Data Hub</Text>
               <Text style={styles.quickAccessSubtitle}>Manage all health inputs</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.quickAccessCard}
+              onPress={navigateToActuarialRisk}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.quickAccessIconWrap, { backgroundColor: '#EF44441A' }]}>
+                <MaterialCommunityIcons name="heart-pulse" size={24} color="#EF4444" />
+              </View>
+              <Text style={styles.quickAccessTitle}>Cardiovascular Risk</Text>
+              <Text style={styles.quickAccessSubtitle}>10-year CVD risk assessment</Text>
             </TouchableOpacity>
           </View>
         </View>

@@ -99,6 +99,7 @@ export type InsightsStackParamList = {
   CardiovascularDashboard: undefined;
   SexualHealthDashboard: undefined;
   ActuarialRiskDashboard: undefined;
+  ActuarialRisk: undefined;
   VoiceInterview: undefined;
   GoalManagement: undefined;
   BaselineProfile: undefined;
