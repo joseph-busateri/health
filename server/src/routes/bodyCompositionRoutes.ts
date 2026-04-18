@@ -20,7 +20,10 @@ const router = Router();
 router.post('/body-composition/upload', uploadMiddleware, uploadBodyCompositionDocumentHandler);
 
 // CSV upload
-router.post('/body-composition/:user_id/upload-csv', uploadMiddleware, uploadBodyCompositionCSVHandler);
+router.post('/body-composition/:user_id/upload-csv', uploadMiddleware, (req, res, next) => {
+  console.log('[CSV Route] Route matched, calling handler');
+  uploadBodyCompositionCSVHandler(req, res, next);
+});
 
 // Scan CRUD
 router.post('/body-composition/scan', createBodyCompositionScanHandler);

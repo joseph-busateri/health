@@ -237,17 +237,28 @@ export const detectAnomaliesHandler = async (req: Request, res: Response, next: 
 // ============================================================================
 
 export const uploadBodyCompositionCSVHandler = async (req: Request, res: Response, next: NextFunction) => {
+  console.log('[CSV Upload] Handler called');
+  console.log('[CSV Upload] Params:', req.params);
+  console.log('[CSV Upload] Body keys:', Object.keys(req.body));
+  console.log('[CSV Upload] File present:', !!req.file);
+  console.log('[CSV Upload] File:', req.file ? { name: req.file.originalname, size: req.file.size, mimetype: req.file.mimetype } : null);
+
   try {
     const userId = Array.isArray(req.params.user_id) ? req.params.user_id[0] : req.params.user_id;
+    console.log('[CSV Upload] Extracted userId:', userId);
+    
     if (!userId) {
+      console.log('[CSV Upload] ERROR: userId is required');
       return res.status(400).json({ success: false, error: 'user_id is required' });
     }
 
     if (!req.file) {
+      console.log('[CSV Upload] ERROR: file is required');
       return res.status(400).json({ success: false, error: 'file is required' });
     }
 
     const detectedSource = req.body.detected_source || 'other_scale';
+    console.log('[CSV Upload] Calling uploadBodyCompositionCSV with:', { userId, fileName: req.file.originalname, detectedSource });
 
     const result = await uploadBodyCompositionCSV({
       userId,
@@ -256,12 +267,15 @@ export const uploadBodyCompositionCSVHandler = async (req: Request, res: Respons
       detectedSource,
     });
 
+    console.log('[CSV Upload] Result:', result);
+
     if (result.success) {
       res.status(201).json(result);
     } else {
       res.status(400).json(result);
     }
   } catch (error) {
+    console.log('[CSV Upload] ERROR:', error);
     next(error);
   }
 };
