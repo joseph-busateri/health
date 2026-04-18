@@ -4,6 +4,8 @@
 
 ---
 
+**2026-04-18**: Removed catch-all middleware from deprecated interview routes. Changes: (1) Removed catch-all middleware from interviewAgentRoutes.ts that logged warnings for all requests. (2) Removed catch-all middleware from dynamicFollowUpRoutes.ts that logged warnings for all requests. Status: **FIXED**. These deprecated routes were mounted at / with catch-all middleware that intercepted ALL requests including /api/* requests, causing noise in logs and potentially interfering with route matching. Routes still functional for data recovery but no longer log warnings for every request.
+
 **2026-04-18**: Fixed route ordering to prevent root-mounted routes from intercepting /api requests. Changes: (1) Moved /api router mount to before root-mounted routes in index.ts. (2) Removed duplicate /api router mount at end of route list. Status: **FIXED**. Express processes routes in order, so /api router must be mounted before root-mounted routes (like interviewAgentRoutes at /) to prevent interception. This was causing /api/body-composition requests to hit deprecated interview middleware instead of the CSV upload handler.
 
 **2026-04-18**: Fixed CSV upload routing issue. Changes: (1) Removed duplicate bodyCompositionRoutes mount from index.ts (was mounted both at root and through /api router). (2) Removed /body-composition prefix from route definitions in bodyCompositionRoutes.ts (prefix added by centralized router). (3) Updated mobile service to use /api prefix for CSV upload endpoint. Status: **FIXED**. CSV upload endpoint now correctly accessible at /api/body-composition/:user_id/upload-csv. Previous duplicate mount caused route matching failures. All body composition endpoints now properly routed through centralized /api router.
