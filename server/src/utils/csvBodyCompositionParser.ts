@@ -202,6 +202,7 @@ export const parseBodyCompositionCSV = (
 
     // Detect column mapping
     const headers = rows[0];
+    logger.info('CSV Headers detected', { headers });
     const mapping = detectColumnMapping(headers);
 
     if (!mapping) {
@@ -212,6 +213,15 @@ export const parseBodyCompositionCSV = (
       });
       return result;
     }
+
+    logger.info('Column mapping detected', { 
+      dateColumn: mapping.date,
+      weightColumn: mapping.weight,
+      bodyFatColumn: mapping.bodyFatPercentage,
+      muscleColumn: mapping.skeletalMuscleMassLb,
+      bmiColumn: mapping.bmi,
+      bmrColumn: mapping.basalMetabolicRateKcal
+    });
 
     // Parse data rows
     const dataRows = rows.slice(1);
