@@ -28,15 +28,15 @@ import BloodworkRecommendationsScreen from '../screens/BloodworkRecommendationsS
 import BloodworkTimelineScreen from '../screens/BloodworkTimelineScreen';
 import BloodworkTrendsScreen from '../screens/BloodworkTrendsScreen';
 import VoiceInterviewScreen from '../screens/VoiceInterviewScreen';
-import SleepNumberConnectScreen from '../screens/SleepNumberConnectScreen';
+import SleepNumberConnectScreenV2 from '../screens/SleepNumberConnectScreenV2';
 import SleepNumberUploadScreen from '../screens/SleepNumberUploadScreen';
 import ControlTowerScreen from '../screens/ControlTowerScreen';
 import RecommendationsScreen from '../screens/RecommendationsScreen';
 import BaselineProfileScreen from '../screens/BaselineProfileScreen';
 import GoalManagementScreen from '../screens/GoalManagementScreen';
 import HealthDataHubScreen from '../screens/HealthDataHubScreen';
-import AppleWatchConnectScreen from '../screens/AppleWatchConnectScreen';
-import OuraConnectScreen from '../screens/OuraConnectScreen';
+import AppleWatchConnectScreenV2 from '../screens/AppleWatchConnectScreenV2';
+import OuraConnectScreenV2 from '../screens/OuraConnectScreenV2';
 // DEPRECATED: Legacy interview modes - preserved for recovery, use VoiceInterviewScreen instead
 // import AgentInterviewScreen from '../screens/AgentInterviewScreen';
 // import DynamicInterviewScreen from '../screens/DynamicInterviewScreen';
@@ -217,7 +217,7 @@ const AppNavigator: React.FC = () => {
     />
     <Stack.Screen
       name="SleepNumberConnect"
-      component={SleepNumberConnectScreen}
+      component={SleepNumberConnectScreenV2}
       options={{ title: 'Sleep Number i10' }}
     />
     <Stack.Screen
@@ -252,12 +252,12 @@ const AppNavigator: React.FC = () => {
     />
     <Stack.Screen
       name="AppleWatchConnect"
-      component={AppleWatchConnectScreen}
+      component={AppleWatchConnectScreenV2}
       options={{ title: 'Connect Apple Watch' }}
     />
     <Stack.Screen
       name="OuraConnect"
-      component={OuraConnectScreen}
+      component={OuraConnectScreenV2}
       options={{ title: 'Connect Oura Ring' }}
     />
     {/* DEPRECATED: Legacy interview modes - routes removed, use VoiceInterview instead */}

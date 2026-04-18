@@ -9,8 +9,8 @@ import VoiceInterviewScreen from '../screens/VoiceInterviewScreen';
 import GoalManagementScreen from '../screens/GoalManagementScreen';
 import BaselineProfileScreen from '../screens/BaselineProfileScreen';
 import HealthDataHubScreen from '../screens/HealthDataHubScreen';
-import AppleWatchConnectScreen from '../screens/AppleWatchConnectScreen';
-import OuraConnectScreen from '../screens/OuraConnectScreen';
+import AppleWatchConnectScreenV2 from '../screens/AppleWatchConnectScreenV2';
+import OuraConnectScreenV2 from '../screens/OuraConnectScreenV2';
 import ControlTowerScreen from '../screens/ControlTowerScreen';
 import CorrelationInsightsScreen from '../screens/CorrelationInsightsScreen';
 import AnalyticsDashboardScreen from '../screens/AnalyticsDashboardScreen';
@@ -29,8 +29,8 @@ const InsightsStackNavigator: React.FC = () => (
     <InsightsStack.Screen name="GoalManagement" component={GoalManagementScreen} />
     <InsightsStack.Screen name="BaselineProfile" component={BaselineProfileScreen} />
     <InsightsStack.Screen name="HealthDataHub" component={HealthDataHubScreen} />
-    <InsightsStack.Screen name="AppleWatchConnect" component={AppleWatchConnectScreen} />
-    <InsightsStack.Screen name="OuraConnect" component={OuraConnectScreen} />
+    <InsightsStack.Screen name="AppleWatchConnect" component={AppleWatchConnectScreenV2} />
+    <InsightsStack.Screen name="OuraConnect" component={OuraConnectScreenV2} />
     <InsightsStack.Screen name="ControlTower" component={ControlTowerScreen} />
     <InsightsStack.Screen name="CorrelationInsights" component={CorrelationInsightsScreen} />
     <InsightsStack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />

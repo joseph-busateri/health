@@ -11,7 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import HealthKit from '@kingstinct/react-native-healthkit';
+// import HealthKit from '@kingstinct/react-native-healthkit'; // Not available for web
 import { useUser } from '../context/UserContext';
 
 /**
