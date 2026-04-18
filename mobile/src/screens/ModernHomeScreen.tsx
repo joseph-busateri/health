@@ -171,13 +171,6 @@ export default function ModernHomeScreen() {
 
   const quickActions: QuickAction[] = [
     {
-      title: 'Cardiovascular Risk',
-      subtitle: '10-year CVD risk assessment',
-      icon: 'heart-pulse',
-      color: '#EF4444',
-      onPress: () => navigation.navigate('ActuarialRisk' as any),
-    },
-    {
       title: 'Today\'s Workout',
       subtitle: 'View today\'s plan',
       icon: 'calendar-today',
@@ -201,6 +194,14 @@ export default function ModernHomeScreen() {
       onPress: () => navigation.navigate('Recommendations'),
     },
   ];
+
+  const cardiovascularRiskAction: QuickAction = {
+    title: 'Cardiovascular Risk',
+    subtitle: '10-year CVD risk assessment',
+    icon: 'heart-pulse',
+    color: '#EF4444',
+    onPress: () => navigation.navigate('ActuarialRisk' as any),
+  };
 
   const healthTimeline: TimelineItem[] = [
     {
@@ -272,6 +273,14 @@ export default function ModernHomeScreen() {
             <Text style={styles.heroActionText}>Check in with the AI coach</Text>
           </TouchableOpacity>
         </LinearGradient>
+
+        <View style={styles.sectionBlock}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Cardiovascular Risk</Text>
+            <Text style={styles.sectionSubtitle}>10-year CVD risk assessment</Text>
+          </View>
+          <QuickActionCard action={cardiovascularRiskAction} />
+        </View>
 
         <View style={styles.sectionBlock}>
           <View style={styles.sectionHeader}>
