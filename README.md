@@ -4,6 +4,8 @@
 
 ---
 
+**2026-04-18**: Fixed route ordering to prevent root-mounted routes from intercepting /api requests. Changes: (1) Moved /api router mount to before root-mounted routes in index.ts. (2) Removed duplicate /api router mount at end of route list. Status: **FIXED**. Express processes routes in order, so /api router must be mounted before root-mounted routes (like interviewAgentRoutes at /) to prevent interception. This was causing /api/body-composition requests to hit deprecated interview middleware instead of the CSV upload handler.
+
 **2026-04-18**: Fixed CSV upload routing issue. Changes: (1) Removed duplicate bodyCompositionRoutes mount from index.ts (was mounted both at root and through /api router). (2) Removed /body-composition prefix from route definitions in bodyCompositionRoutes.ts (prefix added by centralized router). (3) Updated mobile service to use /api prefix for CSV upload endpoint. Status: **FIXED**. CSV upload endpoint now correctly accessible at /api/body-composition/:user_id/upload-csv. Previous duplicate mount caused route matching failures. All body composition endpoints now properly routed through centralized /api router.
 
 **2026-04-18**: Wired BodyCompositionUploadScreenV2 to navigation. Changes: (1) Updated HomeStackNavigator.tsx to use BodyCompositionUploadScreenV2 instead of original screen. (2) Updated AppNavigator.tsx to use BodyCompositionUploadScreenV2 instead of original screen. (3) CSV upload functionality now accessible via navigation from Home tab and other entry points. Status: **PRODUCTION-READY**. BodyCompositionUploadScreenV2 is now fully integrated into the navigation system, replacing the original screen. Users can access CSV upload, image upload, and manual entry through the same navigation routes.
