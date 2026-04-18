@@ -45,6 +45,24 @@ export interface ColumnMapping {
   heightInches?: string;
   age?: string;
   gender?: string;
+  bodyFatMassLb?: string;
+  totalBodyWaterLb?: string;
+  intracellularWaterLb?: string;
+  extracellularWaterLb?: string;
+  visceralFatAreaCm2?: string;
+  rightArmMuscleLb?: string;
+  leftArmMuscleLb?: string;
+  trunkMuscleLb?: string;
+  rightLegMuscleLb?: string;
+  leftLegMuscleLb?: string;
+  rightArmFatLb?: string;
+  leftArmFatLb?: string;
+  trunkFatLb?: string;
+  rightLegFatLb?: string;
+  leftLegFatLb?: string;
+  proteinMassLb?: string;
+  boneMinContentLb?: string;
+  phaseAngleDegrees?: string;
 }
 
 // ============================================================================
@@ -67,6 +85,34 @@ const STANDARD_MAPPING: ColumnMapping = {
 
 // InBody export format (common variations)
 const INBODY_MAPPINGS: ColumnMapping[] = [
+  // InBody S2 format (exported CSV)
+  {
+    date: 'date',
+    weight: 'Weight(lb)',
+    bodyFatPercentage: 'Percent Body Fat(%)',
+    skeletalMuscleMassLb: 'Skeletal Muscle Mass(lb)',
+    visceralFatLevel: 'Visceral Fat Level(Level)',
+    bmi: 'BMI(kg/m²)',
+    basalMetabolicRateKcal: 'Basal Metabolic Rate(kJ)', // Will convert kJ to kcal
+    bodyFatMassLb: 'Body Fat Mass(lb)',
+    totalBodyWaterLb: 'Total Body Water(lb)',
+    intracellularWaterLb: 'Intracellular Water(lb)',
+    extracellularWaterLb: 'Extracellular Water(lb)',
+    visceralFatAreaCm2: 'Visceral Fat Area(cm²)',
+    rightArmMuscleLb: 'Right Arm Lean Mass(lb)',
+    leftArmMuscleLb: 'Left Arm Lean Mass(lb)',
+    trunkMuscleLb: 'Trunk Lean Mass(lb)',
+    rightLegMuscleLb: 'Right Leg Lean Mass(lb)',
+    leftLegMuscleLb: 'Left leg Lean Mass(lb)',
+    rightArmFatLb: 'Right Arm Fat Mass(lb)',
+    leftArmFatLb: 'Left Arm Fat Mass(lb)',
+    trunkFatLb: 'Trunk Fat Mass(lb)',
+    rightLegFatLb: 'Right Leg Fat Mass(lb)',
+    leftLegFatLb: 'Left Leg Fat Mass(lb)',
+    proteinMassLb: 'Protein(lb)',
+    boneMinContentLb: 'Bone Mineral Content(lb)',
+    phaseAngleDegrees: 'Whole Body Phase Angle(°)',
+  },
   {
     date: 'Date',
     weight: 'Weight',
@@ -449,8 +495,13 @@ const parseCSVRow = (
   }
 
   if (mapping.basalMetabolicRateKcal && rowData[mapping.basalMetabolicRateKcal]) {
-    const bmr = parseNumber(rowData[mapping.basalMetabolicRateKcal]);
+    let bmr = parseNumber(rowData[mapping.basalMetabolicRateKcal]);
     if (bmr !== null) {
+      // Check if this is InBody S2 format with kJ (column name contains 'kJ')
+      if (mapping.basalMetabolicRateKcal.includes('kJ')) {
+        // Convert kJ to kcal: 1 kJ = 0.239006 kcal
+        bmr = Math.round(bmr * 0.239006);
+      }
       if (isValidRange(bmr, VALIDATION_RULES.basalMetabolicRateKcal)) {
         scan.basalMetabolicRateKcal = bmr;
       } else {
@@ -523,6 +574,11 @@ const parseDate = (value: string): string | null => {
 };
 
 const parseNumber = (value: string): number | null => {
+  // Handle missing values (InBody S2 uses '-' for missing data)
+  if (!value || value.trim() === '-' || value.trim() === '') {
+    return null;
+  }
+  
   // Remove commas and spaces
   const clean = value.replace(/[, ]/g, '');
   
