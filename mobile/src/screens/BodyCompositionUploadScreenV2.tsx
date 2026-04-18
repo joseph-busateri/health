@@ -177,47 +177,22 @@ export default function BodyCompositionUploadScreenV2() {
 
       if (response.success) {
         console.log('[CSV Upload Screen] Upload successful, showing alert');
-        Alert.alert(
-          'Success',
-          response.message,
-          [
-            {
-              text: 'OK',
-              onPress: () => {
-                console.log('[CSV Upload Screen] Resetting CSV selection');
-                setSelectedCSV(null);
-                setCsvPreview(null);
-                setShowCSVPreview(false);
-              },
-            },
-          ]
-        );
+        // Use browser alert for web compatibility
+        window.alert(response.message);
+        console.log('[CSV Upload Screen] Resetting CSV selection');
+        setSelectedCSV(null);
+        setCsvPreview(null);
+        setShowCSVPreview(false);
       } else {
         console.log('[CSV Upload Screen] Upload failed:', response.message);
-        Alert.alert(
-          'Upload Failed',
-          response.message,
-          response.errors && response.errors.length > 0
-            ? [
-                {
-                  text: 'View Errors',
-                  onPress: () => {
-                    const errorText = response.errors
-                      ?.map(e => `Row ${e.row}: ${e.message}`)
-                      .join('\n');
-                    Alert.alert('CSV Errors', errorText || 'Unknown errors');
-                  },
-                },
-                {
-                  text: 'OK',
-                },
-              ]
-            : [{ text: 'OK' }]
-        );
+        const errorText = response.errors && response.errors.length > 0
+          ? response.errors.map(e => `Row ${e.row}: ${e.message}`).join('\n')
+          : response.message;
+        window.alert(`Upload Failed:\n${errorText}`);
       }
     } catch (error) {
       console.error('[CSV Upload Screen] Upload error:', error);
-      Alert.alert('Error', 'Failed to upload CSV. Please try again.');
+      window.alert('Error: Failed to upload CSV. Please try again.');
     } finally {
       setUploading(false);
     }
