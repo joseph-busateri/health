@@ -78,7 +78,7 @@ app.use(cors({
   origin: '*', // Allow all origins for development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'X-App-ID']
 }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
