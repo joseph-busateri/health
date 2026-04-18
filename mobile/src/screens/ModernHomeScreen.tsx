@@ -107,15 +107,14 @@ export default function ModernHomeScreen() {
   const overallScore = 85;
 
   useEffect(() => {
-    if (userId) {
-      loadCardiovascularRisk();
-    }
-  }, [userId]);
+    loadCardiovascularRisk();
+  }, [resolvedUserId]);
 
   const loadCardiovascularRisk = async () => {
-    if (!userId) return;
     try {
-      const response = await healthApi.actuarial.getRecord(userId);
+      console.log('Loading cardiovascular risk for userId:', resolvedUserId);
+      const response = await healthApi.actuarial.getRecord(resolvedUserId);
+      console.log('Cardiovascular risk response:', response.data);
       if (response.data?.data) {
         setRiskRecord(response.data.data);
       }
