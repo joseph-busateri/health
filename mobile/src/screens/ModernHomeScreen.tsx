@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DEFAULT_USER_ID, useUser } from '../context/UserContext';
+import { healthApi } from '../services/api';
 
 import type { HomeStackParamList, InsightsStackParamList } from '../types/navigation';
 
@@ -101,8 +102,27 @@ export default function ModernHomeScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList & InsightsStackParamList>>();
   const { userId } = useUser();
   const resolvedUserId = userId ?? DEFAULT_USER_ID;
+  const [riskRecord, setRiskRecord] = useState<any>(null);
 
   const overallScore = 85;
+
+  useEffect(() => {
+    if (userId) {
+      loadCardiovascularRisk();
+    }
+  }, [userId]);
+
+  const loadCardiovascularRisk = async () => {
+    if (!userId) return;
+    try {
+      const response = await healthApi.actuarial.getRecord(userId);
+      if (response.data?.data) {
+        setRiskRecord(response.data.data);
+      }
+    } catch (error) {
+      console.error('Error loading cardiovascular risk:', error);
+    }
+  };
 
   const overallComponents: OverallComponent[] = [
     {
@@ -197,7 +217,9 @@ export default function ModernHomeScreen() {
 
   const cardiovascularRiskAction: QuickAction = {
     title: 'Cardiovascular Risk',
-    subtitle: '10-year CVD risk assessment',
+    subtitle: riskRecord
+      ? `10-year risk: ${riskRecord.overallRisk.toFixed(1)}%`
+      : '10-year CVD risk assessment',
     icon: 'heart-pulse',
     color: '#EF4444',
     onPress: () => navigation.navigate('ActuarialRisk' as any),
