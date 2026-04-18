@@ -276,14 +276,6 @@ export default function ModernHomeScreen() {
 
         <View style={styles.sectionBlock}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Cardiovascular Risk</Text>
-            <Text style={styles.sectionSubtitle}>10-year CVD risk assessment</Text>
-          </View>
-          <QuickActionCard action={cardiovascularRiskAction} />
-        </View>
-
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Overall readiness breakdown</Text>
             <Text style={styles.sectionSubtitle}>How the system scores your 85 today</Text>
           </View>
@@ -300,6 +292,14 @@ export default function ModernHomeScreen() {
               );
             })}
           </View>
+        </View>
+
+        <View style={styles.sectionBlock}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Cardiovascular Risk</Text>
+            <Text style={styles.sectionSubtitle}>10-year CVD risk assessment</Text>
+          </View>
+          <QuickActionCard action={cardiovascularRiskAction} />
         </View>
 
         <View style={styles.sectionBlock}>
