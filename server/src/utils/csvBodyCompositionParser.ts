@@ -231,7 +231,7 @@ export const parseBodyCompositionCSV = (
       const row = dataRows[i];
       
       try {
-        const scan = parseCSVRow(row, mapping, rowIndex, detectedSource);
+        const scan = parseCSVRow(row, mapping, rowIndex, detectedSource, headers);
         if (scan) {
           result.scans.push(scan);
         }
@@ -414,16 +414,27 @@ const parseCSVRow = (
   row: string[],
   mapping: ColumnMapping,
   rowIndex: number,
-  detectedSource?: BodyCompositionSource
+  detectedSource?: BodyCompositionSource,
+  headers?: string[]
 ): ParsedCSVScan | null => {
   const rowData: Record<string, string> = {};
   
-  // Build row data object
-  Object.values(mapping).forEach((column, index) => {
-    if (row[index] !== undefined) {
-      rowData[column] = row[index].trim();
-    }
-  });
+  // Build row data object by finding column index in headers
+  if (headers) {
+    Object.entries(mapping).forEach(([key, columnName]) => {
+      const columnIndex = headers.indexOf(columnName);
+      if (columnIndex !== -1 && row[columnIndex] !== undefined) {
+        rowData[columnName] = row[columnIndex].trim();
+      }
+    });
+  } else {
+    // Fallback: assume mapping order matches row order (for backward compatibility)
+    Object.values(mapping).forEach((column, index) => {
+      if (row[index] !== undefined) {
+        rowData[column] = row[index].trim();
+      }
+    });
+  }
 
   // Validate required fields
   const dateValue = rowData[mapping.date];
