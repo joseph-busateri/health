@@ -15,6 +15,7 @@ import {
   getActuarialRiskRecord,
   getActuarialRiskHistory,
 } from '../services/actuarialRiskEngineService';
+import { unifyActuarialData } from '../services/actuarialDataUnifier';
 import type { ActuarialRiskInputs } from '../types/actuarialRiskEngine';
 
 // ============================================================================
@@ -153,6 +154,62 @@ export const calculateActuarialRiskHandler = async (req: Request, res: Response)
     res.status(500).json({
       success: false,
       error: 'Failed to calculate actuarial risk',
+      details: (error as Error).message,
+    });
+  }
+};
+
+/**
+ * Calculate actuarial risk with automatic data unification
+ * POST /:userId/calculate-auto
+ */
+export const calculateActuarialRiskAutoHandler = async (req: Request, res: Response) => {
+  try {
+    const userId = validateUserId(req.params.userId);
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameter: userId',
+      });
+    }
+
+    logger.info('📊 [ACTUARIAL API] Auto-calculating actuarial risk with data unification', { userId });
+
+    // Unify data from multiple sources
+    const inputs = await unifyActuarialData(userId);
+
+    logger.info('✅ [ACTUARIAL API] Data unification complete', {
+      userId,
+      hasBaseline: !!inputs.demographic,
+      hasClinical: !!inputs.clinical,
+      hasLifestyle: !!inputs.lifestyle,
+    });
+
+    // Calculate risk
+    const record = await calculateActuarialRisk(userId, inputs);
+
+    logger.info('✅ [ACTUARIAL API] Auto-calculation complete', {
+      userId,
+      riskCategory: record.riskCategory,
+      overallRisk: record.overallRisk,
+    });
+
+    res.status(200).json({
+      success: true,
+      data: record,
+      metadata: {
+        dataSource: 'unified',
+        unifiedInputs: inputs,
+      },
+    });
+  } catch (error) {
+    logger.error('❌ [ACTUARIAL API] Failed to auto-calculate actuarial risk', {
+      error: (error as Error).message,
+      stack: (error as Error).stack,
+    });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to auto-calculate actuarial risk',
       details: (error as Error).message,
     });
   }

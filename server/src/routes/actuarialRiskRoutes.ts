@@ -13,6 +13,7 @@
 import { Router } from 'express';
 import {
   calculateActuarialRiskHandler,
+  calculateActuarialRiskAutoHandler,
   getActuarialRiskRecordHandler,
   getActuarialRiskHistoryHandler,
 } from '../controllers/actuarialRiskController';
@@ -21,6 +22,9 @@ const router = Router();
 
 // Calculate actuarial risk for a user
 router.post('/:userId/calculate', calculateActuarialRiskHandler);
+
+// Calculate actuarial risk with automatic data unification
+router.post('/:userId/calculate-auto', calculateActuarialRiskAutoHandler);
 
 // Get current/latest actuarial risk record
 router.get('/:userId/record', getActuarialRiskRecordHandler);

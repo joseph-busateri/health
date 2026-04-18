@@ -3,6 +3,7 @@ export type HealthDataSection =
   | 'workout_schedule'
   | 'supplement_intake'
   | 'bloodwork'
+  | 'cardiovascular_risk'
   | 'body_composition'
   | 'strength_tracking'
   | 'tape_measurements'

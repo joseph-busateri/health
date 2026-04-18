@@ -82,6 +82,9 @@ export default function HealthDataHubScreen() {
       case 'bloodwork':
         navigation.navigate('Bloodwork' as never);
         break;
+      case 'cardiovascular_risk':
+        navigation.navigate('ActuarialRisk' as never);
+        break;
       case 'body_composition':
         navigation.navigate('BodyComposition' as never);
         break;

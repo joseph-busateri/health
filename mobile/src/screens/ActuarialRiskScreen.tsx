@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../context/UserContext';
@@ -66,6 +67,7 @@ export default function ActuarialRiskScreen() {
   const [history, setHistory] = useState<RiskRecord[]>([]);
   const [selectedTab, setSelectedTab] = useState<'current' | 'history'>('current');
   const [error, setError] = useState<string | null>(null);
+  const [showInfoModal, setShowInfoModal] = useState(false);
 
   useEffect(() => {
     if (userId) {
@@ -111,57 +113,24 @@ export default function ActuarialRiskScreen() {
       return;
     }
 
-    Alert.alert(
-      'Calculate Risk',
-      'This feature requires demographic and clinical data from your baseline profile and bloodwork. Make sure you have completed your profile and added recent bloodwork results.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          onPress: async () => {
-            setCalculating(true);
-            setError(null);
-            try {
-              const response = await healthApi.actuarial.calculate(userId, {
-                demographic: {
-                  age: 45,
-                  gender: 'male',
-                  race: 'white',
-                },
-                clinical: {
-                  systolicBP: 120,
-                  diastolicBP: 80,
-                  totalCholesterol: 200,
-                  hdlCholesterol: 50,
-                  isSmoker: false,
-                  isDiabetic: false,
-                  isOnBPMedication: false,
-                },
-                lifestyle: {
-                  exerciseFrequency: 3,
-                  vo2Max: 35,
-                  bodyFatPercentage: 20,
-                  bmi: 25,
-                },
-              });
+    setCalculating(true);
+    setError(null);
+    try {
+      const response = await healthApi.actuarial.calculateAuto(userId);
 
-              if (response.data?.data) {
-                setRiskRecord(response.data.data);
-                Alert.alert('Success', 'Risk calculation complete!');
-                await loadRiskData();
-              }
-            } catch (err: any) {
-              console.error('Error calculating risk:', err);
-              const errorMessage = err.response?.data?.details || err.response?.data?.error || 'Failed to calculate risk. Please try again.';
-              setError(errorMessage);
-              Alert.alert('Error', errorMessage);
-            } finally {
-              setCalculating(false);
-            }
-          },
-        },
-      ]
-    );
+      if (response.data?.data) {
+        setRiskRecord(response.data.data);
+        Alert.alert('Success', 'Risk calculation complete!');
+        await loadRiskData();
+      }
+    } catch (err: any) {
+      console.error('Error calculating risk:', err);
+      const errorMessage = err.response?.data?.details || err.response?.data?.error || 'Failed to calculate risk. Please ensure your baseline profile and health data are up to date.';
+      setError(errorMessage);
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setCalculating(false);
+    }
   };
 
   const getRiskCategoryColor = (category: string) => {
@@ -467,12 +436,115 @@ export default function ActuarialRiskScreen() {
     );
   }
 
+  const renderInfoModal = () => (
+    <Modal
+      visible={showInfoModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowInfoModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Understanding Your Risk</Text>
+            <TouchableOpacity onPress={() => setShowInfoModal(false)}>
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalBody}>
+            <View style={styles.infoSection}>
+              <Text style={styles.infoSectionTitle}>Actuarial Cardiovascular Risk</Text>
+              <Text style={styles.infoText}>
+                This is a <Text style={styles.infoBold}>10-year prediction</Text> of your risk of developing cardiovascular disease (heart attack, stroke, or cardiovascular death).
+              </Text>
+              <Text style={styles.infoText}>
+                It uses validated medical models (Framingham Risk Score and ASCVD Calculator) based on decades of research.
+              </Text>
+              <Text style={styles.infoText}>
+                <Text style={styles.infoBold}>What it tells you:</Text> Your statistical probability of having a cardiovascular event in the next 10 years.
+              </Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoSection}>
+              <Text style={styles.infoSectionTitle}>Cardiovascular Score</Text>
+              <Text style={styles.infoText}>
+                This is a <Text style={styles.infoBold}>current health status</Text> metric that tracks your cardiovascular health in real-time.
+              </Text>
+              <Text style={styles.infoText}>
+                It uses data from wearables (heart rate, HRV) and clinical measurements (blood pressure, lipid panel).
+              </Text>
+              <Text style={styles.infoText}>
+                <Text style={styles.infoBold}>What it tells you:</Text> How healthy your cardiovascular system is right now.
+              </Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoSection}>
+              <Text style={styles.infoSectionTitle}>Key Differences</Text>
+              <View style={styles.comparisonRow}>
+                <View style={styles.comparisonColumn}>
+                  <Text style={styles.comparisonHeader}>Actuarial Risk</Text>
+                  <Text style={styles.comparisonItem}>• 10-year prediction</Text>
+                  <Text style={styles.comparisonItem}>• Medical models</Text>
+                  <Text style={styles.comparisonItem}>• Clinical use</Text>
+                  <Text style={styles.comparisonItem}>• Percentage risk</Text>
+                </View>
+                <View style={styles.comparisonColumn}>
+                  <Text style={styles.comparisonHeader}>CV Score</Text>
+                  <Text style={styles.comparisonItem}>• Current status</Text>
+                  <Text style={styles.comparisonItem}>• Real-time data</Text>
+                  <Text style={styles.comparisonItem}>• Daily tracking</Text>
+                  <Text style={styles.comparisonItem}>• 0-100 score</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoSection}>
+              <Text style={styles.infoSectionTitle}>When to Use Each</Text>
+              <Text style={styles.infoText}>
+                <Text style={styles.infoBold}>Actuarial Risk:</Text> For medical assessment, long-term risk management, and clinical decision-making.
+              </Text>
+              <Text style={styles.infoText}>
+                <Text style={styles.infoBold}>Cardiovascular Score:</Text> For daily health monitoring, lifestyle feedback, and tracking improvements.
+              </Text>
+            </View>
+          </ScrollView>
+
+          <TouchableOpacity
+            style={styles.modalCloseButton}
+            onPress={() => setShowInfoModal(false)}
+          >
+            <Text style={styles.modalCloseButtonText}>Got it</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Cardiovascular Risk</Text>
-        <Text style={styles.subtitle}>10-Year CVD Risk Assessment</Text>
+        <View style={styles.headerContent}>
+          <View>
+            <Text style={styles.title}>Cardiovascular Risk</Text>
+            <Text style={styles.subtitle}>10-Year CVD Risk Assessment</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.infoButton}
+            onPress={() => setShowInfoModal(true)}
+          >
+            <Ionicons name="information-circle-outline" size={28} color="#3b82f6" />
+          </TouchableOpacity>
+        </View>
       </View>
+
+      {renderInfoModal()}
 
       <View style={styles.tabs}>
         <TouchableOpacity
@@ -530,6 +602,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#e5e7eb',
   },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  infoButton: {
+    padding: 4,
+  },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
@@ -539,6 +619,94 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginTop: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    width: '100%',
+    maxHeight: '80%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e5e7eb',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  modalBody: {
+    maxHeight: 400,
+  },
+  infoSection: {
+    padding: 20,
+  },
+  infoSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 12,
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#374151',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  infoBold: {
+    fontWeight: '600',
+    color: '#111827',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#e5e7eb',
+  },
+  comparisonRow: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  comparisonColumn: {
+    flex: 1,
+  },
+  comparisonHeader: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#3b82f6',
+    marginBottom: 8,
+  },
+  comparisonItem: {
+    fontSize: 13,
+    color: '#374151',
+    marginBottom: 4,
+  },
+  modalCloseButton: {
+    backgroundColor: '#3b82f6',
+    margin: 20,
+    marginTop: 0,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  modalCloseButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   tabs: {
     flexDirection: 'row',

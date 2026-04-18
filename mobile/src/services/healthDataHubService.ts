@@ -64,6 +64,14 @@ function getDefaultSections(): HealthDataSectionStatus[] {
       available: true,
     },
     {
+      section: 'cardiovascular_risk',
+      title: 'Cardiovascular Risk',
+      description: '10-year CVD risk assessment (Framingham + ASCVD)',
+      status: 'not_started',
+      icon: '❤️',
+      available: true,
+    },
+    {
       section: 'body_composition',
       title: 'Body Composition',
       description: '3D scans and body composition tracking',

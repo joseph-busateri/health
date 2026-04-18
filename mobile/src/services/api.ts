@@ -215,6 +215,8 @@ export const healthApi = {
   actuarial: {
     calculate: (userId: string, data: any) => 
       api.post(`/api/actuarial-risk/${userId}/calculate`, data),
+    calculateAuto: (userId: string) => 
+      api.post(`/api/actuarial-risk/${userId}/calculate-auto`),
     getRecord: (userId: string, date?: string) => 
       api.get(`/api/actuarial-risk/${userId}/record${date ? `?date=${date}` : ''}`),
     getHistory: (userId: string, days = 30) => 
