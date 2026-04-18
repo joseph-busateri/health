@@ -10,9 +10,7 @@ const DEFAULT_BASE_URL = 'http://localhost:3000';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL
   ? String(process.env.EXPO_PUBLIC_API_URL)
-  : typeof __DEV__ !== 'undefined' && __DEV__
-    ? DEFAULT_BASE_URL
-    : DEFAULT_BASE_URL;
+  : DEFAULT_BASE_URL;
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -26,7 +24,8 @@ const api = axios.create({
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     if (config.method && config.url) {
-      console.log(`API Request: ${config.method.toUpperCase()} ${config.url}`);
+      const fullUrl = `${config.baseURL}${config.url}`;
+      console.log(`API Request: ${config.method.toUpperCase()} ${fullUrl}`);
     }
     return config;
   },
