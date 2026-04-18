@@ -1,7 +1,54 @@
 import { Router, Request, Response } from 'express';
 import { bodyCompositionEngine } from '../services/bodyCompositionEngine';
+import multer from 'multer';
+import { uploadBodyCompositionCSV } from '../services/bodyCompositionService';
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage() });
+
+// CSV upload - MUST be before /:userId route to avoid conflict
+router.post('/:userId/upload-csv', upload.single('file'), async (req: Request, res: Response) => {
+  console.log('[CSV Route] Route matched, calling handler');
+  console.log('[CSV Upload] Params:', req.params);
+  console.log('[CSV Upload] File present:', !!req.file);
+  console.log('[CSV Upload] File:', req.file ? { name: req.file.originalname, size: req.file.size, mimetype: req.file.mimetype } : null);
+
+  try {
+    const userId = Array.isArray(req.params.userId) ? req.params.userId[0] : req.params.userId;
+    console.log('[CSV Upload] Extracted userId:', userId);
+    
+    if (!userId) {
+      console.log('[CSV Upload] ERROR: userId is required');
+      return res.status(400).json({ success: false, error: 'userId is required' });
+    }
+
+    if (!req.file) {
+      console.log('[CSV Upload] ERROR: file is required');
+      return res.status(400).json({ success: false, error: 'file is required' });
+    }
+
+    const detectedSource = req.body.detected_source || 'other_scale';
+    console.log('[CSV Upload] Calling uploadBodyCompositionCSV with:', { userId, fileName: req.file.originalname, detectedSource });
+
+    const result = await uploadBodyCompositionCSV({
+      userId,
+      file: req.file.buffer,
+      fileName: req.file.originalname,
+      detectedSource,
+    });
+
+    console.log('[CSV Upload] Result:', result);
+
+    if (result.success) {
+      res.status(201).json(result);
+    } else {
+      res.status(400).json(result);
+    }
+  } catch (error) {
+    console.log('[CSV Upload] ERROR:', error);
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
 
 // Get body composition history
 router.get('/:userId', async (req: Request, res: Response) => {
