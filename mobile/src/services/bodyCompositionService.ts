@@ -69,16 +69,22 @@ export const submitBodyCompositionScan = async (
 export const uploadBodyCompositionCSV = async (
   input: UploadBodyCompositionCSVInput,
 ): Promise<UploadBodyCompositionCSVResponse> => {
+  console.log('[CSV Upload Service] Starting upload with input:', { uri: input.uri, fileName: input.fileName });
+  
   const formData = new FormData();
 
   // For web, we need to fetch the file as a Blob
   // For native, we use the URI directly
   if (input.uri.startsWith('blob:') || input.uri.startsWith('http')) {
+    console.log('[CSV Upload Service] Web mode - fetching blob from URI');
     // Web: fetch the blob
     const response = await fetch(input.uri);
     const blob = await response.blob();
+    console.log('[CSV Upload Service] Blob fetched:', { size: blob.size, type: blob.type });
     formData.append('file', blob, input.fileName);
+    console.log('[CSV Upload Service] Blob appended to FormData');
   } else {
+    console.log('[CSV Upload Service] Native mode - using URI directly');
     // Native: use URI
     formData.append('file', {
       uri: input.uri,
@@ -90,6 +96,8 @@ export const uploadBodyCompositionCSV = async (
   if (input.detectedSource) {
     formData.append('detected_source', input.detectedSource);
   }
+
+  console.log('[CSV Upload Service] FormData prepared, sending request');
 
   const response = await api.post<UploadBodyCompositionCSVResponse>(
     `/api/body-composition/${input.userId}/upload-csv`,
