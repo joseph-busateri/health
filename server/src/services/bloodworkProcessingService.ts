@@ -234,12 +234,22 @@ export async function processBloodworkDocument(documentId: string, userId: strin
     const recommendationsResult = await generateBloodworkRecommendationsForUser({ user_id: userId });
 
     if (!recommendationsResult.success) {
-      await markProcessingFailed(
-        documentId,
-        userId,
-        recommendationsResult.error || 'Failed to generate recommendations'
-      );
-      return;
+      const recError = recommendationsResult.error || '';
+      // Allow completion even if recommendations fail due to insufficient data
+      if (recError.includes('No bloodwork results') || recError.includes('Insufficient data') || recError.includes('No data available')) {
+        logger.warn('Skipping recommendations due to insufficient data', {
+          documentId,
+          userId,
+          error: recError,
+        });
+      } else {
+        await markProcessingFailed(
+          documentId,
+          userId,
+          recommendationsResult.error || 'Failed to generate recommendations'
+        );
+        return;
+      }
     }
 
     await updateProcessingStatusInternal(documentId, 'complete', {
