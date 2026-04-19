@@ -258,7 +258,25 @@ export const parseBodyCompositionCSV = (
       bodyFatColumn: mapping.bodyFatPercentage,
       muscleColumn: mapping.skeletalMuscleMassLb,
       bmiColumn: mapping.bmi,
-      bmrColumn: mapping.basalMetabolicRateKcal
+      bmrColumn: mapping.basalMetabolicRateKcal,
+      bodyFatMassColumn: mapping.bodyFatMassLb,
+      totalBodyWaterColumn: mapping.totalBodyWaterLb,
+      intracellularWaterColumn: mapping.intracellularWaterLb,
+      extracellularWaterColumn: mapping.extracellularWaterLb,
+      visceralFatAreaColumn: mapping.visceralFatAreaCm2,
+      rightArmMuscleColumn: mapping.rightArmMuscleLb,
+      leftArmMuscleColumn: mapping.leftArmMuscleLb,
+      trunkMuscleColumn: mapping.trunkMuscleLb,
+      rightLegMuscleColumn: mapping.rightLegMuscleLb,
+      leftLegMuscleColumn: mapping.leftLegMuscleLb,
+      rightArmFatColumn: mapping.rightArmFatLb,
+      leftArmFatColumn: mapping.leftArmFatLb,
+      trunkFatColumn: mapping.trunkFatLb,
+      rightLegFatColumn: mapping.rightLegFatLb,
+      leftLegFatColumn: mapping.leftLegFatLb,
+      proteinColumn: mapping.proteinMassLb,
+      boneMinColumn: mapping.boneMinContentLb,
+      phaseAngleColumn: mapping.phaseAngleDegrees
     });
 
     // Parse data rows
