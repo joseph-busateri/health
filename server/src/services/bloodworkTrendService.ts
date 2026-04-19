@@ -341,21 +341,10 @@ export async function getBloodworkTrendsByUser(
       trends.push(trend);
     }
 
-    // Generate summary
-    const summary = await getBloodworkTrendSummary({ user_id, category });
-
-    if (!summary.success || !summary.data) {
-      return {
-        success: false,
-        error: 'Failed to generate trend summary'
-      };
-    }
-
     return {
       success: true,
       data: {
         trends,
-        summary: summary.data,
         total: trends.length
       }
     };

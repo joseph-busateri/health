@@ -38,7 +38,7 @@ export interface GetBloodworkTrendsResponse {
   success: boolean;
   data?: {
     trends: BloodworkTrend[];
-    summary: BloodworkTrendSummary;
+    summary?: BloodworkTrendSummary;
     total: number;
   };
   error?: string;
