@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { deviceSyncMonitoringService } from '../services/deviceSyncMonitoringService';
+import { sexualHealthMetrics } from '../utils/sexualHealthMetrics';
 
 const router = Router();
 
@@ -73,6 +74,26 @@ router.post('/check-all', async (req: Request, res: Response) => {
   try {
     await deviceSyncMonitoringService.monitorAllDevices();
     res.json({ success: true, message: 'Monitoring check completed' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Get sexual health V2 metrics
+router.get('/sexual-health-v2', async (req: Request, res: Response) => {
+  try {
+    const metrics = sexualHealthMetrics.getAllMetrics();
+    res.json({ success: true, data: metrics });
+  } catch (error) {
+    res.status(500).json({ success: false, error: (error as Error).message });
+  }
+});
+
+// Reset sexual health V2 metrics (useful for testing)
+router.post('/sexual-health-v2/reset', async (req: Request, res: Response) => {
+  try {
+    sexualHealthMetrics.reset();
+    res.json({ success: true, message: 'Sexual health V2 metrics reset' });
   } catch (error) {
     res.status(500).json({ success: false, error: (error as Error).message });
   }

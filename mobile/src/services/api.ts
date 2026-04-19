@@ -221,6 +221,14 @@ export const healthApi = {
     getHistory: (userId: string, days = 30) => 
       api.get(`/api/actuarial-risk/${userId}/history?days=${days}`),
   },
+
+  // Sexual Health V2 endpoints (with trend analysis)
+  sexualHealthV2: {
+    getToday: (userId: string) => 
+      api.get(`/api/sexual-health-v2/${userId}/today`),
+    getHistory: (userId: string) => 
+      api.get(`/api/sexual-health-v2/${userId}/history`),
+  },
 };
 
 export default api;
