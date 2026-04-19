@@ -231,7 +231,9 @@ export async function processBloodworkDocument(documentId: string, userId: strin
       progress: STATUS_PROGRESS.generating_recommendations,
     });
 
+    logger.info('Generating recommendations', { documentId, userId });
     const recommendationsResult = await generateBloodworkRecommendationsForUser({ user_id: userId });
+    logger.info('Recommendations result', { documentId, userId, success: recommendationsResult.success, error: recommendationsResult.error });
 
     if (!recommendationsResult.success) {
       const recError = recommendationsResult.error || '';
@@ -243,6 +245,11 @@ export async function processBloodworkDocument(documentId: string, userId: strin
           error: recError,
         });
       } else {
+        logger.error('Recommendations failed with non-insufficient-data error', {
+          documentId,
+          userId,
+          error: recError,
+        });
         await markProcessingFailed(
           documentId,
           userId,
