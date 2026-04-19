@@ -512,14 +512,16 @@ export async function saveBloodworkTrends(
       latest_value: typeof trend.latest_value === 'number' ? trend.latest_value : parseFloat(trend.latest_value as string) || null,
       prior_value: typeof trend.prior_value === 'number' ? trend.prior_value : parseFloat(trend.prior_value as string) || null,
       absolute_change: trend.absolute_change,
-      change_percent: trend.percent_change,
+      change_percent: trend.percent_change, // Database uses change_percent, BloodworkTrend type uses percent_change
       trend_direction: trend.trend_direction,
       data_points: trend.data_points,
       first_test_date: trend.first_test_date,
       latest_test_date: trend.latest_test_date,
       unit: trend.unit,
       trend_summary: trend.trend_summary,
-      calculated_at: new Date().toISOString()
+      reference_range_low: null, // TODO: Add to BloodworkTrend type if needed
+      reference_range_high: null, // TODO: Add to BloodworkTrend type if needed
+      abnormal_flag: null // TODO: Add to BloodworkTrend type if needed
     }));
 
     // Insert new trends
