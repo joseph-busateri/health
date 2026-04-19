@@ -238,7 +238,7 @@ export async function processBloodworkDocument(documentId: string, userId: strin
     if (!recommendationsResult.success) {
       const recError = recommendationsResult.error || '';
       // Allow completion even if recommendations fail due to insufficient data
-      if (recError.includes('No bloodwork results') || recError.includes('Insufficient data') || recError.includes('No data available')) {
+      if (recError.includes('No bloodwork results') || recError.includes('Insufficient data') || recError.includes('No data available') || recError.includes('Failed to generate trend summary')) {
         logger.warn('Skipping recommendations due to insufficient data', {
           documentId,
           userId,
