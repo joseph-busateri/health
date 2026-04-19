@@ -25,6 +25,25 @@ export interface ParsedCSVScan {
   age?: number;
   gender?: 'male' | 'female' | 'other';
   scanSource: BodyCompositionSource;
+  // Additional InBody S2 fields
+  bodyFatMassLb?: number;
+  totalBodyWaterLb?: number;
+  intracellularWaterLb?: number;
+  extracellularWaterLb?: number;
+  visceralFatAreaCm2?: number;
+  rightArmMuscleLb?: number;
+  leftArmMuscleLb?: number;
+  trunkMuscleLb?: number;
+  rightLegMuscleLb?: number;
+  leftLegMuscleLb?: number;
+  rightArmFatLb?: number;
+  leftArmFatLb?: number;
+  trunkFatLb?: number;
+  rightLegFatLb?: number;
+  leftLegFatLb?: number;
+  proteinMassLb?: number;
+  boneMinContentLb?: number;
+  phaseAngleDegrees?: number;
 }
 
 export interface CSVParseResult {
@@ -164,6 +183,25 @@ const VALIDATION_RULES = {
   basalMetabolicRateKcal: { min: 800, max: 4000 },
   heightInches: { min: 48, max: 96 },
   age: { min: 10, max: 100 },
+  // Additional InBody S2 validation rules
+  bodyFatMassLb: { min: 0, max: 200 },
+  totalBodyWaterLb: { min: 0, max: 200 },
+  intracellularWaterLb: { min: 0, max: 150 },
+  extracellularWaterLb: { min: 0, max: 100 },
+  visceralFatAreaCm2: { min: 0, max: 300 },
+  rightArmMuscleLb: { min: 0, max: 50 },
+  leftArmMuscleLb: { min: 0, max: 50 },
+  trunkMuscleLb: { min: 0, max: 150 },
+  rightLegMuscleLb: { min: 0, max: 100 },
+  leftLegMuscleLb: { min: 0, max: 100 },
+  rightArmFatLb: { min: 0, max: 50 },
+  leftArmFatLb: { min: 0, max: 50 },
+  trunkFatLb: { min: 0, max: 150 },
+  rightLegFatLb: { min: 0, max: 100 },
+  leftLegFatLb: { min: 0, max: 100 },
+  proteinMassLb: { min: 0, max: 100 },
+  boneMinContentLb: { min: 0, max: 20 },
+  phaseAngleDegrees: { min: 0, max: 20 },
 };
 
 // ============================================================================
@@ -401,6 +439,26 @@ const normalizeMappingKeys = (mapping: ColumnMapping): ColumnMapping => {
   if (mapping.heightInches) normalized.heightInches = mapping.heightInches.toLowerCase();
   if (mapping.age) normalized.age = mapping.age.toLowerCase();
   if (mapping.gender) normalized.gender = mapping.gender.toLowerCase();
+  
+  // Additional InBody S2 fields
+  if (mapping.bodyFatMassLb) normalized.bodyFatMassLb = mapping.bodyFatMassLb.toLowerCase();
+  if (mapping.totalBodyWaterLb) normalized.totalBodyWaterLb = mapping.totalBodyWaterLb.toLowerCase();
+  if (mapping.intracellularWaterLb) normalized.intracellularWaterLb = mapping.intracellularWaterLb.toLowerCase();
+  if (mapping.extracellularWaterLb) normalized.extracellularWaterLb = mapping.extracellularWaterLb.toLowerCase();
+  if (mapping.visceralFatAreaCm2) normalized.visceralFatAreaCm2 = mapping.visceralFatAreaCm2.toLowerCase();
+  if (mapping.rightArmMuscleLb) normalized.rightArmMuscleLb = mapping.rightArmMuscleLb.toLowerCase();
+  if (mapping.leftArmMuscleLb) normalized.leftArmMuscleLb = mapping.leftArmMuscleLb.toLowerCase();
+  if (mapping.trunkMuscleLb) normalized.trunkMuscleLb = mapping.trunkMuscleLb.toLowerCase();
+  if (mapping.rightLegMuscleLb) normalized.rightLegMuscleLb = mapping.rightLegMuscleLb.toLowerCase();
+  if (mapping.leftLegMuscleLb) normalized.leftLegMuscleLb = mapping.leftLegMuscleLb.toLowerCase();
+  if (mapping.rightArmFatLb) normalized.rightArmFatLb = mapping.rightArmFatLb.toLowerCase();
+  if (mapping.leftArmFatLb) normalized.leftArmFatLb = mapping.leftArmFatLb.toLowerCase();
+  if (mapping.trunkFatLb) normalized.trunkFatLb = mapping.trunkFatLb.toLowerCase();
+  if (mapping.rightLegFatLb) normalized.rightLegFatLb = mapping.rightLegFatLb.toLowerCase();
+  if (mapping.leftLegFatLb) normalized.leftLegFatLb = mapping.leftLegFatLb.toLowerCase();
+  if (mapping.proteinMassLb) normalized.proteinMassLb = mapping.proteinMassLb.toLowerCase();
+  if (mapping.boneMinContentLb) normalized.boneMinContentLb = mapping.boneMinContentLb.toLowerCase();
+  if (mapping.phaseAngleDegrees) normalized.phaseAngleDegrees = mapping.phaseAngleDegrees.toLowerCase();
 
   return normalized;
 };
@@ -560,6 +618,133 @@ const parseCSVRow = (
     }
   }
 
+  // Parse additional InBody S2 fields
+  if (mapping.bodyFatMassLb && rowData[mapping.bodyFatMassLb]) {
+    const value = parseNumber(rowData[mapping.bodyFatMassLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.bodyFatMassLb)) {
+      scan.bodyFatMassLb = value;
+    }
+  }
+
+  if (mapping.totalBodyWaterLb && rowData[mapping.totalBodyWaterLb]) {
+    const value = parseNumber(rowData[mapping.totalBodyWaterLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.totalBodyWaterLb)) {
+      scan.totalBodyWaterLb = value;
+    }
+  }
+
+  if (mapping.intracellularWaterLb && rowData[mapping.intracellularWaterLb]) {
+    const value = parseNumber(rowData[mapping.intracellularWaterLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.intracellularWaterLb)) {
+      scan.intracellularWaterLb = value;
+    }
+  }
+
+  if (mapping.extracellularWaterLb && rowData[mapping.extracellularWaterLb]) {
+    const value = parseNumber(rowData[mapping.extracellularWaterLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.extracellularWaterLb)) {
+      scan.extracellularWaterLb = value;
+    }
+  }
+
+  if (mapping.visceralFatAreaCm2 && rowData[mapping.visceralFatAreaCm2]) {
+    const value = parseNumber(rowData[mapping.visceralFatAreaCm2]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.visceralFatAreaCm2)) {
+      scan.visceralFatAreaCm2 = value;
+    }
+  }
+
+  if (mapping.rightArmMuscleLb && rowData[mapping.rightArmMuscleLb]) {
+    const value = parseNumber(rowData[mapping.rightArmMuscleLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.rightArmMuscleLb)) {
+      scan.rightArmMuscleLb = value;
+    }
+  }
+
+  if (mapping.leftArmMuscleLb && rowData[mapping.leftArmMuscleLb]) {
+    const value = parseNumber(rowData[mapping.leftArmMuscleLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.leftArmMuscleLb)) {
+      scan.leftArmMuscleLb = value;
+    }
+  }
+
+  if (mapping.trunkMuscleLb && rowData[mapping.trunkMuscleLb]) {
+    const value = parseNumber(rowData[mapping.trunkMuscleLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.trunkMuscleLb)) {
+      scan.trunkMuscleLb = value;
+    }
+  }
+
+  if (mapping.rightLegMuscleLb && rowData[mapping.rightLegMuscleLb]) {
+    const value = parseNumber(rowData[mapping.rightLegMuscleLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.rightLegMuscleLb)) {
+      scan.rightLegMuscleLb = value;
+    }
+  }
+
+  if (mapping.leftLegMuscleLb && rowData[mapping.leftLegMuscleLb]) {
+    const value = parseNumber(rowData[mapping.leftLegMuscleLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.leftLegMuscleLb)) {
+      scan.leftLegMuscleLb = value;
+    }
+  }
+
+  if (mapping.rightArmFatLb && rowData[mapping.rightArmFatLb]) {
+    const value = parseNumber(rowData[mapping.rightArmFatLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.rightArmFatLb)) {
+      scan.rightArmFatLb = value;
+    }
+  }
+
+  if (mapping.leftArmFatLb && rowData[mapping.leftArmFatLb]) {
+    const value = parseNumber(rowData[mapping.leftArmFatLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.leftArmFatLb)) {
+      scan.leftArmFatLb = value;
+    }
+  }
+
+  if (mapping.trunkFatLb && rowData[mapping.trunkFatLb]) {
+    const value = parseNumber(rowData[mapping.trunkFatLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.trunkFatLb)) {
+      scan.trunkFatLb = value;
+    }
+  }
+
+  if (mapping.rightLegFatLb && rowData[mapping.rightLegFatLb]) {
+    const value = parseNumber(rowData[mapping.rightLegFatLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.rightLegFatLb)) {
+      scan.rightLegFatLb = value;
+    }
+  }
+
+  if (mapping.leftLegFatLb && rowData[mapping.leftLegFatLb]) {
+    const value = parseNumber(rowData[mapping.leftLegFatLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.leftLegFatLb)) {
+      scan.leftLegFatLb = value;
+    }
+  }
+
+  if (mapping.proteinMassLb && rowData[mapping.proteinMassLb]) {
+    const value = parseNumber(rowData[mapping.proteinMassLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.proteinMassLb)) {
+      scan.proteinMassLb = value;
+    }
+  }
+
+  if (mapping.boneMinContentLb && rowData[mapping.boneMinContentLb]) {
+    const value = parseNumber(rowData[mapping.boneMinContentLb]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.boneMinContentLb)) {
+      scan.boneMinContentLb = value;
+    }
+  }
+
+  if (mapping.phaseAngleDegrees && rowData[mapping.phaseAngleDegrees]) {
+    const value = parseNumber(rowData[mapping.phaseAngleDegrees]);
+    if (value !== null && isValidRange(value, VALIDATION_RULES.phaseAngleDegrees)) {
+      scan.phaseAngleDegrees = value;
+    }
+  }
+
   return scan;
 };
 
@@ -634,5 +819,24 @@ export const convertCSVParsedToScanInputs = (
     heightInches: scan.heightInches,
     age: scan.age,
     gender: scan.gender,
+    // Additional InBody S2 fields
+    bodyFatMassLb: scan.bodyFatMassLb,
+    totalBodyWaterLb: scan.totalBodyWaterLb,
+    intracellularWaterLb: scan.intracellularWaterLb,
+    extracellularWaterLb: scan.extracellularWaterLb,
+    visceralFatAreaCm2: scan.visceralFatAreaCm2,
+    rightArmMuscleLb: scan.rightArmMuscleLb,
+    leftArmMuscleLb: scan.leftArmMuscleLb,
+    trunkMuscleLb: scan.trunkMuscleLb,
+    rightLegMuscleLb: scan.rightLegMuscleLb,
+    leftLegMuscleLb: scan.leftLegMuscleLb,
+    rightArmFatLb: scan.rightArmFatLb,
+    leftArmFatLb: scan.leftArmFatLb,
+    trunkFatLb: scan.trunkFatLb,
+    rightLegFatLb: scan.rightLegFatLb,
+    leftLegFatLb: scan.leftLegFatLb,
+    proteinMassLb: scan.proteinMassLb,
+    boneMinContentLb: scan.boneMinContentLb,
+    phaseAngleDegrees: scan.phaseAngleDegrees,
   }));
 };
