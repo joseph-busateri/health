@@ -182,6 +182,7 @@ export async function updateProcessingStatus(
 }
 
 export async function processBloodworkDocument(documentId: string, userId: string): Promise<void> {
+  logger.info('Starting bloodwork document processing', { documentId, userId });
   try {
     await updateProcessingStatusInternal(documentId, 'pending', {
       setStarted: true,
@@ -211,7 +212,9 @@ export async function processBloodworkDocument(documentId: string, userId: strin
       progress: STATUS_PROGRESS.generating_trends,
     });
 
+    logger.info('Starting trend generation', { documentId, userId });
     const trendsResult = await getBloodworkTrendsByUser({ user_id: userId, min_data_points: 1 });
+    logger.info('Trend generation complete', { documentId, userId, success: trendsResult.success, error: trendsResult.error });
 
     if (!trendsResult.success) {
       const trendError = trendsResult.error || '';
