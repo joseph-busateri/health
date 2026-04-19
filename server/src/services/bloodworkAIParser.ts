@@ -30,7 +30,7 @@ export interface AIParseResult {
   model: string;
   requiresManualReview?: boolean;
   validationErrors?: string[];
-  source: 'ai' | 'fallback';
+  source: 'ai' | 'fallback' | 'pattern' | 'mock';
 }
 
 interface AIParseResponse {
@@ -104,8 +104,10 @@ IMPORTANT INSTRUCTIONS:
 2. Identify panel names (e.g., "Lipid Panel", "CBC", "Metabolic Panel")
 3. Categorize panels: cardiovascular, metabolic, hormonal, hematology, liver, kidney, vitamin, other
 4. Parse reference ranges into low/high numeric values when possible
-5. Detect abnormal flags (High, Low, Critical, Abnormal)
+5. Detect abnormal flags - MUST be a string: "High", "Low", "Critical", "Abnormal", "Normal", or null
 6. Return ONLY valid JSON, no additional text
+
+CRITICAL: abnormal_flag MUST be a string value or null, NOT an object.
 
 Return JSON with this EXACT structure:
 {
@@ -290,7 +292,7 @@ Return JSON with this EXACT structure:
       model: 'gpt-4o',
       requiresManualReview: true,
       validationErrors: ['AI parsing failed - manual review required'],
-      source: 'fallback' as const,
+      source: 'fallback',
     },
     {
       serviceName: 'bloodwork-parser',

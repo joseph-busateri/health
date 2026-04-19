@@ -538,6 +538,20 @@ export const BloodworkParseSchema: ValidationSchema = {
   type: 'object',
   required: ['markers'],
   properties: {
+    panels: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: {
+            type: 'string',
+          },
+          category: {
+            type: 'string',
+          },
+        },
+      },
+    },
     markers: {
       type: 'array',
       minLength: 1,
@@ -545,6 +559,9 @@ export const BloodworkParseSchema: ValidationSchema = {
         type: 'object',
         required: ['test_name', 'value'],
         properties: {
+          panel: {
+            type: 'string',
+          },
           test_name: {
             type: 'string',
             minLength: 2,
@@ -562,9 +579,15 @@ export const BloodworkParseSchema: ValidationSchema = {
           reference_range: {
             type: 'string',
           },
+          reference_range_low: {
+            type: 'number',
+          },
+          reference_range_high: {
+            type: 'number',
+          },
           abnormal_flag: {
             type: 'string',
-            enum: ['High', 'Low', 'Critical', 'Abnormal', null],
+            enum: ['High', 'Low', 'Critical', 'Abnormal', null, 'Normal'],
           },
         },
       },
