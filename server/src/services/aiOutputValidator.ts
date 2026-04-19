@@ -20,7 +20,7 @@ import { logger } from '../utils/logger';
 // ============================================================================
 
 export interface ValidationSchema {
-  type: 'object' | 'array' | 'string' | 'number' | 'boolean';
+  type: 'object' | 'array' | 'string' | 'number' | 'boolean' | 'any';
   required?: string[];
   properties?: Record<string, ValidationSchema>;
   items?: ValidationSchema;
@@ -574,20 +574,46 @@ export const BloodworkParseSchema: ValidationSchema = {
             type: 'number',
           },
           unit: {
-            type: 'string',
+            type: 'any',
+            custom: (value) => {
+              // Allow strings, numbers, null, or empty objects (will be cleaned up)
+              return typeof value === 'string' || value === null || 
+                     (typeof value === 'object' && !Object.keys(value).length);
+            },
           },
           reference_range: {
-            type: 'string',
+            type: 'any',
+            custom: (value) => {
+              // Allow strings, null, or empty objects (will be cleaned up)
+              return typeof value === 'string' || value === null || 
+                     (typeof value === 'object' && !Object.keys(value).length);
+            },
           },
           reference_range_low: {
-            type: 'number',
+            type: 'any',
+            custom: (value) => {
+              // Allow numbers, null, or empty objects (will be cleaned up)
+              return typeof value === 'number' || value === null || 
+                     (typeof value === 'object' && !Object.keys(value).length);
+            },
           },
           reference_range_high: {
-            type: 'number',
+            type: 'any',
+            custom: (value) => {
+              // Allow numbers, null, or empty objects (will be cleaned up)
+              return typeof value === 'number' || value === null || 
+                     (typeof value === 'object' && !Object.keys(value).length);
+            },
           },
           abnormal_flag: {
-            type: 'string',
-            enum: ['High', 'Low', 'Critical', 'Abnormal', null, 'Normal'],
+            type: 'any',
+            custom: (value) => {
+              // Allow strings, null, or empty objects (will be cleaned up)
+              if (typeof value === 'string') {
+                return ['High', 'Low', 'Critical', 'Abnormal', 'Normal'].includes(value);
+              }
+              return value === null || (typeof value === 'object' && !Object.keys(value).length);
+            },
           },
         },
       },

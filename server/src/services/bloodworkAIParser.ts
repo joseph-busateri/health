@@ -189,6 +189,34 @@ Return JSON with this EXACT structure:
         parsed = JSON.parse(repaired);
       }
 
+      // Step 2.5: Clean up malformed AI output
+      // AI sometimes returns empty objects {} instead of null for missing values
+      // Convert empty objects to null and fix type mismatches
+      const cleanedMarkers = (parsed.markers || []).map(marker => {
+        const cleaned = { ...marker };
+        
+        // Convert empty objects to null
+        if (cleaned.abnormal_flag && typeof cleaned.abnormal_flag === 'object' && !Object.keys(cleaned.abnormal_flag).length) {
+          cleaned.abnormal_flag = null;
+        }
+        if (cleaned.reference_range && typeof cleaned.reference_range === 'object' && !Object.keys(cleaned.reference_range).length) {
+          cleaned.reference_range = null;
+        }
+        if (cleaned.reference_range_low && typeof cleaned.reference_range_low === 'object' && !Object.keys(cleaned.reference_range_low).length) {
+          cleaned.reference_range_low = null;
+        }
+        if (cleaned.reference_range_high && typeof cleaned.reference_range_high === 'object' && !Object.keys(cleaned.reference_range_high).length) {
+          cleaned.reference_range_high = null;
+        }
+        if (cleaned.unit && typeof cleaned.unit === 'object' && !Object.keys(cleaned.unit).length) {
+          cleaned.unit = null;
+        }
+        
+        return cleaned;
+      });
+      
+      parsed.markers = cleanedMarkers;
+
       // Step 3: Validate AI output against schema
       const validation = await validateAIOutput(parsed, {
         serviceName: 'bloodwork-parser',
