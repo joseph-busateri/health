@@ -2,7 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import type { BloodworkProcessingStatus, BloodworkParseStatus } from '../types/bloodworkDocument';
 import { logger } from '../utils/logger';
 import { parseBloodworkDocument } from './bloodworkExtractionService';
-import { getBloodworkTrendsByUser } from './bloodworkTrendService';
+import { getBloodworkTrendsByUser, saveBloodworkTrends } from './bloodworkTrendService';
 import { generateBloodworkRecommendationsForUser } from './bloodworkRecommendationService';
 import { sendBloodworkProcessingNotification } from './notificationService';
 
@@ -238,6 +238,15 @@ export async function processBloodworkDocument(documentId: string, userId: strin
       } else {
         await markProcessingFailed(documentId, userId, trendError || 'Failed to generate trends');
         return;
+      }
+    } else if (trendsResult.data?.trends && trendsResult.data.trends.length > 0) {
+      // Save trends to database
+      logger.info('Saving trends to database', { documentId, userId, trendCount: trendsResult.data.trends.length });
+      const saveResult = await saveBloodworkTrends(userId, trendsResult.data.trends);
+      if (!saveResult.success) {
+        logger.error('Failed to save trends to database', { documentId, userId, error: saveResult.error });
+      } else {
+        logger.info('Trends saved successfully', { documentId, userId, trendCount: trendsResult.data.trends.length });
       }
     }
 

@@ -493,6 +493,56 @@ export function summarizeBloodworkTrend(markerTrend: BloodworkTrend): string {
   return `${trend_direction === 'improving' ? 'Improving' : 'Worsening'} by ${changeText}`;
 }
 
+export async function saveBloodworkTrends(
+  userId: string,
+  trends: BloodworkTrend[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Delete existing trends for this user to avoid duplicates
+    await supabase
+      .from('bloodwork_trends')
+      .delete()
+      .eq('user_id', userId);
+
+    // Prepare trends for insertion
+    const trendsToInsert = trends.map(trend => ({
+      user_id: userId,
+      marker_name: trend.marker_name,
+      category: trend.category,
+      latest_value: typeof trend.latest_value === 'number' ? trend.latest_value : parseFloat(trend.latest_value as string) || null,
+      prior_value: typeof trend.prior_value === 'number' ? trend.prior_value : parseFloat(trend.prior_value as string) || null,
+      absolute_change: trend.absolute_change,
+      change_percent: trend.percent_change,
+      trend_direction: trend.trend_direction,
+      data_points: trend.data_points,
+      first_test_date: trend.first_test_date,
+      latest_test_date: trend.latest_test_date,
+      unit: trend.unit,
+      trend_summary: trend.trend_summary,
+      calculated_at: new Date().toISOString()
+    }));
+
+    // Insert new trends
+    const { error } = await supabase
+      .from('bloodwork_trends')
+      .insert(trendsToInsert);
+
+    if (error) {
+      return {
+        success: false,
+        error: `Failed to save trends: ${error.message}`
+      };
+    }
+
+    return { success: true };
+  } catch (error) {
+    return {
+      success: false,
+      error: `Error saving trends: ${(error as Error).message}`
+    };
+  }
+}
+
 // Helper function to get all supported marker rules
 export function getSupportedMarkers(): MarkerTrendRule[] {
   return MARKER_TREND_RULES;
