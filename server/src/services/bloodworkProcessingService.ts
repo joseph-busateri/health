@@ -213,13 +213,24 @@ export async function processBloodworkDocument(documentId: string, userId: strin
     });
 
     logger.info('Starting trend generation', { documentId, userId });
-    const trendsResult = await getBloodworkTrendsByUser({ user_id: userId, min_data_points: 1 });
+    let trendsResult;
+    try {
+      trendsResult = await Promise.race([
+        getBloodworkTrendsByUser({ user_id: userId, min_data_points: 1 }),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Trend generation timeout')), 30000)
+        )
+      ]);
+    } catch (timeoutError) {
+      logger.warn('Trend generation timed out, skipping', { documentId, userId, error: timeoutError });
+      trendsResult = { success: false, error: 'Trend generation timeout' };
+    }
     logger.info('Trend generation complete', { documentId, userId, success: trendsResult.success, error: trendsResult.error });
 
     if (!trendsResult.success) {
       const trendError = trendsResult.error || '';
-      if (trendError.includes('No bloodwork results') || trendError.includes('Insufficient data points')) {
-        logger.warn('Skipping trend generation due to insufficient data', {
+      if (trendError.includes('No bloodwork results') || trendError.includes('Insufficient data points') || trendError.includes('Trend generation timeout')) {
+        logger.warn('Skipping trend generation due to insufficient data or timeout', {
           documentId,
           userId,
           error: trendError,
