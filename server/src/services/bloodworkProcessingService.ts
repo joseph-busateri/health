@@ -216,7 +216,7 @@ export async function processBloodworkDocument(documentId: string, userId: strin
     let trendsResult;
     try {
       trendsResult = await Promise.race([
-        getBloodworkTrendsByUser({ user_id: userId, min_data_points: 1 }),
+        getBloodworkTrendsByUser({ user_id: userId, min_data_points: 2 }),
         new Promise((_, reject) => 
           setTimeout(() => reject(new Error('Trend generation timeout')), 30000)
         )
@@ -225,7 +225,7 @@ export async function processBloodworkDocument(documentId: string, userId: strin
       logger.warn('Trend generation timed out, skipping', { documentId, userId, error: timeoutError });
       trendsResult = { success: false, error: 'Trend generation timeout' };
     }
-    logger.info('Trend generation complete', { documentId, userId, success: trendsResult.success, error: trendsResult.error });
+    logger.info('Trend generation complete', { documentId, userId, success: trendsResult.success, error: trendsResult.error, trendCount: trendsResult.data?.trends?.length || 0 });
 
     if (!trendsResult.success) {
       const trendError = trendsResult.error || '';
