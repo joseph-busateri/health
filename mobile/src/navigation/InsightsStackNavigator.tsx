@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import InsightsHomeScreen from '../screens/InsightsHomeScreen';
 import CardiovascularDashboardScreen from '../screens/CardiovascularDashboardScreen';
+import CardiovascularDashboardScreenV2 from '../screens/CardiovascularDashboardScreenV2';
 import SexualHealthDashboardScreen from '../screens/SexualHealthDashboardScreen';
 import SexualHealthDashboardScreenV2 from '../screens/SexualHealthDashboardScreenV2';
 import ActuarialRiskDashboardScreen from '../screens/ActuarialRiskDashboardScreen';
@@ -25,6 +26,7 @@ const InsightsStackNavigator: React.FC = () => (
   <InsightsStack.Navigator screenOptions={{ headerShown: false }}>
     <InsightsStack.Screen name="InsightsHome" component={InsightsHomeScreen} />
     <InsightsStack.Screen name="CardiovascularDashboard" component={CardiovascularDashboardScreen} />
+    <InsightsStack.Screen name="CardiovascularDashboardV2" component={CardiovascularDashboardScreenV2} />
     <InsightsStack.Screen name="SexualHealthDashboard" component={SexualHealthDashboardScreen} />
     <InsightsStack.Screen name="SexualHealthDashboardV2" component={SexualHealthDashboardScreenV2} />
     <InsightsStack.Screen name="ActuarialRiskDashboard" component={ActuarialRiskDashboardScreen} />

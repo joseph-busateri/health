@@ -104,6 +104,36 @@ export default function ModernHomeScreen() {
   const resolvedUserId = userId ?? DEFAULT_USER_ID;
   const [riskRecord, setRiskRecord] = useState<any>(null);
 
+  const getRiskCategoryColor = (category: string): string => {
+    switch (category) {
+      case 'low_risk':
+        return '#10B981'; // green
+      case 'moderate_risk':
+        return '#F59E0B'; // orange
+      case 'high_risk':
+        return '#EF4444'; // red
+      case 'very_high_risk':
+        return '#DC2626'; // dark red
+      default:
+        return '#6B7280'; // gray
+    }
+  };
+
+  const getRiskCategoryLabel = (category: string): string => {
+    switch (category) {
+      case 'low_risk':
+        return 'Low Risk';
+      case 'moderate_risk':
+        return 'Moderate Risk';
+      case 'high_risk':
+        return 'High Risk';
+      case 'very_high_risk':
+        return 'Very High Risk';
+      default:
+        return 'Unknown';
+    }
+  };
+
   const overallScore = 85;
 
   useEffect(() => {
@@ -116,10 +146,34 @@ export default function ModernHomeScreen() {
       const response = await healthApi.actuarial.getRecord(resolvedUserId);
       console.log('Cardiovascular risk response:', response.data);
       if (response.data?.data) {
+        console.log('Setting risk record from getRecord:', response.data.data);
         setRiskRecord(response.data.data);
+      } else {
+        // No record exists, auto-calculate
+        console.log('No cardiovascular risk record found, auto-calculating...');
+        await autoCalculateRisk();
       }
     } catch (error) {
       console.error('Error loading cardiovascular risk:', error);
+      console.error('Error status:', (error as any).response?.status);
+      // If 404, try auto-calculate
+      if ((error as any).response?.status === 404) {
+        console.log('Cardiovascular risk not found (404), auto-calculating...');
+        await autoCalculateRisk();
+      }
+    }
+  };
+
+  const autoCalculateRisk = async () => {
+    try {
+      const calculateResponse = await healthApi.actuarial.calculateAuto(resolvedUserId);
+      console.log('Auto-calculation response:', calculateResponse.data);
+      if (calculateResponse.data?.data) {
+        console.log('Setting risk record from auto-calculation:', calculateResponse.data.data);
+        setRiskRecord(calculateResponse.data.data);
+      }
+    } catch (calcError) {
+      console.error('Auto-calculation failed:', calcError);
     }
   };
 
@@ -176,7 +230,7 @@ export default function ModernHomeScreen() {
       case 'recovery':
         return () => navigation.navigate('RecoveryStatus', { userId: resolvedUserId });
       case 'cardiovascular':
-        return () => navigation.navigate('CardiovascularDashboard');
+        return () => navigation.navigate('CardiovascularDashboardV2');
       case 'metabolic':
         return () => navigation.navigate('InsightsHome');
       case 'performance':
@@ -216,12 +270,57 @@ export default function ModernHomeScreen() {
 
   const cardiovascularRiskAction: QuickAction = {
     title: 'Cardiovascular Risk',
-    subtitle: riskRecord?.overallRisk !== undefined
-      ? `10-year risk: ${riskRecord.overallRisk.toFixed(1)}%`
+    subtitle: (riskRecord?.evidence?.combinedRiskPercentage ?? riskRecord?.riskPercentage)
+      ? `10-year risk: ${typeof (riskRecord?.evidence?.combinedRiskPercentage ?? riskRecord?.riskPercentage) === 'number'
+        ? (riskRecord?.evidence?.combinedRiskPercentage ?? riskRecord?.riskPercentage).toFixed(1)
+        : (riskRecord?.evidence?.combinedRiskPercentage ?? riskRecord?.riskPercentage)}%`
       : '10-year CVD risk assessment',
     icon: 'heart-pulse',
-    color: '#EF4444',
+    color: getRiskCategoryColor(riskRecord?.evidence?.combinedRiskCategory ?? riskRecord?.riskCategory ?? 'low_risk'),
     onPress: () => navigation.navigate('ActuarialRisk' as any),
+  };
+
+  const CardiovascularRiskCard = ({ action, riskRecord }: { action: QuickAction; riskRecord: any }) => {
+    // Try to get risk from evidence first, fall back to top-level fields
+    const riskPercentage = riskRecord?.evidence?.combinedRiskPercentage ?? riskRecord?.riskPercentage;
+    const riskCategory = riskRecord?.evidence?.combinedRiskCategory ?? riskRecord?.riskCategory;
+    const riskColor = action.color;
+
+    console.log('CardiovascularRiskCard rendering:', {
+      riskRecord,
+      riskPercentage,
+      riskCategory,
+      riskColor,
+      hasEvidence: !!riskRecord?.evidence,
+      hasTopLevel: !!riskRecord?.riskPercentage,
+    });
+
+    return (
+      <TouchableOpacity
+        style={styles.actionCard}
+        activeOpacity={0.85}
+        onPress={action.onPress}
+      >
+        <View style={[styles.actionIconWrap, { backgroundColor: `${riskColor}1A` }]}>
+          <MaterialCommunityIcons name={action.icon} size={20} color={riskColor} />
+        </View>
+        <View style={styles.actionTextGroup}>
+          <Text style={styles.actionTitle}>{action.title}</Text>
+          <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
+          {riskPercentage !== undefined && riskPercentage !== null && (
+            <View style={styles.riskScoreContainer}>
+              <View style={[styles.riskScoreBadge, { backgroundColor: riskColor }]}>
+                <Text style={styles.riskScoreText}>{typeof riskPercentage === 'number' ? riskPercentage.toFixed(1) : riskPercentage}%</Text>
+              </View>
+              <Text style={styles.riskCategoryLabel}>
+                {getRiskCategoryLabel(riskCategory || 'low_risk')}
+              </Text>
+            </View>
+          )}
+        </View>
+        <MaterialCommunityIcons name="chevron-right" size={20} color="rgba(15, 23, 42, 0.4)" />
+      </TouchableOpacity>
+    );
   };
 
   const healthTimeline: TimelineItem[] = [
@@ -320,7 +419,7 @@ export default function ModernHomeScreen() {
             <Text style={styles.sectionTitle}>Cardiovascular Risk</Text>
             <Text style={styles.sectionSubtitle}>10-year CVD risk assessment</Text>
           </View>
-          <QuickActionCard action={cardiovascularRiskAction} />
+          <CardiovascularRiskCard action={cardiovascularRiskAction} riskRecord={riskRecord} />
         </View>
 
         <View style={styles.sectionBlock}>
@@ -575,6 +674,28 @@ const styles = StyleSheet.create({
   actionSubtitle: {
     color: '#64748B',
     fontSize: 13,
+    fontFamily: fonts.regular,
+  },
+  riskScoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    gap: 8,
+  },
+  riskScoreBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  riskScoreText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: fonts.semibold,
+  },
+  riskCategoryLabel: {
+    fontSize: 12,
+    color: '#64748B',
     fontFamily: fonts.regular,
   },
   componentList: {

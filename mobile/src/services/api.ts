@@ -229,6 +229,14 @@ export const healthApi = {
     getHistory: (userId: string) => 
       api.get(`/api/sexual-health-v2/${userId}/history`),
   },
+
+  // Cardiovascular Engine endpoints
+  cardiovascular: {
+    getToday: (userId: string) => 
+      api.get(`/cardiovascular/${userId}/today`),
+    getHistory: (userId: string) => 
+      api.get(`/cardiovascular/${userId}/history`),
+  },
 };
 
 export default api;

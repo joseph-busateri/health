@@ -84,6 +84,7 @@ export type HomeStackParamList = {
   Recommendations: undefined;
   DailyLogs: undefined;
   CardiovascularDashboard: undefined;
+  CardiovascularDashboardV2: undefined;
   SexualHealthDashboard: undefined;
   SexualHealthDashboardV2: undefined;
   ActuarialRiskDashboard: undefined;
@@ -99,6 +100,7 @@ export type HomeStackParamList = {
 export type InsightsStackParamList = {
   InsightsHome: undefined;
   CardiovascularDashboard: undefined;
+  CardiovascularDashboardV2: undefined;
   SexualHealthDashboard: undefined;
   SexualHealthDashboardV2: undefined;
   ActuarialRiskDashboard: undefined;
