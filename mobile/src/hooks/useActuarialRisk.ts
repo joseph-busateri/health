@@ -1,7 +1,7 @@
 /**
  * useActuarialRisk Hook
  * Custom hook for fetching actuarial risk data from the API
- * 
+ *
  * Features:
  * - Fetch latest risk record
  * - Fetch risk history
@@ -10,10 +10,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import axios from 'axios';
-
-// API base URL - should be configured via environment variable in production
-const API_BASE_URL = 'http://localhost:3000/api';
+import { healthApi } from '../services/api';
 
 // ============================================================================
 // TYPES
@@ -101,12 +98,7 @@ export function useActuarialRisk(userId: string): UseActuarialRiskResult {
 
     try {
       // Fetch latest record
-      const recordResponse = await axios.get(
-        `${API_BASE_URL}/actuarial-risk/${userId}/record`,
-        {
-          timeout: 10000,
-        }
-      );
+      const recordResponse = await healthApi.actuarial.getRecord(userId);
 
       if (recordResponse.data.success && recordResponse.data.data) {
         setRecord(recordResponse.data.data);
@@ -114,13 +106,22 @@ export function useActuarialRisk(userId: string): UseActuarialRiskResult {
         setRecord(null);
       }
 
-      // Fetch history (last 30 days)
-      const historyResponse = await axios.get(
-        `${API_BASE_URL}/actuarial-risk/${userId}/history?days=30`,
-        {
-          timeout: 10000,
+      // If no record exists, auto-calculate
+      if (!recordResponse.data.success || !recordResponse.data.data) {
+        console.log('No risk record found, auto-calculating...');
+        try {
+          const calculateResponse = await healthApi.actuarial.calculateAuto(userId);
+          if (calculateResponse.data.success && calculateResponse.data.data) {
+            setRecord(calculateResponse.data.data);
+          }
+        } catch (calcError: any) {
+          console.error('Auto-calculation failed:', calcError);
+          // Don't block UI if auto-calc fails, user can manually retry
         }
-      );
+      }
+
+      // Fetch history (last 30 days)
+      const historyResponse = await healthApi.actuarial.getHistory(userId, 30);
 
       if (historyResponse.data.success && historyResponse.data.data) {
         setHistory(historyResponse.data.data);
@@ -131,11 +132,31 @@ export function useActuarialRisk(userId: string): UseActuarialRiskResult {
       setLoading(false);
     } catch (err: any) {
       console.error('Failed to fetch actuarial risk data:', err);
-      
+
       if (err.response?.status === 404) {
-        // No data available - not an error, just empty state
-        setRecord(null);
-        setHistory([]);
+        // No data available - try auto-calculate
+        console.log('No risk record found (404), auto-calculating...');
+        try {
+          const calculateResponse = await healthApi.actuarial.calculateAuto(userId);
+          if (calculateResponse.data.success && calculateResponse.data.data) {
+            setRecord(calculateResponse.data.data);
+          }
+        } catch (calcError: any) {
+          console.error('Auto-calculation failed:', calcError);
+        }
+
+        // Fetch history after calculation
+        try {
+          const historyResponse = await healthApi.actuarial.getHistory(userId, 30);
+          if (historyResponse.data.success && historyResponse.data.data) {
+            setHistory(historyResponse.data.data);
+          } else {
+            setHistory([]);
+          }
+        } catch (historyError) {
+          setHistory([]);
+        }
+
         setError(null);
       } else if (err.code === 'ECONNABORTED') {
         setError('Request timed out. Please try again.');
@@ -146,7 +167,7 @@ export function useActuarialRisk(userId: string): UseActuarialRiskResult {
       } else {
         setError('Failed to load actuarial risk data');
       }
-      
+
       setLoading(false);
     }
   }, [userId]);

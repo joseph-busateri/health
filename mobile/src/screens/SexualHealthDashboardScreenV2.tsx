@@ -104,6 +104,16 @@ const statusLabel = (status: string) => {
   }
 };
 
+const statusToScore = (status: string): number => {
+  switch (status) {
+    case 'optimal': return 90;
+    case 'moderate': return 75;
+    case 'reduced': return 55;
+    case 'high_risk': return 35;
+    default: return 70;
+  }
+};
+
 const getTrendIcon = (direction?: string) => {
   switch (direction) {
     case 'improving':
@@ -226,20 +236,22 @@ const SexualHealthDashboardScreenV2: React.FC = () => {
 
         <View style={styles.scoreCard}>
           <View>
-            <Text style={styles.scoreLabel}>Status</Text>
-            <View style={statusBadgeStyle(data.sexualHealthStatus)}>
-              <Text style={styles.statusText}>{statusLabel(data.sexualHealthStatus)}</Text>
-            </View>
+            <Text style={styles.scoreLabel}>Score</Text>
+            <Text style={styles.scoreValue}>{statusToScore(data.sexualHealthStatus)}</Text>
             <Text style={styles.lastLab}>Last updated {new Date(data.createdAt).toLocaleDateString()}</Text>
           </View>
           <View style={styles.statusWrapper}>
+            <Text style={styles.statusLabel}>Status</Text>
+            <View style={statusBadgeStyle(data.sexualHealthStatus)}>
+              <Text style={styles.statusText}>{statusLabel(data.sexualHealthStatus)}</Text>
+            </View>
             <Text style={styles.focusLabel}>Trend Analysis</Text>
             {trendMetadata?.testosterone ? (
               <View style={styles.trendRow}>
-                <MaterialCommunityIcons 
-                  name={getTrendIcon(trendMetadata.testosterone.direction)} 
-                  size={20} 
-                  color={getTrendColor(trendMetadata.testosterone.direction)} 
+                <MaterialCommunityIcons
+                  name={getTrendIcon(trendMetadata.testosterone.direction)}
+                  size={20}
+                  color={getTrendColor(trendMetadata.testosterone.direction)}
                 />
                 <Text style={styles.trendText}>
                   Testosterone {trendMetadata.testosterone.direction}
@@ -251,10 +263,10 @@ const SexualHealthDashboardScreenV2: React.FC = () => {
             )}
             {trendMetadata?.freeTestosterone && (
               <View style={styles.trendRow}>
-                <MaterialCommunityIcons 
-                  name={getTrendIcon(trendMetadata.freeTestosterone.direction)} 
-                  size={20} 
-                  color={getTrendColor(trendMetadata.freeTestosterone.direction)} 
+                <MaterialCommunityIcons
+                  name={getTrendIcon(trendMetadata.freeTestosterone.direction)}
+                  size={20}
+                  color={getTrendColor(trendMetadata.freeTestosterone.direction)}
                 />
                 <Text style={styles.trendText}>
                   Free Testosterone {trendMetadata.freeTestosterone.direction}
@@ -371,6 +383,17 @@ const styles = StyleSheet.create({
   scoreLabel: {
     color: '#94A3B8',
     fontSize: 14,
+    marginBottom: 8,
+  },
+  scoreValue: {
+    color: '#fff',
+    fontSize: 48,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  statusLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
     marginBottom: 8,
   },
   statusBadge: {

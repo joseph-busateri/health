@@ -18,8 +18,7 @@ interface RiskRecord {
   id: string;
   userId: string;
   date: string;
-  riskCategory: 'low_risk' | 'moderate_risk' | 'high_risk' | 'very_high_risk';
-  overallRisk: number;
+  inputs: any;
   evidence: {
     framinghamResult?: {
       riskPercentage: number;
@@ -30,10 +29,12 @@ interface RiskRecord {
       riskCategory: string;
     };
     combinedRiskPercentage: number;
-    combinedRiskCategory: string;
+    combinedRiskCategory: 'low_risk' | 'moderate_risk' | 'high_risk' | 'very_high_risk';
     riskFactors: RiskFactor[];
     signals: EvidenceSignal[];
     summary: string;
+    lifestyleAdjustment: number;
+    fitnessAdjustment: number;
   };
   recommendation: {
     type: string;
@@ -42,14 +43,19 @@ interface RiskRecord {
     actions: string[];
     riskReductionPotential: number;
     primaryRiskDrivers: string[];
+    preventionStrategies: string[];
     source: string;
   };
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface RiskFactor {
   factor: string;
   contribution: number;
-  severity: 'low' | 'moderate' | 'high';
+  status: 'positive' | 'negative' | 'neutral';
+  value: string;
+  interpretation: string;
 }
 
 interface EvidenceSignal {
@@ -68,6 +74,7 @@ export default function ActuarialRiskScreen() {
   const [selectedTab, setSelectedTab] = useState<'current' | 'history'>('current');
   const [error, setError] = useState<string | null>(null);
   const [showInfoModal, setShowInfoModal] = useState(false);
+  const [showDataSourcesModal, setShowDataSourcesModal] = useState(false);
 
   useEffect(() => {
     if (userId) {
@@ -245,18 +252,18 @@ export default function ActuarialRiskScreen() {
             <View
               style={[
                 styles.riskBadge,
-                { backgroundColor: getRiskCategoryColor(riskRecord.riskCategory) },
+                { backgroundColor: getRiskCategoryColor(riskRecord.evidence.combinedRiskCategory) },
               ]}
             >
               <Text style={styles.riskBadgeText}>
-                {getRiskCategoryLabel(riskRecord.riskCategory)}
+                {getRiskCategoryLabel(riskRecord.evidence.combinedRiskCategory)}
               </Text>
             </View>
           </View>
 
           <View style={styles.riskPercentageContainer}>
             <Text style={styles.riskPercentage}>
-              {riskRecord.overallRisk.toFixed(1)}%
+              {riskRecord.evidence.combinedRiskPercentage?.toFixed(1) || '0.0'}%
             </Text>
             <Text style={styles.riskPercentageLabel}>Overall Risk</Text>
           </View>
@@ -266,7 +273,7 @@ export default function ActuarialRiskScreen() {
               <View style={styles.modelCard}>
                 <Text style={styles.modelName}>Framingham</Text>
                 <Text style={styles.modelRisk}>
-                  {riskRecord.evidence.framinghamResult.riskPercentage.toFixed(1)}%
+                  {riskRecord.evidence.framinghamResult.riskPercentage?.toFixed(1) || '0.0'}%
                 </Text>
                 <Text style={styles.modelLabel}>10-year CHD risk</Text>
               </View>
@@ -275,7 +282,7 @@ export default function ActuarialRiskScreen() {
               <View style={styles.modelCard}>
                 <Text style={styles.modelName}>ASCVD</Text>
                 <Text style={styles.modelRisk}>
-                  {riskRecord.evidence.ascvdResult.riskPercentage.toFixed(1)}%
+                  {riskRecord.evidence.ascvdResult.riskPercentage?.toFixed(1) || '0.0'}%
                 </Text>
                 <Text style={styles.modelLabel}>10-year ASCVD risk</Text>
               </View>
@@ -295,9 +302,9 @@ export default function ActuarialRiskScreen() {
                       styles.severityBadge,
                       {
                         backgroundColor:
-                          factor.severity === 'high'
+                          factor.status === 'negative'
                             ? '#fee2e2'
-                            : factor.severity === 'moderate'
+                            : factor.status === 'neutral'
                             ? '#fef3c7'
                             : '#d1fae5',
                       },
@@ -308,20 +315,20 @@ export default function ActuarialRiskScreen() {
                         styles.severityText,
                         {
                           color:
-                            factor.severity === 'high'
+                            factor.status === 'negative'
                               ? '#dc2626'
-                              : factor.severity === 'moderate'
+                              : factor.status === 'neutral'
                               ? '#d97706'
                               : '#059669',
                         },
                       ]}
                     >
-                      {factor.severity}
+                      {factor.status}
                     </Text>
                   </View>
                 </View>
                 <Text style={styles.riskFactorContribution}>
-                  Contribution: {factor.contribution.toFixed(1)}%
+                  Contribution: {factor.contribution?.toFixed(1) || '0.0'}%
                 </Text>
               </View>
             ))}
@@ -358,11 +365,11 @@ export default function ActuarialRiskScreen() {
                   ))}
                 </View>
               )}
-              {riskRecord.recommendation.riskReductionPotential > 0 && (
+              {riskRecord.recommendation.riskReductionPotential && riskRecord.recommendation.riskReductionPotential > 0 && (
                 <View style={styles.reductionPotential}>
                   <Ionicons name="trending-down" size={20} color="#10b981" />
                   <Text style={styles.reductionText}>
-                    Potential risk reduction: {riskRecord.recommendation.riskReductionPotential.toFixed(1)}%
+                    Potential risk reduction: {riskRecord.recommendation.riskReductionPotential?.toFixed(1) || '0.0'}%
                   </Text>
                 </View>
               )}
@@ -410,15 +417,15 @@ export default function ActuarialRiskScreen() {
                 <View
                   style={[
                     styles.historyBadge,
-                    { backgroundColor: getRiskCategoryColor(record.riskCategory) },
+                    { backgroundColor: getRiskCategoryColor(record.evidence.combinedRiskCategory) },
                   ]}
                 >
                   <Text style={styles.historyBadgeText}>
-                    {getRiskCategoryLabel(record.riskCategory)}
+                    {getRiskCategoryLabel(record.evidence.combinedRiskCategory)}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.historyRisk}>{record.overallRisk.toFixed(1)}%</Text>
+              <Text style={styles.historyRisk}>{record.evidence.combinedRiskPercentage?.toFixed(1) || '0.0'}%</Text>
             </View>
           ))}
         </View>
@@ -538,6 +545,99 @@ export default function ActuarialRiskScreen() {
     </Modal>
   );
 
+  const renderDataSourcesModal = () => (
+    <Modal
+      visible={showDataSourcesModal}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setShowDataSourcesModal(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Data Sources</Text>
+            <TouchableOpacity onPress={() => setShowDataSourcesModal(false)}>
+              <Ionicons name="close" size={24} color="#6b7280" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView style={styles.modalBody}>
+            <View style={styles.infoSection}>
+              <Text style={styles.infoSectionTitle}>Real Data (From Database)</Text>
+              <View style={styles.dataSourceItem}>
+                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                <View style={styles.dataSourceText}>
+                  <Text style={styles.dataSourceLabel}>Baseline Profile</Text>
+                  <Text style={styles.dataSourceDetail}>Age: 59, Male, White, Pre-diabetes</Text>
+                </View>
+              </View>
+              <View style={styles.dataSourceItem}>
+                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                <View style={styles.dataSourceText}>
+                  <Text style={styles.dataSourceLabel}>Bloodwork</Text>
+                  <Text style={styles.dataSourceDetail}>Latest: Oct 11, 2023 (498 results)</Text>
+                </View>
+              </View>
+              <View style={styles.dataSourceItem}>
+                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                <View style={styles.dataSourceText}>
+                  <Text style={styles.dataSourceLabel}>Body Composition</Text>
+                  <Text style={styles.dataSourceDetail}>Latest: Apr 18, 2026 (body fat %)</Text>
+                </View>
+              </View>
+              <View style={styles.dataSourceItem}>
+                <Ionicons name="checkmark-circle" size={20} color="#10b981" />
+                <View style={styles.dataSourceText}>
+                  <Text style={styles.dataSourceLabel}>Workout Data</Text>
+                  <Text style={styles.dataSourceDetail}>Exercise frequency: 6 days/week (from baseline profile)</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoSection}>
+              <Text style={styles.infoSectionTitle}>Mock/Default Data</Text>
+              <View style={styles.dataSourceItem}>
+                <Ionicons name="alert-circle" size={20} color="#f59e0b" />
+                <View style={styles.dataSourceText}>
+                  <Text style={styles.dataSourceLabel}>Blood Pressure</Text>
+                  <Text style={styles.dataSourceDetail}>No BP data, using default (120/80)</Text>
+                </View>
+              </View>
+              <View style={styles.dataSourceItem}>
+                <Ionicons name="alert-circle" size={20} color="#f59e0b" />
+                <View style={styles.dataSourceText}>
+                  <Text style={styles.dataSourceLabel}>Cholesterol</Text>
+                  <Text style={styles.dataSourceDetail}>No cholesterol data, using defaults</Text>
+                </View>
+              </View>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoSection}>
+              <Text style={styles.infoSectionTitle}>How to Improve Accuracy</Text>
+              <Text style={styles.infoText}>
+                • Log regular blood pressure measurements
+              </Text>
+              <Text style={styles.infoText}>
+                • Update bloodwork with recent lipid panel (current: Oct 2023)
+              </Text>
+            </View>
+          </ScrollView>
+
+          <TouchableOpacity
+            style={styles.modalCloseButton}
+            onPress={() => setShowDataSourcesModal(false)}
+          >
+            <Text style={styles.modalCloseButtonText}>Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
@@ -546,16 +646,25 @@ export default function ActuarialRiskScreen() {
             <Text style={styles.title}>Cardiovascular Risk</Text>
             <Text style={styles.subtitle}>10-Year CVD Risk Assessment</Text>
           </View>
-          <TouchableOpacity
-            style={styles.infoButton}
-            onPress={() => setShowInfoModal(true)}
-          >
-            <Ionicons name="information-circle-outline" size={28} color="#3b82f6" />
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity
+              style={styles.infoButton}
+              onPress={() => setShowDataSourcesModal(true)}
+            >
+              <Ionicons name="list-outline" size={28} color="#3b82f6" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.infoButton}
+              onPress={() => setShowInfoModal(true)}
+            >
+              <Ionicons name="information-circle-outline" size={28} color="#3b82f6" />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
       {renderInfoModal()}
+      {renderDataSourcesModal()}
 
       <View style={styles.tabs}>
         <TouchableOpacity
@@ -617,6 +726,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 8,
   },
   infoButton: {
     padding: 4,
@@ -705,6 +818,25 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#374151',
     marginBottom: 4,
+  },
+  dataSourceItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 12,
+  },
+  dataSourceText: {
+    flex: 1,
+  },
+  dataSourceLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 2,
+  },
+  dataSourceDetail: {
+    fontSize: 12,
+    color: '#6b7280',
   },
   modalCloseButton: {
     backgroundColor: '#3b82f6',

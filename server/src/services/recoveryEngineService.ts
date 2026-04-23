@@ -154,6 +154,14 @@ const mergeInputs = async (
   override?: RecoverySourceInputs
 ): Promise<RecoverySourceInputs> => {
   const source: RecoverySourceInputs = {
+    hrv: undefined,
+    sleepDurationHours: undefined,
+    sleepQuality: undefined,
+    restingHr: undefined,
+    stressLevel: undefined,
+    workoutLoad: undefined,
+    verbalRecoveryFeeling: undefined,
+    adherenceScore: undefined,
     ...override,
   };
 

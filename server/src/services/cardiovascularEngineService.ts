@@ -18,6 +18,9 @@ import { validateCardiovascularRecommendation } from './cardiovascularRecommenda
 import { createRecommendation } from './recommendationEngineService';
 import { getBaselineFields } from './baselineContextService';
 import { getLatestBloodworkContext, getMarkerValue, isMarkerAbnormal } from './bloodworkContextService';
+import { getLatestBodyCompositionContext } from './bodyCompositionContextService';
+import { getStressToday } from './stressEngineService';
+import { getRecoveryToday } from './recoveryEngineService';
 import type {
   CardiovascularRecord,
   CardiovascularStatus,
@@ -478,7 +481,7 @@ export async function getCardiovascularRecommendation(
     userId,
     age: baseline.age,
     sex: baseline.sex,
-    hasFamilyHistory: Object.keys(baseline.familyHistory).length > 0,
+    hasFamilyHistory: baseline.familyHistory?.cardiovascular_disease || false,
   });
 
   // Step 0b: Load bloodwork for lipid panel and cardiovascular markers
@@ -498,7 +501,7 @@ export async function getCardiovascularRecommendation(
     // Enrich inputs with lipid panel from bloodwork (preserve user-provided values if present)
     if (!inputs.lipidPanel) {
       const lipidPanel: Partial<LipidPanel> = {};
-      
+
       if (bloodwork.markers.totalCholesterol) {
         lipidPanel.totalCholesterol = getMarkerValue(bloodwork.markers.totalCholesterol) ?? undefined;
       }
@@ -511,16 +514,27 @@ export async function getCardiovascularRecommendation(
       if (bloodwork.markers.triglycerides) {
         lipidPanel.triglycerides = getMarkerValue(bloodwork.markers.triglycerides) ?? undefined;
       }
-      if (bloodwork.markers.apoB) {
-        lipidPanel.apoB = getMarkerValue(bloodwork.markers.apoB) ?? undefined;
-      }
-      if (bloodwork.markers.lpa) {
-        lipidPanel.lpa = getMarkerValue(bloodwork.markers.lpa) ?? undefined;
+
+      // Calculate estimated total cholesterol from LDL + HDL if total cholesterol is missing
+      // This is a conservative estimate (assumes normal triglycerides)
+      if (!lipidPanel.totalCholesterol && lipidPanel.ldl && lipidPanel.hdl) {
+        lipidPanel.totalCholesterol = lipidPanel.ldl + lipidPanel.hdl;
+        logger.info('📊 [CARDIOVASCULAR ENGINE] Using estimated total cholesterol (LDL + HDL)', {
+          userId,
+          ldl: lipidPanel.ldl,
+          hdl: lipidPanel.hdl,
+          estimatedTotal: lipidPanel.totalCholesterol,
+        });
       }
 
       // Calculate cholesterol ratio if we have both total and HDL
       if (lipidPanel.totalCholesterol && lipidPanel.hdl) {
         lipidPanel.cholesterolRatio = lipidPanel.totalCholesterol / lipidPanel.hdl;
+      }
+
+      // Calculate LDL/HDL ratio as alternative risk metric
+      if (lipidPanel.ldl && lipidPanel.hdl) {
+        lipidPanel.ldlHdlRatio = lipidPanel.ldl / lipidPanel.hdl;
       }
 
       if (Object.keys(lipidPanel).length > 0) {
@@ -529,6 +543,8 @@ export async function getCardiovascularRecommendation(
           ldl: lipidPanel.ldl,
           hdl: lipidPanel.hdl,
           triglycerides: lipidPanel.triglycerides,
+          totalCholesterol: lipidPanel.totalCholesterol,
+          cholesterolSource: bloodwork.markers.totalCholesterol ? 'bloodwork' : 'estimated',
         });
       }
     }
@@ -754,19 +770,52 @@ export async function calculateCardiovascular(userId: string): Promise<Cardiovas
   }
 }
 
-export async function getCardiovascularToday(userId: string): Promise<CardiovascularRecord | null> {
+export async function getCardiovascularToday(userId: string, options?: { regenerate?: boolean }): Promise<CardiovascularRecord | null> {
   const today = new Date().toISOString().slice(0, 10);
   const userRecords = cardiovascularRecordStore.get(userId) ?? [];
   const existing = userRecords.find(record => record.date === today);
 
-  if (existing) {
+  if (existing && !options?.regenerate) {
     logger.info('📋 [CARDIOVASCULAR ENGINE] Returning cached record', { userId, date: today });
     return existing;
   }
 
-  logger.info('🔄 [CARDIOVASCULAR ENGINE] No cached record, generating new', { userId });
+  if (options?.regenerate) {
+    logger.info('🔄 [CARDIOVASCULAR ENGINE] Regenerate flag set, bypassing cache', { userId });
+  } else {
+    logger.info('🔄 [CARDIOVASCULAR ENGINE] No cached record, generating new', { userId });
+  }
   
-  // Default inputs for demo
+  // Fetch real data from other engines
+  const [bodyComp, stress, recovery] = await Promise.allSettled([
+    getLatestBodyCompositionContext(userId),
+    getStressToday(userId),
+    getRecoveryToday(userId),
+  ]);
+
+  // Extract body fat percentage
+  const bodyFatPercentage = bodyComp.status === 'fulfilled' && bodyComp.value?.bodyFatPercentage
+    ? bodyComp.value.bodyFatPercentage
+    : undefined;
+
+  // Extract stress score
+  const stressScore = stress.status === 'fulfilled' && stress.value?.stressScore !== undefined
+    ? stress.value.stressScore
+    : undefined;
+
+  // Extract recovery score
+  const recoveryScore = recovery.status === 'fulfilled' && recovery.value?.recoveryScore !== undefined
+    ? recovery.value.recoveryScore
+    : undefined;
+
+  logger.info('📊 [CARDIOVASCULAR ENGINE] Fetched cross-engine data', {
+    userId,
+    bodyFatPercentage,
+    stressScore,
+    recoveryScore,
+  });
+  
+  // Default inputs for demo (fallback if real data not available)
   const inputs: CardiovascularInputs = {
     systolicBP: 118,
     diastolicBP: 76,
@@ -779,9 +828,9 @@ export async function getCardiovascularToday(userId: string): Promise<Cardiovasc
       triglycerides: 125,
       cholesterolRatio: 3.3,
     },
-    bodyFat: 18,
-    stressScore: 45,
-    recoveryScore: 72,
+    bodyFat: bodyFatPercentage,
+    stressScore: stressScore,
+    recoveryScore: recoveryScore,
   };
 
   return getCardiovascularRecommendation(userId, inputs);

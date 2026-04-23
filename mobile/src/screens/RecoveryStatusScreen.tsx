@@ -32,6 +32,75 @@ const metricLabel = (key: string): string => {
   }
 };
 
+const metricInterpretation = (key: string, value: number | null): string => {
+  if (value === null) return 'No data';
+  
+  switch (key) {
+    case 'hrv':
+      if (value >= 60) return 'Excellent HRV';
+      if (value >= 45) return 'Good HRV';
+      if (value >= 30) return 'Moderate HRV';
+      return 'Low HRV';
+    case 'sleepDurationHours':
+      if (value >= 8) return 'Optimal sleep';
+      if (value >= 7) return 'Good sleep';
+      if (value >= 6) return 'Adequate sleep';
+      return 'Insufficient sleep';
+    case 'sleepQuality':
+      if (value >= 80) return 'Excellent sleep quality';
+      if (value >= 60) return 'Good sleep quality';
+      if (value >= 40) return 'Moderate sleep quality';
+      return 'Poor sleep quality';
+    case 'restingHr':
+      if (value < 60) return 'Excellent resting HR';
+      if (value < 70) return 'Good resting HR';
+      if (value < 80) return 'Average resting HR';
+      return 'Elevated resting HR';
+    case 'stressLevel':
+      if (value <= 2) return 'Low stress';
+      if (value <= 3) return 'Moderate stress';
+      return 'High stress';
+    case 'workoutLoad':
+      if (value >= 80) return 'High workout load';
+      if (value >= 50) return 'Moderate workout load';
+      return 'Light workout load';
+    case 'verbalRecoveryFeeling':
+      if (value >= 8) return 'Feeling great';
+      if (value >= 6) return 'Feeling good';
+      if (value >= 4) return 'Feeling okay';
+      return 'Feeling poor';
+    case 'adherenceScore':
+      if (value >= 80) return 'Excellent adherence';
+      if (value >= 60) return 'Good adherence';
+      if (value >= 40) return 'Moderate adherence';
+      return 'Poor adherence';
+    default:
+      return '';
+  }
+};
+
+const formatMetricValue = (key: string, value: number | null): string => {
+  if (value === null) return 'N/A';
+  
+  switch (key) {
+    case 'sleepDurationHours':
+      return `${value} hrs`;
+    case 'stressLevel':
+    case 'verbalRecoveryFeeling':
+      return `${value}/10`;
+    case 'adherenceScore':
+    case 'sleepQuality':
+    case 'workoutLoad':
+      return `${value}%`;
+    case 'restingHr':
+      return `${value} bpm`;
+    case 'hrv':
+      return `${value} ms`;
+    default:
+      return String(value);
+  }
+};
+
 const RecoveryStatusScreen: React.FC<Props> = ({ route }) => {
   const { userId } = route.params;
   const [loading, setLoading] = useState(true);
@@ -49,6 +118,7 @@ const RecoveryStatusScreen: React.FC<Props> = ({ route }) => {
       ]);
       setToday(todayResponse);
       setHistory(historyResponse);
+      console.log('Recovery data loaded:', { todayResponse, sourceInputs: todayResponse?.sourceInputs });
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'Failed to load recovery data');
     } finally {
@@ -95,13 +165,22 @@ const RecoveryStatusScreen: React.FC<Props> = ({ route }) => {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Contributing Inputs</Text>
-        {Object.entries(today.sourceInputs).map(([key, value]) => (
-          <View key={key} style={styles.row}>
-            <Text style={styles.label}>{metricLabel(key)}</Text>
-            <Text style={styles.value}>{value ?? 'N/A'}</Text>
-          </View>
-        ))}
+        <Text style={styles.cardTitle}>Health Signals</Text>
+        {!today.sourceInputs || Object.keys(today.sourceInputs).length === 0 ? (
+          <Text style={styles.text}>No health signals available.</Text>
+        ) : (
+          Object.entries(today.sourceInputs).map(([key, value]) => (
+            <View key={key} style={styles.signalRow}>
+              <View style={styles.signalHeader}>
+                <Text style={styles.signalLabel}>{metricLabel(key)}</Text>
+              </View>
+              <Text style={styles.signalValue}>
+                {formatMetricValue(key, value)}
+              </Text>
+              <Text style={styles.signalNote}>{metricInterpretation(key, value)}</Text>
+            </View>
+          ))
+        )}
       </View>
 
       <View style={styles.card}>
@@ -208,6 +287,32 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#DC2626',
     textAlign: 'center',
+  },
+  signalRow: {
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  signalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  signalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  signalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#2563EB',
+    marginBottom: 2,
+  },
+  signalNote: {
+    fontSize: 12,
+    color: '#6B7280',
   },
 });
 

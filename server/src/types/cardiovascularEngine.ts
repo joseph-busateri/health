@@ -25,6 +25,7 @@ export interface LipidPanel {
   hdl?: number;
   triglycerides?: number;
   cholesterolRatio?: number;
+  ldlHdlRatio?: number;
 }
 
 // New AI enrichment types

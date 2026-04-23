@@ -12,23 +12,21 @@ import {
   TextInput,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useUser } from '../context/UserContext';
 import { healthApi } from '../services/api';
 import { initializeHealthKit, syncBloodPressure } from '../services/healthKitService';
-import type { HomeStackParamList } from '../types/navigation';
 
 export default function DevicesScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList>>();
+  const navigation = useNavigation<NavigationProp<any>>();
   const { userId } = useUser();
   const [syncing, setSyncing] = useState<{ [key: string]: boolean }>({});
   const [lastSync, setLastSync] = useState<{ [key: string]: string }>({});
 
   const devices = [
     { id: 'oura', name: 'Oura Ring', iconName: 'ring', color: '#FF6B6B', hasConnectScreen: true },
-    { id: 'appleWatch', name: 'Apple Watch', iconName: 'watch-variant', color: '#007AFF', hasConnectScreen: true },
-    { id: 'sleepNumber', name: 'Sleep Number', iconName: 'bed-king', color: '#4CAF50' },
+    { id: 'appleWatch', name: 'Apple Watch', iconName: 'watch-variant', color: '#007AFF', hasConnectScreen: false },
+    { id: 'sleepNumber', name: 'Sleep Number', iconName: 'bed-king', color: '#4CAF50', hasConnectScreen: true },
     { id: 'bpMonitor', name: 'Blood Pressure Monitor', iconName: 'heart-pulse', color: '#EC4899' },
   ];
 
@@ -132,8 +130,8 @@ export default function DevicesScreen() {
                   onPress={() => {
                     if (device.id === 'oura') {
                       navigation.navigate('OuraConnect');
-                    } else if (device.id === 'appleWatch') {
-                      navigation.navigate('AppleWatchConnect');
+                    } else if (device.id === 'sleepNumber') {
+                      navigation.navigate('SleepNumberConnect');
                     }
                   }}
                 >
@@ -186,21 +184,6 @@ export default function DevicesScreen() {
             </View>
           </View>
         ))}
-
-        <TouchableOpacity 
-          style={styles.dataHubCard}
-          onPress={() => navigation.navigate('HealthDataHub')}
-          activeOpacity={0.88}
-        >
-          <View style={styles.dataHubIconWrapper}>
-            <MaterialCommunityIcons name="database" size={28} color="#FFFFFF" />
-          </View>
-          <View style={styles.dataHubContent}>
-            <Text style={styles.dataHubTitle}>Health Data Hub</Text>
-            <Text style={styles.dataHubSubtitle}>View all connected data sources and provenance</Text>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
 
         <Text style={[styles.sectionLabel, styles.sectionLabelSpacing]}>Manual Uploads</Text>
         {uploads.map((item) => (
@@ -344,41 +327,6 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: '600',
     fontSize: 13,
-  },
-  dataHubCard: {
-    backgroundColor: '#2563EB',
-    borderRadius: 12,
-    padding: 20,
-    marginBottom: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  dataHubIconWrapper: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dataHubContent: {
-    flex: 1,
-    gap: 4,
-  },
-  dataHubTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  dataHubSubtitle: {
-    fontSize: 13,
-    color: '#E0E7FF',
   },
   deviceDetails: {
     marginTop: 5,

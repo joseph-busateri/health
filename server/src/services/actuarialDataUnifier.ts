@@ -23,7 +23,7 @@ import { getCardiovascularToday } from './cardiovascularEngineService';
 import { getMetabolicToday } from './metabolicEngineService';
 import { getRecoveryToday } from './recoveryEngineService';
 import { getStressToday } from './stressEngineService';
-import { getWorkoutToday } from './workoutEngineService';
+import { getWorkoutRecommendationToday } from './workoutEngineService';
 import { getLatestBodyCompositionContext } from './bodyCompositionContextService';
 import { getLatestBloodworkContext, getMarkerValue } from './bloodworkContextService';
 import { getBaselineFields } from './baselineContextService';
@@ -96,14 +96,14 @@ async function buildDemographicProfile(
 
   try {
     // Fetch baseline profile data
-    const baseline = await getBaselineFields(userId, ['age', 'gender', 'race', 'familyHistory', 'smokingStatus']);
+    const baseline = await getBaselineFields(userId);
 
     const profile: DemographicProfile = {
       age: baseline?.age || 50,
-      gender: (baseline?.gender as 'male' | 'female') || 'male',
-      race: (baseline?.race as 'white' | 'african_american' | 'other') || 'white',
-      familyHistory: baseline?.familyHistory || false,
-      smokingStatus: (baseline?.smokingStatus as 'never' | 'former' | 'current') || 'never',
+      gender: (baseline?.sex as 'male' | 'female') || 'male',
+      race: 'white', // TODO: Add race to baseline profile
+      familyHistory: baseline?.familyHistory?.cardiovascular_disease || false,
+      smokingStatus: 'never', // TODO: Add smoking status to baseline profile
     };
 
     // Apply overrides
@@ -162,8 +162,8 @@ async function buildClinicalRiskFactors(
       }
 
       // Check for BP medication from baseline
-      const baseline = await getBaselineFields(userId, ['onBPmedication']);
-      factors.onBPmedication = baseline?.onBPmedication || false;
+      // TODO: Add onBPmedication to baseline profile
+      factors.onBPmedication = false;
 
       logger.info('✅ [CLINICAL] Cardiovascular data integrated', {
         userId,
@@ -179,9 +179,22 @@ async function buildClinicalRiskFactors(
       factors.ldlCholesterol = getMarkerValue(bloodwork.markers.ldl) || undefined;
       factors.triglycerides = getMarkerValue(bloodwork.markers.triglycerides) || undefined;
 
+      // Calculate estimated total cholesterol from LDL + HDL if total cholesterol is missing
+      // This is a conservative estimate (assumes normal triglycerides)
+      if (!factors.totalCholesterol && factors.ldlCholesterol && factors.hdlCholesterol) {
+        factors.totalCholesterol = factors.ldlCholesterol + factors.hdlCholesterol;
+        logger.info('📊 [CLINICAL] Using estimated total cholesterol (LDL + HDL)', {
+          userId,
+          ldl: factors.ldlCholesterol,
+          hdl: factors.hdlCholesterol,
+          estimatedTotal: factors.totalCholesterol,
+        });
+      }
+
       logger.info('✅ [CLINICAL] Bloodwork data integrated', {
         userId,
         hasCholesterol: !!factors.totalCholesterol,
+        cholesterolSource: bloodwork.markers.totalCholesterol ? 'bloodwork' : 'estimated',
       });
     }
 
@@ -245,39 +258,41 @@ async function buildLifestyleRiskFactors(
   const factors: Partial<LifestyleRiskFactors> = {};
 
   try {
-    // Fetch workout data for exercise frequency and VO2 max
-    const workout = await getWorkoutToday(userId);
-    if (workout) {
-      // Extract exercise frequency from workout evidence
-      if (workout.evidence?.signals) {
-        const freqSignal = workout.evidence.signals.find(s => s.type === 'exercise_frequency');
-        if (freqSignal?.value && typeof freqSignal.value === 'number') {
-          factors.exerciseFrequency = freqSignal.value;
-        }
+    // Fetch exercise frequency from baseline profile
+    const baselineProfile = await getBaselineFields(userId);
+    if (baselineProfile?.trainingDaysPerWeek && typeof baselineProfile.trainingDaysPerWeek === 'number') {
+      factors.exerciseFrequency = baselineProfile.trainingDaysPerWeek;
+      logger.info('✅ [LIFESTYLE] Exercise frequency from baseline', {
+        userId,
+        trainingDaysPerWeek: baselineProfile.trainingDaysPerWeek,
+      });
+    }
 
-        const vo2Signal = workout.evidence.signals.find(s => s.type === 'vo2_max');
-        if (vo2Signal?.value && typeof vo2Signal.value === 'number') {
-          factors.vo2Max = vo2Signal.value;
-        }
+    // Fetch workout data for VO2 max (if available in future)
+    const workout = await getWorkoutRecommendationToday(userId);
+    if (workout?.evidence?.signals) {
+      const vo2Signal = workout.evidence.signals.find(s => s.name === 'vo2_max');
+      if (vo2Signal?.value && typeof vo2Signal.value === 'number') {
+        factors.vo2Max = vo2Signal.value;
       }
+    }
 
-      logger.info('✅ [LIFESTYLE] Workout data integrated', {
+    logger.info('✅ [LIFESTYLE] Workout data integrated', {
         userId,
         hasExerciseFreq: !!factors.exerciseFrequency,
         hasVO2Max: !!factors.vo2Max,
       });
-    }
 
     // Fetch body composition for BMI and body fat
     const bodyComp = await getLatestBodyCompositionContext(userId);
     if (bodyComp) {
       factors.bmi = bodyComp.bmi || undefined;
-      factors.bodyFatPercentage = bodyComp.bodyFatPercentage || undefined;
+      factors.bodyFatPercent = bodyComp.bodyFatPercentage || undefined;
 
       logger.info('✅ [LIFESTYLE] Body composition integrated', {
         userId,
         hasBMI: !!factors.bmi,
-        hasBodyFat: !!factors.bodyFatPercentage,
+        hasBodyFat: !!factors.bodyFatPercent,
       });
     }
 
@@ -318,9 +333,9 @@ async function buildLifestyleRiskFactors(
     }
 
     // Diet quality from baseline or nutrition engine
-    const baseline = await getBaselineFields(userId, ['dietQuality']);
-    if (baseline?.dietQuality) {
-      factors.dietQuality = baseline.dietQuality as 'poor' | 'fair' | 'good' | 'excellent';
+    const baselineDiet = await getBaselineFields(userId);
+    if (baselineDiet?.dietQuality) {
+      factors.dietQuality = baselineDiet.dietQuality as 'poor' | 'fair' | 'good' | 'excellent';
     }
   } catch (error) {
     logger.warn('⚠️ [LIFESTYLE] Error fetching lifestyle data', {
@@ -337,8 +352,7 @@ async function buildLifestyleRiskFactors(
     sleepQuality: factors.sleepQuality || 70,
     stressLevel: factors.stressLevel || 50,
     vo2Max: factors.vo2Max,
-    bodyFatPercentage: factors.bodyFatPercentage,
-    alcoholConsumption: factors.alcoholConsumption,
+    bodyFatPercent: factors.bodyFatPercent,
     ...overrides,
   };
 
@@ -346,6 +360,7 @@ async function buildLifestyleRiskFactors(
     userId,
     exerciseFrequency: finalFactors.exerciseFrequency,
     bmi: finalFactors.bmi,
+    dietQuality: finalFactors.dietQuality,
   });
 
   return finalFactors;
@@ -485,11 +500,11 @@ export async function extractExerciseData(userId: string): Promise<{
   vo2Max?: number;
 } | null> {
   try {
-    const workout = await getWorkoutToday(userId);
+    const workout = await getWorkoutRecommendationToday(userId);
     if (workout?.evidence?.signals) {
-      const freqSignal = workout.evidence.signals.find(s => s.type === 'exercise_frequency');
-      const vo2Signal = workout.evidence.signals.find(s => s.type === 'vo2_max');
-      
+      const freqSignal = workout.evidence.signals.find(s => s.name === 'exercise_frequency');
+      const vo2Signal = workout.evidence.signals.find(s => s.name === 'vo2_max');
+
       if (freqSignal?.value && typeof freqSignal.value === 'number') {
         return {
           frequency: freqSignal.value,

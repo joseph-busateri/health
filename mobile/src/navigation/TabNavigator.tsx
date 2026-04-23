@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import HomeStackNavigator from './HomeStackNavigator';
 import InsightsStackNavigator from './InsightsStackNavigator';
 import WorkoutsStackNavigator from './WorkoutsStackNavigator';
-import DevicesScreen from '../screens/DevicesScreen';
+import DevicesStackNavigator from './DevicesStackNavigator';
 import UserSettingsScreen from '../screens/UserSettingsScreen';
 import GoalManagementScreen from '../screens/GoalManagementScreen';
 
@@ -72,10 +72,11 @@ const TabNavigator: React.FC = () => {
       />
       <Tab.Screen
         name="IntegrationsTab"
-        component={DevicesScreen}
+        component={DevicesStackNavigator}
         options={{
           tabBarLabel: 'Integrations',
           tabBarIcon: ({ color, size }) => <Ionicons name="watch" size={size} color={color} />,
+          headerShown: false,
         }}
       />
       <Tab.Screen

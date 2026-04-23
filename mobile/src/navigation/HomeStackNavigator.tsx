@@ -2,6 +2,7 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import ModernHomeScreen from '../screens/ModernHomeScreen';
+import ModernHomeScreenV2 from '../screens/ModernHomeScreenV2';
 import RecoveryStatusScreen from '../screens/RecoveryStatusScreen';
 import StressStatusScreen from '../screens/StressStatusScreen';
 import JointHealthStatusScreen from '../screens/JointHealthStatusScreen';
@@ -18,6 +19,7 @@ import CardiovascularDashboardScreen from '../screens/CardiovascularDashboardScr
 import CardiovascularDashboardScreenV2 from '../screens/CardiovascularDashboardScreenV2';
 import SexualHealthDashboardScreen from '../screens/SexualHealthDashboardScreen';
 import SexualHealthDashboardScreenV2 from '../screens/SexualHealthDashboardScreenV2';
+import SexualHealthDashboardScreenV3 from '../screens/SexualHealthDashboardScreenV3';
 import ActuarialRiskDashboardScreen from '../screens/ActuarialRiskDashboardScreen';
 import ActuarialRiskScreen from '../screens/ActuarialRiskScreen';
 import MealLogScreen from '../screens/MealLogScreen';
@@ -32,7 +34,7 @@ const HomeStack = createNativeStackNavigator<HomeStackParamList>();
 
 const HomeStackNavigator: React.FC = () => (
   <HomeStack.Navigator screenOptions={{ headerShown: false }}>
-    <HomeStack.Screen name="ModernHome" component={ModernHomeScreen} />
+    <HomeStack.Screen name="ModernHome" component={ModernHomeScreenV2} />
     <HomeStack.Screen name="RecoveryStatus" component={RecoveryStatusScreen} />
     <HomeStack.Screen name="StressStatus" component={StressStatusScreen} />
     <HomeStack.Screen name="JointHealthStatus" component={JointHealthStatusScreen} />
@@ -49,6 +51,7 @@ const HomeStackNavigator: React.FC = () => (
     <HomeStack.Screen name="CardiovascularDashboardV2" component={CardiovascularDashboardScreenV2} />
     <HomeStack.Screen name="SexualHealthDashboard" component={SexualHealthDashboardScreen} />
     <HomeStack.Screen name="SexualHealthDashboardV2" component={SexualHealthDashboardScreenV2} />
+    <HomeStack.Screen name="SexualHealthDashboardV3" component={SexualHealthDashboardScreenV3} />
     <HomeStack.Screen name="ActuarialRiskDashboard" component={ActuarialRiskDashboardScreen} />
     <HomeStack.Screen name="ActuarialRisk" component={ActuarialRiskScreen} />
     <HomeStack.Screen name="NutritionDashboard" component={NutritionDashboardScreen} />

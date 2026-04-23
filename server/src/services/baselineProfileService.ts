@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import { logger } from '../utils/logger';
+import { invalidateBaselineContext } from './cacheManager';
 
 export interface BaselineProfile {
   userId: string;
@@ -26,6 +27,7 @@ export interface BaselineProfile {
   trainingDaysPerWeek?: number;
   travelFrequency?: 'never' | 'rarely' | 'monthly' | 'weekly' | 'daily';
   stressEnvironment?: 'low' | 'moderate' | 'high' | 'very_high';
+  dietQuality?: 'poor' | 'fair' | 'good' | 'excellent';
   baselineCalories?: number;
   baselineProteinG?: number;
   baselineCarbsG?: number;
@@ -138,6 +140,7 @@ export async function getBaselineProfile(userId: string): Promise<BaselineProfil
       trainingDaysPerWeek: data.training_days_per_week,
       travelFrequency: data.travel_frequency,
       stressEnvironment: data.stress_environment,
+      dietQuality: data.diet_quality,
       baselineCalories: data.baseline_calories,
       baselineProteinG: data.baseline_protein_g,
       baselineCarbsG: data.baseline_carbs_g,
@@ -201,6 +204,7 @@ export async function upsertBaselineProfile(profile: Partial<BaselineProfile> & 
       training_days_per_week: profile.trainingDaysPerWeek,
       travel_frequency: profile.travelFrequency,
       stress_environment: profile.stressEnvironment,
+      diet_quality: profile.dietQuality,
       baseline_calories: profile.baselineCalories,
       baseline_protein_g: profile.baselineProteinG,
       baseline_carbs_g: profile.baselineCarbsG,
@@ -217,12 +221,13 @@ export async function upsertBaselineProfile(profile: Partial<BaselineProfile> & 
 
     if (error) throw error;
 
-    // Invalidate cache
+    // Invalidate caches
     baselineProfileCache.delete(profile.userId);
+    invalidateBaselineContext(profile.userId);
 
-    logger.info('✅ [BASELINE PROFILE] Profile saved', { 
+    logger.info('✅ [BASELINE PROFILE] Profile saved', {
       userId: profile.userId,
-      source: profile.source 
+      source: profile.source
     });
 
     return await getBaselineProfile(profile.userId);
@@ -322,8 +327,9 @@ export async function upsertUserPreferences(preferences: Partial<UserPreferences
 
     if (error) throw error;
 
-    // Invalidate cache
+    // Invalidate caches
     userPreferencesCache.delete(preferences.userId);
+    invalidateBaselineContext(preferences.userId);
 
     logger.info('✅ [USER PREFERENCES] Preferences saved', { userId: preferences.userId });
 

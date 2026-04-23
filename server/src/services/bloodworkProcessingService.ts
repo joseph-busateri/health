@@ -4,7 +4,9 @@ import { logger } from '../utils/logger';
 import { parseBloodworkDocument } from './bloodworkExtractionService';
 import { getBloodworkTrendsByUser, saveBloodworkTrends } from './bloodworkTrendService';
 import { generateBloodworkRecommendationsForUser } from './bloodworkRecommendationService';
+import { generateBloodworkRecommendationsForUserV2 } from './bloodworkRecommendationServiceV2';
 import { sendBloodworkProcessingNotification } from './notificationService';
+import { isFeatureEnabled } from '../config/featureFlags';
 
 const SUPABASE_URL = process.env.SUPABASE_URL!;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -254,9 +256,46 @@ export async function processBloodworkDocument(documentId: string, userId: strin
       progress: STATUS_PROGRESS.generating_recommendations,
     });
 
-    logger.info('Generating recommendations', { documentId, userId });
-    const recommendationsResult = await generateBloodworkRecommendationsForUser({ user_id: userId });
-    logger.info('Recommendations result', { documentId, userId, success: recommendationsResult.success, error: recommendationsResult.error });
+    // Use V2 recommendation service if feature flag is enabled
+    const useV2 = isFeatureEnabled('USE_RECOMMENDATION_V2');
+    const aiEnhancementEnabled = isFeatureEnabled('AI_ENHANCEMENT_ENABLED');
+    
+    logger.info('Generating recommendations', { 
+      documentId, 
+      userId, 
+      version: useV2 ? 'V2' : 'V1',
+      aiEnhancement: useV2 && aiEnhancementEnabled
+    });
+
+    let recommendationsResult;
+    
+    if (useV2) {
+      try {
+        recommendationsResult = await generateBloodworkRecommendationsForUserV2({ 
+          user_id: userId,
+          use_ai_enhancement: aiEnhancementEnabled
+        });
+      } catch (v2Error) {
+        logger.error('V2 recommendation service failed, falling back to V1', {
+          documentId,
+          userId,
+          error: v2Error instanceof Error ? v2Error.message : 'Unknown error'
+        });
+        // Fallback to V1 on V2 failure
+        recommendationsResult = await generateBloodworkRecommendationsForUser({ user_id: userId });
+      }
+    } else {
+      recommendationsResult = await generateBloodworkRecommendationsForUser({ user_id: userId });
+    }
+    
+    logger.info('Recommendations result', { 
+      documentId, 
+      userId, 
+      version: useV2 ? 'V2' : 'V1',
+      success: recommendationsResult.success, 
+      generatedCount: recommendationsResult.data?.generated_count || 0,
+      error: recommendationsResult.error 
+    });
 
     if (!recommendationsResult.success) {
       const recError = recommendationsResult.error || '';

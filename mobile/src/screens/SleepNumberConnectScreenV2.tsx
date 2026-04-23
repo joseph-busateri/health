@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser, DEFAULT_USER_ID } from '../context/UserContext';
+import { API_BASE_URL } from '../config';
 
 /**
  * Sleep Number Connect Screen V2
@@ -65,9 +66,7 @@ export default function SleepNumberConnectScreenV2() {
     setLoading(true);
 
     try {
-      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      
-      const response = await fetch(`${API_URL}/sleep-number/${userId}/connect`, {
+      const response = await fetch(`${API_BASE_URL}/api/devices/sleep-number/${userId}/connect`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -121,9 +120,7 @@ export default function SleepNumberConnectScreenV2() {
           onPress: async () => {
             setLoading(true);
             try {
-              const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-              
-              const response = await fetch(`${API_URL}/sleep-number/${userId}/disconnect`, {
+              const response = await fetch(`${API_BASE_URL}/api/devices/sleep-number/${userId}/disconnect`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
               });
@@ -155,9 +152,7 @@ export default function SleepNumberConnectScreenV2() {
 
     setLoading(true);
     try {
-      const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      
-      const response = await fetch(`${API_URL}/sleep-number/${userId}/sync`, {
+      const response = await fetch(`${API_BASE_URL}/api/devices/sleep-number/${userId}/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       });

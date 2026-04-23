@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { sleepNumberSyncService } from '../services/sleepNumberSyncService';
 import { sleepNumberService } from '../services/sleepNumberService';
+import { supabase } from '../config/supabase';
 
 const router = Router();
 
@@ -64,8 +65,27 @@ router.post('/:userId/disconnect', async (req: Request, res: Response) => {
 router.post('/:userId/sync', async (req: Request, res: Response) => {
   try {
     const userId = req.params.userId as string;
-    await sleepNumberSyncService.runAutomaticSync();
-    res.json({ success: true, message: 'Sync completed successfully' });
+
+    // Get user's connection
+    const { data: connection, error: connError } = await supabase
+      .from('sleep_number_connections')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('connection_status', 'active')
+      .single();
+
+    if (connError || !connection) {
+      return res.status(404).json({ success: false, error: 'No active Sleep Number connection. Please connect your account first.' });
+    }
+
+    // Process sync for this specific connection
+    const result = await sleepNumberSyncService.processSyncJob(
+      'manual-' + Date.now(),
+      connection.id,
+      userId
+    );
+
+    res.json({ success: true, message: 'Sync completed successfully', data: result });
   } catch (error) {
     const errorMessage = (error as Error).message;
     if (errorMessage.includes('not found') || errorMessage.includes('No connection') || errorMessage.includes('not connected')) {

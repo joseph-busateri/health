@@ -14,8 +14,11 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useUser, DEFAULT_USER_ID } from '../context/UserContext';
 import { healthApi } from '../services/api';
+import { getRecoveryToday } from '../services/recoveryEngineService';
 
 import type { InsightsStackParamList } from '../types/navigation';
+import type { RecoveryRecord } from '../types/recoveryEngine';
+import type { BodyCompositionScan } from '../types/bodyComposition';
 
 interface CardiovascularRecord {
   id: string;
@@ -51,6 +54,8 @@ const CardiovascularDashboardScreenV2: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [cardioData, setCardioData] = useState<CardiovascularRecord | null>(null);
+  const [recoveryData, setRecoveryData] = useState<RecoveryRecord | null>(null);
+  const [bodyComposition, setBodyComposition] = useState<BodyCompositionScan | null>(null);
 
   const loadData = async () => {
     if (!resolvedUserId) return;
@@ -59,13 +64,41 @@ const CardiovascularDashboardScreenV2: React.FC = () => {
     setError(null);
     try {
       console.log('Loading cardiovascular data for userId:', resolvedUserId);
-      const response = await healthApi.cardiovascular.getToday(resolvedUserId);
-      console.log('Cardiovascular response:', response.data);
       
-      if (response.data?.data) {
-        setCardioData(response.data.data);
+      // Load all data in parallel
+      const [cardioResponse, recoveryResponse] = await Promise.allSettled([
+        healthApi.cardiovascular.getToday(resolvedUserId, { regenerate: true }),
+        getRecoveryToday(resolvedUserId, { regenerate: true }),
+      ]);
+      
+      // Handle cardiovascular data
+      if (cardioResponse.status === 'fulfilled' && cardioResponse.value.data?.data) {
+        setCardioData(cardioResponse.value.data.data);
+        console.log('Cardiovascular data loaded:', cardioResponse.value.data.data);
       } else {
         setError('No cardiovascular data available');
+      }
+      
+      // Handle recovery data
+      if (recoveryResponse.status === 'fulfilled') {
+        setRecoveryData(recoveryResponse.value);
+        console.log('Recovery data loaded - Score:', recoveryResponse.value.recoveryScore, 'Status:', recoveryResponse.value.recoveryStatus);
+      } else if (recoveryResponse.status === 'rejected') {
+        console.warn('Recovery data not available:', recoveryResponse.reason);
+      }
+      
+      // Try to load body composition data separately
+      try {
+        const bodyCompResponse = await fetch(`http://localhost:3000/api/body-composition/latest/${resolvedUserId}`);
+        if (bodyCompResponse.ok) {
+          const bodyCompData = await bodyCompResponse.json();
+          if (bodyCompData.data) {
+            setBodyComposition(bodyCompData.data);
+            console.log('Body composition data loaded - Body Fat %:', bodyCompData.data.bodyFatPercentage, 'Weight:', bodyCompData.data.weightLb);
+          }
+        }
+      } catch (bodyCompError) {
+        console.warn('Body composition data not available:', bodyCompError);
       }
     } catch (err: any) {
       console.error('Error loading cardiovascular data:', err);
@@ -88,11 +121,11 @@ const CardiovascularDashboardScreenV2: React.FC = () => {
 
   const getCardioScore = (status: string): number => {
     switch (status) {
-      case 'optimal': return 85;
-      case 'moderate': return 72;
+      case 'optimal': return 90;
+      case 'moderate': return 75;
       case 'elevated_risk': return 55;
       case 'high_risk': return 35;
-      default: return 50;
+      default: return 70;
     }
   };
 
@@ -256,6 +289,38 @@ const CardiovascularDashboardScreenV2: React.FC = () => {
                   <Text style={styles.signalNote}>{signal.interpretation}</Text>
                 </View>
               ))}
+            </View>
+          </View>
+        )}
+
+        {(recoveryData || bodyComposition) && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Contributing Inputs</Text>
+            <View style={styles.card}>
+              {bodyComposition?.bodyFatPercentage && (
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Body Fat %</Text>
+                  <Text style={styles.inputValue}>{bodyComposition.bodyFatPercentage.toFixed(1)}%</Text>
+                </View>
+              )}
+              {recoveryData?.recoveryScore && (
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Recovery Score</Text>
+                  <Text style={styles.inputValue}>{Math.round(recoveryData.recoveryScore)}</Text>
+                </View>
+              )}
+              {recoveryData?.sourceInputs?.stressLevel && (
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>Stress Level</Text>
+                  <Text style={styles.inputValue}>{recoveryData.sourceInputs.stressLevel}/5</Text>
+                </View>
+              )}
+              {recoveryData?.sourceInputs?.hrv && (
+                <View style={styles.inputRow}>
+                  <Text style={styles.inputLabel}>HRV</Text>
+                  <Text style={styles.inputValue}>{Math.round(recoveryData.sourceInputs.hrv)} ms</Text>
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -495,6 +560,24 @@ const styles = StyleSheet.create({
     color: '#374151',
     flex: 1,
     lineHeight: 20,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  inputLabel: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  inputValue: {
+    fontSize: 16,
+    color: '#0F172A',
+    fontWeight: '600',
   },
   ctaButton: {
     backgroundColor: '#6366F1',

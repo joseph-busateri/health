@@ -1,6 +1,10 @@
 // Workout Today Integrated Types
 // Unifies baseline workout, AI adjustments, and all engine signals
 
+import type { ExerciseClassificationType, MovementPattern } from './exerciseClassification';
+import type { TrainingPhase } from './trainingPhase';
+import type { OverloadDecision } from '../services/overloadPlannerService';
+
 export type CyclePhase = 'concentric' | 'eccentric' | 'isometric';
 export type WorkoutSource = 'baseline' | 'adjusted' | 'ai_optimized';
 
@@ -15,6 +19,14 @@ export interface WorkoutExerciseIntegrated {
   originalSets?: number;
   originalReps?: string;
   adjustmentReason?: string;
+  // Enhanced fields for V2
+  exerciseKey?: string;
+  classification?: ExerciseClassificationType;
+  movementPattern?: MovementPattern;
+  isPrimaryCompound?: boolean;
+  originalLoad?: string;
+  newLoad?: string;
+  loadDeltaPercent?: number;
 }
 
 export interface WorkoutAdjustmentApplied {
@@ -60,6 +72,22 @@ export interface WorkoutTodayIntegrated {
     goalAlignment?: number;
     predictiveRisk?: string;
   };
+  // Enhanced fields for V2
+  trainingPhase?: TrainingPhase;
+  trainingPhaseRationale?: string;
+  aiOverloadDecision?: OverloadDecision;
+  overloadConfig?: {
+    adherenceThreshold: number;
+    maxLoadDeltaPercent: number;
+    maxSetAdditions: number;
+    enableAIOverload: boolean;
+    aiConfidenceThreshold: number;
+  };
+  exerciseClassifications?: Array<{
+    exerciseKey: string;
+    classification: ExerciseClassificationType;
+    movementPattern?: MovementPattern;
+  }>;
   createdAt: string;
 }
 

@@ -39,35 +39,59 @@ export class SleepNumberSyncService {
       const apiClient = new SleepNumberApiClient();
       const tokens = await apiClient.login(email, password);
 
-      // Get user's beds
-      const beds = await apiClient.getBeds();
-      if (beds.length === 0) {
-        throw new Error('No beds found for this account');
-      }
-
-      const bedId = beds[0].bedId;
+      // Skip getBeds for now - will be resolved during sync
+      // Sleep Number API authentication may have changed
+      const bedId = 'pending'; // Placeholder, will be updated during sync
 
       // Encrypt tokens
       const encryptedAccessToken = this.encrypt(tokens.accessToken);
       const encryptedRefreshToken = this.encrypt(tokens.refreshToken);
 
-      // Save connection
-      const { data: connection, error } = await supabase
+      // Check if connection already exists
+      const { data: existingConnection, error: checkError } = await supabase
         .from('sleep_number_connections')
-        .insert({
-          user_id: userId,
-          email: email,
-          access_token_encrypted: encryptedAccessToken,
-          refresh_token_encrypted: encryptedRefreshToken,
-          token_expires_at: tokens.expiresAt.toISOString(),
-          connection_status: 'active',
-          auto_sync_enabled: true,
-          bed_id: bedId,
-        })
-        .select()
-        .single();
+        .select('id')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-      if (error) throw error;
+      let connection;
+      if (existingConnection) {
+        // Update existing connection
+        const { data: updated, error: updateError } = await supabase
+          .from('sleep_number_connections')
+          .update({
+            email: email,
+            access_token_encrypted: encryptedAccessToken,
+            refresh_token_encrypted: encryptedRefreshToken,
+            token_expires_at: tokens.expiresAt.toISOString(),
+            connection_status: 'active',
+            auto_sync_enabled: true,
+            bed_id: bedId,
+          })
+          .eq('user_id', userId)
+          .select()
+          .single();
+        if (updateError) throw updateError;
+        connection = updated;
+      } else {
+        // Insert new connection
+        const { data: inserted, error: insertError } = await supabase
+          .from('sleep_number_connections')
+          .insert({
+            user_id: userId,
+            email: email,
+            access_token_encrypted: encryptedAccessToken,
+            refresh_token_encrypted: encryptedRefreshToken,
+            token_expires_at: tokens.expiresAt.toISOString(),
+            connection_status: 'active',
+            auto_sync_enabled: true,
+            bed_id: bedId,
+          })
+          .select()
+          .single();
+        if (insertError) throw insertError;
+        connection = inserted;
+      }
 
       logger.info('Sleep Number account connected', {
         userId,
@@ -379,9 +403,9 @@ export class SleepNumberSyncService {
     connectionId: string,
     scheduledFor: Date,
     priority: number = 5
-  ): Promise<string> {
+  ): Promise<void> {
     try {
-      const { data, error } = await supabase
+      const { error } = await supabase
         .rpc('queue_sync_job', {
           p_connection_id: connectionId,
           p_scheduled_for: scheduledFor.toISOString(),
@@ -391,7 +415,6 @@ export class SleepNumberSyncService {
       if (error) throw error;
 
       logger.info('Sync job queued', { connectionId, scheduledFor, priority });
-      return data;
     } catch (error) {
       logger.error('Failed to queue sync job', { error, connectionId });
       throw error;

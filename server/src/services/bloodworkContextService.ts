@@ -17,7 +17,7 @@ const supabase = createClient<any>(
  */
 
 export interface BloodworkMarker {
-  normalized_test_name: string;
+  raw_test_name: string;
   value_numeric: number | null;
   value_text: string | null;
   unit: string | null;
@@ -92,7 +92,7 @@ export async function getLatestBloodworkContext(userId: string): Promise<Bloodwo
     // Fetch all bloodwork results for user, ordered by test date
     const { data: results, error } = await supabase
       .from('bloodwork_results')
-      .select('normalized_test_name, value_numeric, value_text, unit, test_date, reference_range_low, reference_range_high, abnormal_flag, category')
+      .select('raw_test_name, value_numeric, value_text, unit, test_date, reference_range_low, reference_range_high, abnormal_flag, category')
       .eq('user_id', userId)
       .not('test_date', 'is', null)
       .order('test_date', { ascending: false });
@@ -110,17 +110,17 @@ export async function getLatestBloodworkContext(userId: string): Promise<Bloodwo
     // Get latest test date
     const latestTestDate = results[0].test_date;
 
-    // Map normalized test names to markers
+    // Map raw test names to markers
     const markerMap = new Map<string, BloodworkMarker>();
-    
+
     for (const result of results) {
-      const normalizedName = result.normalized_test_name?.toLowerCase();
-      if (!normalizedName || markerMap.has(normalizedName)) {
+      const rawName = result.raw_test_name?.toLowerCase();
+      if (!rawName || markerMap.has(rawName)) {
         continue; // Skip if already have latest for this marker
       }
 
-      markerMap.set(normalizedName, {
-        normalized_test_name: result.normalized_test_name || '',
+      markerMap.set(rawName, {
+        raw_test_name: result.raw_test_name || '',
         value_numeric: result.value_numeric,
         value_text: result.value_text,
         unit: result.unit,
@@ -188,11 +188,29 @@ export async function getLatestBloodworkContext(userId: string): Promise<Bloodwo
 
     // Log summary
     const markerCount = Object.values(context.markers).filter(m => m !== null).length;
+
+    // Calculate LDL/HDL ratio as backup if total cholesterol is missing
+    let calculatedLDLHDLRatio = null;
+    if (!context.markers.totalCholesterol && context.markers.ldl && context.markers.hdl) {
+      const ldlValue = context.markers.ldl.value_numeric;
+      const hdlValue = context.markers.hdl.value_numeric;
+      if (ldlValue && hdlValue && hdlValue > 0) {
+        calculatedLDLHDLRatio = ldlValue / hdlValue;
+        logger.info('📊 [BLOODWORK CONTEXT] Calculated LDL/HDL ratio as backup', {
+          userId,
+          ldl: ldlValue,
+          hdl: hdlValue,
+          ldlHdlRatio: calculatedLDLHDLRatio,
+        });
+      }
+    }
+
     logger.info('✅ [BLOODWORK CONTEXT] Bloodwork loaded', {
       userId,
       latestTestDate,
       markerCount,
       totalResults: results.length,
+      calculatedLDLHDLRatio,
     });
 
     return context;
@@ -203,7 +221,7 @@ export async function getLatestBloodworkContext(userId: string): Promise<Bloodwo
 }
 
 /**
- * Get a specific bloodwork marker by normalized name
+ * Get a specific bloodwork marker by raw test name
  * Tries multiple name variations
  */
 function getMarker(

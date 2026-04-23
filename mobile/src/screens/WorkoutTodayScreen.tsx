@@ -1,12 +1,13 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View, Platform } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View, Platform } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 import type { RootStackParamList } from '../types/navigation';
 import type { WorkoutTodayRecord } from '../types/workoutToday';
-import { getWorkoutToday } from '../services/workoutTodayService';
+import { getWorkoutTodayV2 } from '../services/workoutTodayServiceV2';
 import { DEFAULT_USER_ID } from '../context/UserContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'WorkoutToday'>;
@@ -46,11 +47,11 @@ const WorkoutTodayScreen: React.FC<Props> = ({ route }) => {
     }
   }, [record]);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (regenerate = false) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await getWorkoutToday(normalizedUserId);
+      const response = await getWorkoutTodayV2(normalizedUserId, { regenerate });
       setRecord(response);
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'Failed to load workout today');
@@ -74,9 +75,24 @@ const WorkoutTodayScreen: React.FC<Props> = ({ route }) => {
   }
 
   if (error || !record) {
+    const isBaselineError = error?.toLowerCase().includes('baseline') || error?.toLowerCase().includes('not found');
+    
     return (
       <View style={styles.center}>
-        <Text style={styles.errorText}>{error ?? 'No workout record available'}</Text>
+        <Text style={styles.errorTitle}>
+          {isBaselineError ? 'No Workout Plan' : 'Error'}
+        </Text>
+        <Text style={styles.errorText}>
+          {isBaselineError 
+            ? 'Please upload a workout plan first to generate today\'s workout.'
+            : error ?? 'No workout record available'
+          }
+        </Text>
+        {isBaselineError && (
+          <Text style={styles.errorSubtext}>
+            Go to the Upload screen to add your workout document.
+          </Text>
+        )}
       </View>
     );
   }
@@ -94,8 +110,17 @@ const WorkoutTodayScreen: React.FC<Props> = ({ route }) => {
             <Text style={styles.heroLabel}>Today&apos;s Focus</Text>
             <Text style={styles.heroTitle}>{formattedDate}</Text>
           </View>
-          <View style={[styles.readinessBadge, { backgroundColor: readinessMeta.badgeBackground }]}>
-            <Text style={[styles.readinessBadgeText, { color: readinessMeta.badgeText }]}>{readinessMeta.label}</Text>
+          <View style={styles.heroBadges}>
+            <View style={[styles.readinessBadge, { backgroundColor: readinessMeta.badgeBackground }]}>
+              <Text style={[styles.readinessBadgeText, { color: readinessMeta.badgeText }]}>{readinessMeta.label}</Text>
+            </View>
+            <TouchableOpacity 
+              style={styles.refreshButton} 
+              onPress={() => load(true)}
+              disabled={loading}
+            >
+              <MaterialCommunityIcons name="refresh" size={20} color="#FFFFFF" />
+            </TouchableOpacity>
           </View>
         </View>
         <Text style={styles.heroSummary}>{readinessMeta.summary}</Text>
@@ -231,6 +256,19 @@ const styles = StyleSheet.create({
     color: '#DC2626',
     textAlign: 'center',
   },
+  errorTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1E293B',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  errorSubtext: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 8,
+  },
   hero: {
     paddingHorizontal: 20,
     paddingVertical: 28,
@@ -263,10 +301,23 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
   readinessBadgeText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     letterSpacing: 0.4,
     textTransform: 'uppercase',
+  },
+  heroBadges: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   heroSummary: {
     fontSize: 15,

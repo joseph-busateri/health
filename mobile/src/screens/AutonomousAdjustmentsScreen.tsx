@@ -54,7 +54,7 @@ const AutonomousAdjustmentsScreen = () => {
       const response = await fetch(`http://localhost:3000/autonomous-adjustments/${USER_ID}`, {
         headers: {
           'Content-Type': 'application/json',
-          'X-App-ID': '12345678-1234-1234-1234-123456789abc',
+          'X-App-ID': process.env.EXPO_PUBLIC_APP_ID || '12345678-1234-1234-1234-123456789abc',
         },
       });
       if (!response.ok) {
@@ -85,7 +85,7 @@ const AutonomousAdjustmentsScreen = () => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'X-App-ID': '12345678-1234-1234-1234-123456789abc',
+          'X-App-ID': process.env.EXPO_PUBLIC_APP_ID || '12345678-1234-1234-1234-123456789abc',
         },
         body: JSON.stringify({ user_id: USER_ID }),
       });
@@ -103,7 +103,7 @@ const AutonomousAdjustmentsScreen = () => {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
-          'X-App-ID': '12345678-1234-1234-1234-123456789abc',
+          'X-App-ID': process.env.EXPO_PUBLIC_APP_ID || '12345678-1234-1234-1234-123456789abc',
         },
         body: JSON.stringify({ user_id: USER_ID, feedback }),
       });

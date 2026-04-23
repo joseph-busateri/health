@@ -1,18 +1,11 @@
 import { getBaselineProfile, getUserPreferences, type BaselineProfile, type UserPreferences } from './baselineProfileService';
 import { logger } from '../utils/logger';
+import { getCachedBaselineContext, setCachedBaselineContext, invalidateBaselineContext as invalidateCache } from './cacheManager';
 
 export interface BaselineContext {
   profile: BaselineProfile;
   preferences: UserPreferences;
   loadedAt: Date;
-}
-
-// In-memory cache for baseline context (shared across engines)
-const baselineContextCache = new Map<string, { context: BaselineContext; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function isCacheValid(timestamp: number): boolean {
-  return Date.now() - timestamp < CACHE_TTL;
 }
 
 /**
@@ -22,10 +15,10 @@ function isCacheValid(timestamp: number): boolean {
  */
 export async function getBaselineContext(userId: string): Promise<BaselineContext> {
   // Check cache first
-  const cached = baselineContextCache.get(userId);
-  if (cached && isCacheValid(cached.timestamp)) {
+  const cached = getCachedBaselineContext(userId);
+  if (cached) {
     logger.info('📋 [BASELINE CONTEXT] Cache hit', { userId });
-    return cached.context;
+    return cached;
   }
 
   logger.info('🔵 [BASELINE CONTEXT] Loading baseline context', { userId });
@@ -43,7 +36,7 @@ export async function getBaselineContext(userId: string): Promise<BaselineContex
   };
 
   // Cache the result
-  baselineContextCache.set(userId, { context, timestamp: Date.now() });
+  setCachedBaselineContext(userId, context);
 
   logger.info('✅ [BASELINE CONTEXT] Context loaded', {
     userId,
@@ -59,8 +52,7 @@ export async function getBaselineContext(userId: string): Promise<BaselineContex
  * Call this when profile or preferences are updated
  */
 export function invalidateBaselineContext(userId: string): void {
-  baselineContextCache.delete(userId);
-  logger.info('🔄 [BASELINE CONTEXT] Cache invalidated', { userId });
+  invalidateCache(userId);
 }
 
 /**
@@ -82,6 +74,7 @@ export async function getBaselineFields(userId: string): Promise<{
   familyHistory: Record<string, any>;
   riskTolerance: string;
   aggressiveness: string;
+  dietQuality?: 'poor' | 'fair' | 'good' | 'excellent';
 }> {
   const context = await getBaselineContext(userId);
   const { profile, preferences } = context;
@@ -100,7 +93,8 @@ export async function getBaselineFields(userId: string): Promise<{
     conditions: profile.conditions ?? [],
     medications: profile.medications ?? [],
     familyHistory: profile.familyHistory ?? {},
-    riskTolerance: preferences.riskTolerance ?? 'moderate',
-    aggressiveness: preferences.aggressivenessLevel ?? 'moderate',
+    riskTolerance: preferences?.riskTolerance ?? 'moderate',
+    aggressiveness: preferences?.aggressivenessLevel ?? 'moderate',
+    dietQuality: profile.dietQuality,
   };
 }

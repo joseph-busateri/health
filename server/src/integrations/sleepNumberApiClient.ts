@@ -41,6 +41,7 @@ export class SleepNumberApiClient {
     this.client = axios.create({
       baseURL: this.baseUrl,
       timeout: 30000,
+      withCredentials: true, // Enable cookie handling
       headers: {
         'Content-Type': 'application/json',
         'User-Agent': 'SleepIQ/1.0 (iPhone; iOS 16.0; Scale/3.00)',
@@ -51,20 +52,13 @@ export class SleepNumberApiClient {
     // Add request interceptor for auth
     this.client.interceptors.request.use(
       async (config) => {
-        // Check if token needs refresh
-        if (this.accessToken && this.tokenExpiresAt) {
-          const now = new Date();
-          const expiresIn = this.tokenExpiresAt.getTime() - now.getTime();
-          
-          // Refresh if expiring in less than 5 minutes
-          if (expiresIn < 5 * 60 * 1000) {
-            await this.refreshAccessToken();
-          }
-        }
-
-        // Add auth header
+        // Add auth as both header and query parameter
         if (this.accessToken) {
-          config.headers.Authorization = `Bearer ${this.accessToken}`;
+          config.headers['X-Key'] = this.accessToken;
+          config.params = {
+            ...config.params,
+            key: this.accessToken,
+          };
         }
 
         return config;
@@ -76,17 +70,8 @@ export class SleepNumberApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       async (error) => {
-        if (error.response?.status === 401 && this.refreshToken) {
-          // Token expired, try to refresh
-          try {
-            await this.refreshAccessToken();
-            // Retry original request
-            return this.client.request(error.config);
-          } catch (refreshError) {
-            logger.error('Failed to refresh token', { refreshError });
-            throw error;
-          }
-        }
+        // Sleep Number doesn't support token refresh
+        // If token expires, user needs to re-authenticate
         return Promise.reject(error);
       }
     );
@@ -105,11 +90,27 @@ export class SleepNumberApiClient {
 
       const { key, userId, expires } = response.data;
 
+      logger.info('Sleep Number login response', { key, userId, expires });
+
       this.accessToken = key;
       this.refreshToken = key; // Sleep Number uses same key
-      this.tokenExpiresAt = new Date(expires);
 
-      logger.info('Sleep Number login successful', { userId });
+      // Handle expires field - it might be null or in an unexpected format
+      if (expires) {
+        try {
+          this.tokenExpiresAt = new Date(expires);
+        } catch (e) {
+          // If date parsing fails, set expiry to 24 hours from now
+          logger.warn('Failed to parse expires date, using 24h default', { expires, error: e });
+          this.tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+        }
+      } else {
+        // No expires field, set to 24 hours from now
+        logger.warn('No expires field in response, using 24h default');
+        this.tokenExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+      }
+
+      logger.info('Sleep Number login successful', { userId, tokenExpiresAt: this.tokenExpiresAt });
 
       return {
         accessToken: key,
@@ -117,36 +118,17 @@ export class SleepNumberApiClient {
         expiresAt: this.tokenExpiresAt,
       };
     } catch (error: any) {
-      logger.error('Sleep Number login failed', { 
+      logger.error('Sleep Number login failed', {
         error: error.message,
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
         url: error.config?.url,
       });
-      
+
       // Return more detailed error message
       const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message;
       throw new Error(`Failed to authenticate with Sleep Number: ${errorMsg}`);
-    }
-  }
-
-  /**
-   * Refresh access token
-   */
-  async refreshAccessToken(): Promise<void> {
-    if (!this.refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
-    try {
-      // Sleep Number doesn't have a separate refresh endpoint
-      // The key stays valid until it expires
-      // In production, you'd re-authenticate or use OAuth refresh
-      logger.info('Token refresh not needed for Sleep Number API');
-    } catch (error) {
-      logger.error('Failed to refresh token', { error });
-      throw error;
     }
   }
 

@@ -13,11 +13,11 @@ const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL
   : DEFAULT_BASE_URL;
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000',
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
-    'X-App-ID': '12345678-1234-1234-1234-123456789abc', // Hardcoded UUID for single-user development
+    'X-App-ID': process.env.EXPO_PUBLIC_APP_ID || '12345678-1234-1234-1234-123456789abc',
   },
 });
 
@@ -232,8 +232,8 @@ export const healthApi = {
 
   // Cardiovascular Engine endpoints
   cardiovascular: {
-    getToday: (userId: string) => 
-      api.get(`/cardiovascular/${userId}/today`),
+    getToday: (userId: string, options?: { regenerate?: boolean }) => 
+      api.get(`/cardiovascular/${userId}/today${options?.regenerate ? '?regenerate=true' : ''}`),
     getHistory: (userId: string) => 
       api.get(`/cardiovascular/${userId}/history`),
   },
