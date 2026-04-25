@@ -21,6 +21,10 @@ import { getLatestBloodworkContext, getMarkerValue, isMarkerAbnormal } from './b
 import { getLatestBodyCompositionContext } from './bodyCompositionContextService';
 import { getStressToday } from './stressEngineService';
 import { getRecoveryToday } from './recoveryEngineService';
+import { getLatestBloodPressureContext, getSystolic, getDiastolic } from './bloodPressureContextService';
+import { getLatestHeartRateContext, getRestingHR } from './heartRateContextService';
+import { getLatestHRVContext, getHRV } from './hrvContextService';
+import { getLatestFitnessContext, getVO2Max } from './fitnessContextService';
 import type {
   CardiovascularRecord,
   CardiovascularStatus,
@@ -680,13 +684,26 @@ export async function calculateCardiovascular(userId: string): Promise<Cardiovas
       logger.warn('No bloodwork found for cardiovascular calculation', { userId });
     }
 
+    // Fetch cardiovascular context data
+    const [bpContext, hrContext, hrvContext] = await Promise.allSettled([
+      getLatestBloodPressureContext(userId),
+      getLatestHeartRateContext(userId),
+      getLatestHRVContext(userId),
+    ]);
+
+    // Extract values with fallbacks
+    const systolicBP = bpContext.status === 'fulfilled' ? getSystolic(bpContext.value) : undefined;
+    const diastolicBP = bpContext.status === 'fulfilled' ? getDiastolic(bpContext.value) : undefined;
+    const restingHR = hrContext.status === 'fulfilled' ? getRestingHR(hrContext.value) : recovery?.source_inputs?.restingHr;
+    const hrv = hrvContext.status === 'fulfilled' ? getHRV(hrvContext.value) : recovery?.source_inputs?.hrv;
+
     // Build inputs from available data
     const age = baseline?.demographics?.age ?? 35;
     const inputs: CardiovascularInputs = {
-      restingHR: recovery?.source_inputs?.restingHr,
-      hrv: recovery?.source_inputs?.hrv,
-      systolicBP: undefined, // TODO: Get from device sync or manual entry
-      diastolicBP: undefined, // TODO: Get from device sync or manual entry
+      restingHR,
+      hrv,
+      systolicBP,
+      diastolicBP,
       lipidPanel: bloodwork?.biomarkers ? {
         totalCholesterol: bloodwork.biomarkers.total_cholesterol,
         ldl: bloodwork.biomarkers.ldl,
@@ -786,11 +803,16 @@ export async function getCardiovascularToday(userId: string, options?: { regener
     logger.info('🔄 [CARDIOVASCULAR ENGINE] No cached record, generating new', { userId });
   }
   
-  // Fetch real data from other engines
-  const [bodyComp, stress, recovery] = await Promise.allSettled([
+  // Fetch real data from other engines and context services
+  const [bodyComp, stress, recovery, bpContext, hrContext, hrvContext, fitnessContext, bloodworkContext] = await Promise.allSettled([
     getLatestBodyCompositionContext(userId),
     getStressToday(userId),
     getRecoveryToday(userId),
+    getLatestBloodPressureContext(userId),
+    getLatestHeartRateContext(userId),
+    getLatestHRVContext(userId),
+    getLatestFitnessContext(userId),
+    getLatestBloodworkContext(userId),
   ]);
 
   // Extract body fat percentage
@@ -808,26 +830,59 @@ export async function getCardiovascularToday(userId: string, options?: { regener
     ? recovery.value.recoveryScore
     : undefined;
 
+  // Extract cardiovascular context values with fallbacks to hardcoded demo values
+  const systolicBP = bpContext.status === 'fulfilled' ? getSystolic(bpContext.value) : undefined;
+  const diastolicBP = bpContext.status === 'fulfilled' ? getDiastolic(bpContext.value) : undefined;
+  const restingHR = hrContext.status === 'fulfilled' ? getRestingHR(hrContext.value) : undefined;
+  const hrv = hrvContext.status === 'fulfilled' ? getHRV(hrvContext.value) : undefined;
+  const vo2Max = fitnessContext.status === 'fulfilled' ? getVO2Max(fitnessContext.value) : undefined;
+
+  // Extract bloodwork lipid panel
+  const bloodwork = bloodworkContext.status === 'fulfilled' ? bloodworkContext.value : null;
+  const lipidPanel = bloodwork?.markers ? {
+    totalCholesterol: getMarkerValue(bloodwork.markers.totalCholesterol),
+    hdl: getMarkerValue(bloodwork.markers.hdl),
+    ldl: getMarkerValue(bloodwork.markers.ldl),
+    triglycerides: getMarkerValue(bloodwork.markers.triglycerides),
+    cholesterolRatio: getMarkerValue(bloodwork.markers.totalCholesterol) && getMarkerValue(bloodwork.markers.hdl)
+      ? getMarkerValue(bloodwork.markers.totalCholesterol)! / getMarkerValue(bloodwork.markers.hdl)!
+      : undefined,
+  } : undefined;
+
+  const apoB = bloodwork?.markers ? getMarkerValue(bloodwork.markers.apoB) : undefined;
+  const lipoproteinA = bloodwork?.markers ? getMarkerValue(bloodwork.markers.lpa) : undefined;
+  const hsCRP = bloodwork?.markers ? getMarkerValue(bloodwork.markers.hsCRP) : undefined;
+
   logger.info('📊 [CARDIOVASCULAR ENGINE] Fetched cross-engine data', {
     userId,
     bodyFatPercentage,
     stressScore,
     recoveryScore,
+    systolicBP,
+    diastolicBP,
+    restingHR,
+    hrv,
+    vo2Max,
+    hasLipidPanel: !!lipidPanel,
   });
   
-  // Default inputs for demo (fallback if real data not available)
+  // Build inputs with real data, fallback to hardcoded demo values only if unavailable
   const inputs: CardiovascularInputs = {
-    systolicBP: 118,
-    diastolicBP: 76,
-    restingHR: 62,
-    hrv: 55,
-    lipidPanel: {
+    systolicBP: systolicBP ?? 118,
+    diastolicBP: diastolicBP ?? 76,
+    restingHR: restingHR ?? 62,
+    hrv: hrv ?? 55,
+    lipidPanel: lipidPanel ?? {
       totalCholesterol: 180,
       hdl: 55,
       ldl: 100,
       triglycerides: 125,
       cholesterolRatio: 3.3,
     },
+    vo2Max,
+    apoB,
+    lipoproteinA,
+    hsCRP,
     bodyFat: bodyFatPercentage,
     stressScore: stressScore,
     recoveryScore: recoveryScore,
