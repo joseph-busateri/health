@@ -19,6 +19,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.health.optimization",
       "infoPlist": {
+        "NSHealthShareUsageDescription": "This app needs access to your health data to sync blood pressure, heart rate, HRV, steps, workouts, sleep, and other metrics from Apple Health to provide personalized health insights and recommendations.",
+        "NSHealthUpdateUsageDescription": "This app needs permission to write health data to Apple Health to keep your health records synchronized.",
         "NSMicrophoneUsageDescription": "This app needs access to your microphone for voice interviews.",
         "NSSpeechRecognitionUsageDescription": "This app uses speech recognition for voice interviews.",
         "CFBundleURLTypes": [
