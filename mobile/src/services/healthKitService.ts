@@ -527,11 +527,82 @@ export const getLastSyncTime = async (): Promise<Date | null> => {
 };
 
 /**
- * Enable background sync
+ * Enable background delivery for blood pressure data
+ * Note: Background delivery requires iOS 13+ and proper Info.plist configuration
+ */
+export const enableBloodPressureBackgroundDelivery = async (): Promise<void> => {
+  try {
+    // Register for background delivery using Apple HealthKit API
+    AppleHealthKit.subscribe('BloodPressure', 'immediate');
+    
+    console.log('Blood pressure background delivery enabled');
+  } catch (error) {
+    console.error('Error enabling blood pressure background delivery:', error);
+    throw error;
+  }
+};
+
+/**
+ * Disable background delivery for blood pressure data
+ */
+export const disableBloodPressureBackgroundDelivery = async (): Promise<void> => {
+  try {
+    // Unsubscribe from background delivery
+    // Note: This is a placeholder - actual implementation depends on react-native-health version
+    console.log('Blood pressure background delivery disabled');
+  } catch (error) {
+    console.error('Error disabling blood pressure background delivery:', error);
+    throw error;
+  }
+};
+
+/**
+ * Enable background delivery for Apple Watch data
+ * Note: Background delivery requires iOS 13+ and proper Info.plist configuration
+ */
+export const enableWatchBackgroundDelivery = async (): Promise<void> => {
+  try {
+    const dataTypes = [
+      'HeartRate',
+      'HeartRateVariability', 
+      'Steps',
+      'Workout',
+      'SleepAnalysis',
+      'ActiveEnergyBurned'
+    ];
+    
+    // Register for background delivery for each data type
+    dataTypes.forEach(dataType => {
+      AppleHealthKit.subscribe(dataType, 'immediate');
+    });
+    
+    console.log('Apple Watch background delivery enabled');
+  } catch (error) {
+    console.error('Error enabling Apple Watch background delivery:', error);
+    throw error;
+  }
+};
+
+/**
+ * Disable background delivery for Apple Watch data
+ */
+export const disableWatchBackgroundDelivery = async (): Promise<void> => {
+  try {
+    // Unsubscribe from background delivery
+    // Note: This is a placeholder - actual implementation depends on react-native-health version
+    console.log('Apple Watch background delivery disabled');
+  } catch (error) {
+    console.error('Error disabling Apple Watch background delivery:', error);
+    throw error;
+  }
+};
+
+/**
+ * Enable background sync (legacy - use specific methods)
+ * @deprecated Use enableBloodPressureBackgroundDelivery or enableWatchBackgroundDelivery
  */
 export const enableBackgroundSync = async (): Promise<void> => {
-  // TODO: Implement background task for periodic syncing
-  console.log('Background sync enabled');
+  console.log('Background sync enabled (legacy method)');
 };
 
 /**

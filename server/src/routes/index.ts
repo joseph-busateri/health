@@ -29,6 +29,7 @@ import bloodworkRecommendationsRoutes from './bloodworkRecommendationsRoutes';
 import bloodworkTrendsRoutes from './bloodworkTrendsRoutes';
 import adherenceEngineRoutes from './adherenceEngineRoutes';
 import autonomousRoutes from './autonomousRoutes';
+import healthDataRoutes from './healthData.routes';
 
 const router = Router();
 
@@ -73,6 +74,9 @@ router.use('/bloodwork-trends', bloodworkTrendsRoutes);
 router.use('/devices/sleep-number', sleepNumberRoutes);
 router.use('/devices/apple-watch', appleWatchRoutes);
 router.use('/devices/oura', ouraRoutes);
+
+// Apple Health Data Routes
+router.use('/health-data', healthDataRoutes);
 
 // Health check
 router.get('/health', (req, res) => {

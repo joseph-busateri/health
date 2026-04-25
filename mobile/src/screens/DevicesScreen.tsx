@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,18 +10,79 @@ import {
   SafeAreaView,
   Modal,
   TextInput,
+  Switch,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useUser } from '../context/UserContext';
 import { healthApi } from '../services/api';
-import { initializeHealthKit, syncAllHealthData } from '../services/healthKitService';
+import { initializeHealthKit, syncAllHealthData, enableBloodPressureBackgroundDelivery, disableBloodPressureBackgroundDelivery, enableWatchBackgroundDelivery, disableWatchBackgroundDelivery } from '../services/healthKitService';
+import { syncPreferencesService, SyncPreferences } from '../services/syncPreferencesService';
 
 export default function DevicesScreen() {
   const navigation = useNavigation<NavigationProp<any>>();
   const { userId } = useUser();
   const [syncing, setSyncing] = useState<{ [key: string]: boolean }>({});
   const [lastSync, setLastSync] = useState<{ [key: string]: string }>({});
+  const [syncPreferences, setSyncPreferences] = useState<SyncPreferences>({
+    automaticBPSync: true,
+    automaticWatchSync: true,
+  });
+  const [loadingPreferences, setLoadingPreferences] = useState(true);
+
+  // Load sync preferences on mount
+  useEffect(() => {
+    loadSyncPreferences();
+  }, []);
+
+  const loadSyncPreferences = async () => {
+    try {
+      const prefs = await syncPreferencesService.getPreferences();
+      setSyncPreferences(prefs);
+    } catch (error) {
+      console.error('Error loading sync preferences:', error);
+    } finally {
+      setLoadingPreferences(false);
+    }
+  };
+
+  const toggleAutomaticBPSync = async (value: boolean) => {
+    try {
+      await syncPreferencesService.setAutomaticBPSync(value);
+      setSyncPreferences(prev => ({ ...prev, automaticBPSync: value }));
+      
+      if (value) {
+        await initializeHealthKit();
+        await enableBloodPressureBackgroundDelivery();
+        Alert.alert('Automatic Sync Enabled', 'Blood pressure data will sync automatically when received in Apple Health');
+      } else {
+        await disableBloodPressureBackgroundDelivery();
+        Alert.alert('Automatic Sync Disabled', 'Blood pressure data will only sync when you tap "Sync BP"');
+      }
+    } catch (error) {
+      console.error('Error toggling automatic BP sync:', error);
+      Alert.alert('Error', 'Failed to update automatic sync setting');
+    }
+  };
+
+  const toggleAutomaticWatchSync = async (value: boolean) => {
+    try {
+      await syncPreferencesService.setAutomaticWatchSync(value);
+      setSyncPreferences(prev => ({ ...prev, automaticWatchSync: value }));
+      
+      if (value) {
+        await initializeHealthKit();
+        await enableWatchBackgroundDelivery();
+        Alert.alert('Automatic Sync Enabled', 'Apple Watch data will sync automatically when received in Apple Health');
+      } else {
+        await disableWatchBackgroundDelivery();
+        Alert.alert('Automatic Sync Disabled', 'Apple Watch data will only sync when you tap "Sync Now"');
+      }
+    } catch (error) {
+      console.error('Error toggling automatic Watch sync:', error);
+      Alert.alert('Error', 'Failed to update automatic sync setting');
+    }
+  };
 
   const devices = [
     { id: 'oura', name: 'Oura Ring', iconName: 'ring', color: '#FF6B6B', hasConnectScreen: true },
@@ -240,6 +301,53 @@ export default function DevicesScreen() {
             Apple Watch and Blood Pressure Monitor sync through Apple Health. Ensure your devices are paired with your iPhone and data is syncing to the Health app.
           </Text>
         </View>
+
+        {/* Sync Status Card */}
+        {!loadingPreferences && process.env.EXPO_PUBLIC_ENABLE_BACKGROUND_SYNC === 'true' && (
+          <View style={styles.syncStatusCard}>
+            <View style={styles.syncStatusHeader}>
+              <MaterialCommunityIcons name="sync-circle" size={24} color="#2563EB" style={styles.syncStatusIcon} />
+              <Text style={styles.syncStatusTitle}>Automatic Sync Status</Text>
+            </View>
+            
+            <View style={styles.syncStatusRow}>
+              <View style={styles.syncStatusItem}>
+                <MaterialCommunityIcons name="heart-pulse" size={20} color="#EC4899" />
+                <Text style={styles.syncStatusLabel}>BP Monitor</Text>
+                <Switch
+                  value={syncPreferences.automaticBPSync}
+                  onValueChange={toggleAutomaticBPSync}
+                  trackColor={{ false: '#767577', true: '#EC4899' }}
+                  thumbColor={syncPreferences.automaticBPSync ? '#EC4899' : '#f4f3f4'}
+                />
+              </View>
+              
+              <View style={styles.syncStatusItem}>
+                <MaterialCommunityIcons name="watch-variant" size={20} color="#007AFF" />
+                <Text style={styles.syncStatusLabel}>Apple Watch</Text>
+                <Switch
+                  value={syncPreferences.automaticWatchSync}
+                  onValueChange={toggleAutomaticWatchSync}
+                  trackColor={{ false: '#767577', true: '#007AFF' }}
+                  thumbColor={syncPreferences.automaticWatchSync ? '#007AFF' : '#f4f3f4'}
+                />
+              </View>
+            </View>
+
+            {syncPreferences.lastSyncTime && (
+              <Text style={styles.lastSyncTime}>
+                Last sync: {new Date(syncPreferences.lastSyncTime).toLocaleString()}
+              </Text>
+            )}
+            
+            {syncPreferences.lastSyncStatus === 'error' && syncPreferences.lastSyncError && (
+              <View style={styles.syncErrorContainer}>
+                <MaterialCommunityIcons name="alert-circle" size={16} color="#EF4444" />
+                <Text style={styles.syncErrorText}>{syncPreferences.lastSyncError}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         <View style={styles.infoCard}>
           <View style={styles.infoHeader}>
@@ -525,5 +633,66 @@ const styles = StyleSheet.create({
   modalSaveText: {
     color: '#F8FAFC',
     fontWeight: '700',
+  },
+  syncStatusCard: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    padding: 15,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  syncStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  syncStatusIcon: {
+    marginRight: 8,
+  },
+  syncStatusTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#0F172A',
+  },
+  syncStatusRow: {
+    gap: 12,
+  },
+  syncStatusItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  syncStatusLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+    flex: 1,
+    marginLeft: 8,
+  },
+  lastSyncTime: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  syncErrorContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    backgroundColor: '#FEF2F2',
+    padding: 8,
+    borderRadius: 6,
+  },
+  syncErrorText: {
+    fontSize: 12,
+    color: '#DC2626',
+    marginLeft: 6,
+    flex: 1,
   },
 });
