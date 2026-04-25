@@ -110,8 +110,15 @@ export const isHealthKitAvailable = (): Promise<boolean> => {
 
 /**
  * Sync all health data from the last N days
+ * @param days Number of days to sync (default: 7)
+ * @param dataTypes Optional array of specific data types to sync. If not provided, syncs all types.
+ *                  Valid types: 'sleep', 'heart_rate', 'steps', 'workouts', 'body_measurements', 
+ *                  'nutrition', 'blood_glucose', 'hrv', 'blood_pressure', 'active_energy'
  */
-export const syncAllHealthData = async (days: number = 7): Promise<HealthKitSyncResult> => {
+export const syncAllHealthData = async (
+  days: number = 7, 
+  dataTypes?: string[]
+): Promise<HealthKitSyncResult> => {
   try {
     const endDate = new Date();
     const startDate = new Date();
@@ -125,76 +132,112 @@ export const syncAllHealthData = async (days: number = 7): Promise<HealthKitSync
     let totalRecords = 0;
     const syncedDataTypes: string[] = [];
 
+    // Helper to check if a data type should be synced
+    const shouldSync = (type: string) => !dataTypes || dataTypes.includes(type);
+
     // Sync Sleep Data
-    const sleepData = await getSleepData(options);
-    if (sleepData.length > 0) {
-      await uploadToBackend('sleep', sleepData);
-      totalRecords += sleepData.length;
-      syncedDataTypes.push('sleep');
+    if (shouldSync('sleep')) {
+      const sleepData = await getSleepData(options);
+      if (sleepData.length > 0) {
+        await uploadToBackend('sleep', sleepData);
+        totalRecords += sleepData.length;
+        syncedDataTypes.push('sleep');
+      }
     }
 
     // Sync Heart Rate Data
-    const heartRateData = await getHeartRateData(options);
-    if (heartRateData.length > 0) {
-      await uploadToBackend('heart_rate', heartRateData);
-      totalRecords += heartRateData.length;
-      syncedDataTypes.push('heart_rate');
+    if (shouldSync('heart_rate')) {
+      const heartRateData = await getHeartRateData(options);
+      if (heartRateData.length > 0) {
+        await uploadToBackend('heart_rate', heartRateData);
+        totalRecords += heartRateData.length;
+        syncedDataTypes.push('heart_rate');
+      }
     }
 
     // Sync Steps Data
-    const stepsData = await getStepsData(options);
-    if (stepsData.length > 0) {
-      await uploadToBackend('steps', stepsData);
-      totalRecords += stepsData.length;
-      syncedDataTypes.push('steps');
+    if (shouldSync('steps')) {
+      const stepsData = await getStepsData(options);
+      if (stepsData.length > 0) {
+        await uploadToBackend('steps', stepsData);
+        totalRecords += stepsData.length;
+        syncedDataTypes.push('steps');
+      }
     }
 
     // Sync Workout Data
-    const workoutData = await getWorkoutData(options);
-    if (workoutData.length > 0) {
-      await uploadToBackend('workouts', workoutData);
-      totalRecords += workoutData.length;
-      syncedDataTypes.push('workouts');
+    if (shouldSync('workouts')) {
+      const workoutData = await getWorkoutData(options);
+      if (workoutData.length > 0) {
+        await uploadToBackend('workouts', workoutData);
+        totalRecords += workoutData.length;
+        syncedDataTypes.push('workouts');
+      }
     }
 
     // Sync Body Measurements
-    const bodyData = await getBodyMeasurements(options);
-    if (bodyData.length > 0) {
-      await uploadToBackend('body_measurements', bodyData);
-      totalRecords += bodyData.length;
-      syncedDataTypes.push('body_measurements');
+    if (shouldSync('body_measurements')) {
+      const bodyData = await getBodyMeasurements(options);
+      if (bodyData.length > 0) {
+        await uploadToBackend('body_measurements', bodyData);
+        totalRecords += bodyData.length;
+        syncedDataTypes.push('body_measurements');
+      }
     }
 
     // Sync Nutrition Data
-    const nutritionData = await getNutritionData(options);
-    if (nutritionData.length > 0) {
-      await uploadToBackend('nutrition', nutritionData);
-      totalRecords += nutritionData.length;
-      syncedDataTypes.push('nutrition');
+    if (shouldSync('nutrition')) {
+      const nutritionData = await getNutritionData(options);
+      if (nutritionData.length > 0) {
+        await uploadToBackend('nutrition', nutritionData);
+        totalRecords += nutritionData.length;
+        syncedDataTypes.push('nutrition');
+      }
     }
 
     // Sync Blood Glucose
-    const glucoseData = await getBloodGlucoseData(options);
-    if (glucoseData.length > 0) {
-      await uploadToBackend('blood_glucose', glucoseData);
-      totalRecords += glucoseData.length;
-      syncedDataTypes.push('blood_glucose');
+    if (shouldSync('blood_glucose')) {
+      const glucoseData = await getBloodGlucoseData(options);
+      if (glucoseData.length > 0) {
+        await uploadToBackend('blood_glucose', glucoseData);
+        totalRecords += glucoseData.length;
+        syncedDataTypes.push('blood_glucose');
+      }
     }
 
     // Sync HRV Data
-    const hrvData = await getHRVData(options);
-    if (hrvData.length > 0) {
-      await uploadToBackend('hrv', hrvData);
-      totalRecords += hrvData.length;
-      syncedDataTypes.push('hrv');
+    if (shouldSync('hrv')) {
+      const hrvData = await getHRVData(options);
+      if (hrvData.length > 0) {
+        await uploadToBackend('hrv', hrvData);
+        totalRecords += hrvData.length;
+        syncedDataTypes.push('hrv');
+      }
     }
 
     // Sync Blood Pressure Data
-    const bpData = await getBloodPressureData(options);
-    if (bpData.length > 0) {
-      await uploadToBackend('blood_pressure', bpData);
-      totalRecords += bpData.length;
-      syncedDataTypes.push('blood_pressure');
+    if (shouldSync('blood_pressure')) {
+      const bpData = await getBloodPressureData(options);
+      if (bpData.length > 0) {
+        await uploadToBackend('blood_pressure', bpData);
+        totalRecords += bpData.length;
+        syncedDataTypes.push('blood_pressure');
+      }
+    }
+
+    // Sync Active Energy
+    if (shouldSync('active_energy')) {
+      const activeEnergyData = await new Promise<any[]>((resolve, reject) => {
+        AppleHealthKit.getActiveEnergyBurned(options, (err: Object, results: any[]) => {
+          if (err) reject(err);
+          else resolve(results || []);
+        });
+      });
+      if (activeEnergyData.length > 0) {
+        await uploadToBackend('active_energy', activeEnergyData);
+        totalRecords += activeEnergyData.length;
+        syncedDataTypes.push('active_energy');
+      }
     }
 
     console.log('HealthKit sync complete', {
@@ -493,36 +536,8 @@ export const enableBackgroundSync = async (): Promise<void> => {
 
 /**
  * Sync blood pressure data specifically
+ * @deprecated Use syncAllHealthData(days, ['blood_pressure']) instead
  */
 export const syncBloodPressure = async (days: number = 30): Promise<HealthKitSyncResult> => {
-  try {
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
-
-    const options = {
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-    };
-
-    const bpData = await getBloodPressureData(options);
-    
-    if (bpData.length > 0) {
-      await uploadToBackend('blood_pressure', bpData);
-    }
-
-    return {
-      success: true,
-      dataTypes: ['blood_pressure'],
-      recordCount: bpData.length,
-    };
-  } catch (error: any) {
-    console.error('Blood pressure sync error:', error);
-    return {
-      success: false,
-      dataTypes: [],
-      recordCount: 0,
-      error: error.message,
-    };
-  }
+  return syncAllHealthData(days, ['blood_pressure']);
 };

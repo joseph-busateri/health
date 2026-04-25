@@ -15,7 +15,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { useUser } from '../context/UserContext';
 import { healthApi } from '../services/api';
-import { initializeHealthKit, syncBloodPressure } from '../services/healthKitService';
+import { initializeHealthKit, syncAllHealthData } from '../services/healthKitService';
 
 export default function DevicesScreen() {
   const navigation = useNavigation<NavigationProp<any>>();
@@ -40,6 +40,22 @@ export default function DevicesScreen() {
       onPress: () => navigation.navigate('BodyCompositionUpload'),
     },
     {
+      id: 'tapeMeasurements',
+      name: 'Tape Measurements',
+      iconName: 'tape-measure',
+      color: '#F59E0B',
+      description: 'Track body measurements over time',
+      onPress: () => navigation.navigate('TapeMeasurements'),
+    },
+    {
+      id: 'nutrition',
+      name: 'Nutrition Dashboard',
+      iconName: 'food',
+      color: '#10B981',
+      description: 'View nutrition targets and meal timing',
+      onPress: () => navigation.navigate('NutritionDashboard'),
+    },
+    {
       id: 'bloodwork',
       name: 'Bloodwork Upload',
       iconName: 'test-tube',
@@ -55,26 +71,42 @@ export default function DevicesScreen() {
       return;
     }
 
-    if (deviceId === 'bpMonitor') {
+    // Apple Health-based devices (Apple Watch and BP Monitor)
+    if (deviceId === 'bpMonitor' || deviceId === 'appleWatch') {
+      setSyncing({ ...syncing, [deviceId]: true });
+      
       try {
         await initializeHealthKit();
-        const result = await syncBloodPressure(30);
+        
+        let result;
+        let message;
+        
+        if (deviceId === 'bpMonitor') {
+          // Sync blood pressure data from last 30 days
+          result = await syncAllHealthData(30, ['blood_pressure']);
+          message = `Synced ${result.recordCount} blood pressure readings from Apple Health`;
+        } else if (deviceId === 'appleWatch') {
+          // Sync Apple Watch data from last 7 days
+          result = await syncAllHealthData(7, ['heart_rate', 'hrv', 'steps', 'workouts', 'sleep', 'active_energy']);
+          message = `Synced ${result.recordCount} records from Apple Watch (${result.dataTypes.join(', ')})`;
+        }
+        
         setLastSync(prev => ({ ...prev, [deviceId]: new Date().toLocaleTimeString() }));
-        Alert.alert('Success', `Synced ${result.recordCount} blood pressure readings from Apple Health`);
+        Alert.alert('Success', message);
       } catch (error: any) {
-        Alert.alert('Sync Failed', error.message || 'Failed to sync blood pressure from Apple Health');
+        Alert.alert('Sync Failed', error.message || `Failed to sync ${deviceId} from Apple Health`);
+      } finally {
+        setSyncing({ ...syncing, [deviceId]: false });
       }
-      setSyncing({ ...syncing, [deviceId]: false });
       return;
     }
 
+    // Backend API devices (Oura Ring, Sleep Number)
     setSyncing({ ...syncing, [deviceId]: true });
 
     try {
       if (deviceId === 'oura') {
         await healthApi.devices.oura.sync(userId);
-      } else if (deviceId === 'appleWatch') {
-        await healthApi.devices.appleWatch.sync(userId);
       } else if (deviceId === 'sleepNumber') {
         await healthApi.devices.sleepNumber.sync(userId);
       }
@@ -147,7 +179,7 @@ export default function DevicesScreen() {
                     <ActivityIndicator size="small" color="white" />
                   ) : (
                     <Text style={styles.syncButtonText}>
-                      {device.id === 'bpMonitor' ? 'BP Monitor' : 'Sync Now'}
+                      {device.id === 'bpMonitor' ? 'Sync BP' : 'Sync Now'}
                     </Text>
                   )}
                 </TouchableOpacity>
@@ -165,7 +197,7 @@ export default function DevicesScreen() {
                 {device.id === 'appleWatch' && (
                   <>
                     <MaterialCommunityIcons name="heart-pulse" size={16} color="#666" style={styles.detailIcon} />
-                    <Text style={styles.detailText}>Workouts, HRV, and activity rings</Text>
+                    <Text style={styles.detailText}>Sync via Apple Health: workouts, HRV, heart rate, steps, sleep</Text>
                   </>
                 )}
                 {device.id === 'sleepNumber' && (
@@ -177,7 +209,7 @@ export default function DevicesScreen() {
                 {device.id === 'bpMonitor' && (
                   <>
                     <MaterialCommunityIcons name="stethoscope" size={16} color="#666" style={styles.detailIcon} />
-                    <Text style={styles.detailText}>Sync from Omron Evolv via Apple Health</Text>
+                    <Text style={styles.detailText}>Sync via Apple Health: blood pressure readings (systolic/diastolic)</Text>
                   </>
                 )}
               </View>
@@ -201,22 +233,21 @@ export default function DevicesScreen() {
 
         <View style={styles.infoCard}>
           <View style={styles.infoHeader}>
-            <MaterialCommunityIcons name="sync" size={24} color="#4CAF50" style={styles.infoIcon} />
-            <Text style={styles.infoTitle}>Auto-Sync Enabled</Text>
+            <MaterialCommunityIcons name="apple" size={24} color="#4CAF50" style={styles.infoIcon} />
+            <Text style={styles.infoTitle}>Apple Health Integration</Text>
           </View>
           <Text style={styles.infoText}>
-            All devices automatically sync daily at 6:00 AM. Use "Sync Now" to manually trigger a sync.
+            Apple Watch and Blood Pressure Monitor sync through Apple Health. Ensure your devices are paired with your iPhone and data is syncing to the Health app.
           </Text>
         </View>
 
         <View style={styles.infoCard}>
           <View style={styles.infoHeader}>
-            <MaterialCommunityIcons name="link-variant" size={24} color="#FF9800" style={styles.infoIcon} />
-            <Text style={styles.infoTitle}>Connection Required</Text>
+            <MaterialCommunityIcons name="sync" size={24} color="#FF9800" style={styles.infoIcon} />
+            <Text style={styles.infoTitle}>Manual Sync</Text>
           </View>
           <Text style={styles.infoText}>
-            To connect devices, you'll need to authorize each integration with your account credentials.
-            Contact support for connection setup.
+            Use "Sync Now" to manually pull the latest data from Apple Health. Data from the last 7 days (Apple Watch) or 30 days (BP) will be synced.
           </Text>
         </View>
       </ScrollView>

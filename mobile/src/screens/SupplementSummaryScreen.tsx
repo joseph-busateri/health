@@ -13,6 +13,16 @@ type Props = NativeStackScreenProps<RootStackParamList, 'SupplementSummary'>;
 
 const SupplementSummaryScreen: React.FC<Props> = ({ route, navigation }) => {
   const { baseline, items } = route.params;
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'active':
+        return 'text-green-600';
+      case 'paused':
+        return 'text-yellow-600';
+      case 'removed':
+        return 'text-red-600';
+      default:
         return 'text-gray-600';
     }
   };
