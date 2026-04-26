@@ -27,6 +27,7 @@ import { getWorkoutRecommendationToday } from './workoutEngineService';
 import { getLatestBodyCompositionContext } from './bodyCompositionContextService';
 import { getLatestBloodworkContext, getMarkerValue } from './bloodworkContextService';
 import { getBaselineFields } from './baselineContextService';
+import { getLatestBloodPressureContext, getSystolic, getDiastolic } from './bloodPressureContextService';
 import type {
   ActuarialRiskInputs,
   DemographicProfile,
@@ -149,27 +150,26 @@ async function buildClinicalRiskFactors(
   const factors: Partial<ClinicalRiskFactors> = {};
 
   try {
-    // Fetch cardiovascular data for BP and lipids
-    const cardiovascular = await getCardiovascularToday(userId);
-    if (cardiovascular) {
-      // Extract blood pressure
-      if (cardiovascular.evidence?.signals) {
-        const bpSignal = cardiovascular.evidence.signals.find(s => s.type === 'blood_pressure');
-        if (bpSignal?.value && typeof bpSignal.value === 'object') {
-          factors.systolicBP = (bpSignal.value as any).systolic;
-          factors.diastolicBP = (bpSignal.value as any).diastolic;
-        }
-      }
-
-      // Check for BP medication from baseline
-      // TODO: Add onBPmedication to baseline profile
-      factors.onBPmedication = false;
-
-      logger.info('✅ [CLINICAL] Cardiovascular data integrated', {
+    // Fetch blood pressure directly from database
+    const bpContext = await getLatestBloodPressureContext(userId);
+    if (bpContext.hasBloodPressure) {
+      factors.systolicBP = getSystolic(bpContext);
+      factors.diastolicBP = getDiastolic(bpContext);
+      logger.info('✅ [CLINICAL] BP data from blood pressure context service', {
         userId,
-        hasBP: !!(factors.systolicBP && factors.diastolicBP),
+        systolicBP: factors.systolicBP,
+        diastolicBP: factors.diastolicBP,
       });
     }
+
+    // Check for BP medication from baseline
+    // TODO: Add onBPmedication to baseline profile
+    factors.onBPmedication = false;
+
+    logger.info('✅ [CLINICAL] Clinical data integrated', {
+      userId,
+      hasBP: !!(factors.systolicBP && factors.diastolicBP),
+    });
 
     // Fetch bloodwork data for cholesterol
     const bloodwork = await getLatestBloodworkContext(userId);
