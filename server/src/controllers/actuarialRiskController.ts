@@ -16,6 +16,7 @@ import {
   getActuarialRiskHistory,
 } from '../services/actuarialRiskEngineService';
 import { unifyActuarialData } from '../services/actuarialDataUnifier';
+import { getLatestBloodPressureContext, getSystolic, getDiastolic } from '../services/bloodPressureContextService';
 import type { ActuarialRiskInputs } from '../types/actuarialRiskEngine';
 
 // ============================================================================
@@ -132,8 +133,29 @@ export const calculateActuarialRiskHandler = async (req: Request, res: Response)
 
     logger.info('📊 [ACTUARIAL API] Calculating actuarial risk', { userId });
 
-    // Calculate risk
-    const inputs: ActuarialRiskInputs = req.body;
+    // Fetch real BP data from database
+    const bpContext = await getLatestBloodPressureContext(userId);
+    const realSystolicBP = getSystolic(bpContext);
+    const realDiastolicBP = getDiastolic(bpContext);
+
+    logger.info('📊 [ACTUARIAL API] Fetched BP data', {
+      userId,
+      hasRealBP: bpContext.hasBloodPressure,
+      systolicBP: realSystolicBP,
+      diastolicBP: realDiastolicBP,
+    });
+
+    // Calculate risk - use real BP data if available, otherwise use request body
+    const inputs: ActuarialRiskInputs = {
+      ...req.body,
+      clinical: {
+        ...req.body.clinical,
+        // Override with real BP data if available
+        systolicBP: realSystolicBP ?? req.body.clinical.systolicBP,
+        diastolicBP: realDiastolicBP ?? req.body.clinical.diastolicBP,
+      },
+    };
+
     const record = await calculateActuarialRisk(userId, inputs);
 
     logger.info('✅ [ACTUARIAL API] Risk calculation complete', {
