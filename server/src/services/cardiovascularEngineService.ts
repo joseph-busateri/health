@@ -61,6 +61,68 @@ export function invalidateCardiovascularCache(userId: string): void {
 }
 
 // ============================================================================
+// VALIDATION HELPERS
+// ============================================================================
+
+/**
+ * Validate blood pressure is within physiologically plausible range
+ */
+function validateBloodPressure(systolic: number | null | undefined, diastolic: number | null | undefined): {
+  valid: boolean;
+  systolic: number | null;
+  diastolic: number | null;
+} {
+  const systolicValid = systolic != null && systolic >= 70 && systolic <= 200;
+  const diastolicValid = diastolic != null && diastolic >= 40 && diastolic <= 130;
+
+  if (!systolicValid && systolic != null) {
+    logger.warn('⚠️ [CARDIOVASCULAR ENGINE] Invalid systolic BP rejected', { systolic, validRange: '70-200' });
+  }
+  if (!diastolicValid && diastolic != null) {
+    logger.warn('⚠️ [CARDIOVASCULAR ENGINE] Invalid diastolic BP rejected', { diastolic, validRange: '40-130' });
+  }
+
+  return {
+    valid: systolicValid && diastolicValid,
+    systolic: systolicValid ? systolic : null,
+    diastolic: diastolicValid ? diastolic : null,
+  };
+}
+
+/**
+ * Validate cholesterol values are within physiologically plausible range
+ */
+function validateCholesterol(
+  totalCholesterol: number | null | undefined,
+  hdl: number | null | undefined,
+  ldl: number | null | undefined
+): {
+  totalCholesterol: number | null;
+  hdl: number | null;
+  ldl: number | null;
+} {
+  const totalValid = totalCholesterol == null || (totalCholesterol >= 100 && totalCholesterol <= 400);
+  const hdlValid = hdl == null || (hdl >= 20 && hdl <= 100);
+  const ldlValid = ldl == null || (ldl >= 20 && ldl <= 200);
+
+  if (!totalValid && totalCholesterol != null) {
+    logger.warn('⚠️ [CARDIOVASCULAR ENGINE] Invalid total cholesterol rejected', { totalCholesterol, validRange: '100-400' });
+  }
+  if (!hdlValid && hdl != null) {
+    logger.warn('⚠️ [CARDIOVASCULAR ENGINE] Invalid HDL rejected', { hdl, validRange: '20-100' });
+  }
+  if (!ldlValid && ldl != null) {
+    logger.warn('⚠️ [CARDIOVASCULAR ENGINE] Invalid LDL rejected', { ldl, validRange: '20-200' });
+  }
+
+  return {
+    totalCholesterol: totalValid ? totalCholesterol : null,
+    hdl: hdlValid ? hdl : null,
+    ldl: ldlValid ? ldl : null,
+  };
+}
+
+// ============================================================================
 // LEGACY CALCULATION HELPERS (Preserved for backward compatibility)
 // ============================================================================
 
@@ -488,6 +550,7 @@ function buildCardiovascularFallbackRecommendation(status: CardiovascularStatus)
 export async function getCardiovascularRecommendation(
   userId: string,
   inputs: CardiovascularInputs,
+  bloodwork?: Awaited<ReturnType<typeof getLatestBloodworkContext>>,
 ): Promise<CardiovascularRecord> {
   logger.info('🔵 [CARDIOVASCULAR ENGINE] Starting cardiovascular recommendation flow', { userId });
 
@@ -500,35 +563,35 @@ export async function getCardiovascularRecommendation(
     hasFamilyHistory: baseline.familyHistory?.cardiovascular_disease || false,
   });
 
-  // Step 0b: Load bloodwork for lipid panel and cardiovascular markers
-  const bloodwork = await getLatestBloodworkContext(userId);
-  if (bloodwork.hasBloodwork) {
+  // Step 0b: Use provided bloodwork or fetch if not provided (for backward compatibility)
+  const bloodworkData = bloodwork || await getLatestBloodworkContext(userId);
+  if (bloodworkData.hasBloodwork) {
     logger.info('✅ [CARDIOVASCULAR ENGINE] Bloodwork loaded', {
       userId,
-      latestTestDate: bloodwork.latestTestDate,
-      hasLDL: !!bloodwork.markers.ldl,
-      hasHDL: !!bloodwork.markers.hdl,
-      hasTriglycerides: !!bloodwork.markers.triglycerides,
-      hasApoB: !!bloodwork.markers.apoB,
-      hasLpa: !!bloodwork.markers.lpa,
-      hasHsCRP: !!bloodwork.markers.hsCRP,
+      latestTestDate: bloodworkData.latestTestDate,
+      hasLDL: !!bloodworkData.markers.ldl,
+      hasHDL: !!bloodworkData.markers.hdl,
+      hasTriglycerides: !!bloodworkData.markers.triglycerides,
+      hasApoB: !!bloodworkData.markers.apoB,
+      hasLpa: !!bloodworkData.markers.lpa,
+      hasHsCRP: !!bloodworkData.markers.hsCRP,
     });
 
     // Enrich inputs with lipid panel from bloodwork (preserve user-provided values if present)
     if (!inputs.lipidPanel) {
       const lipidPanel: Partial<LipidPanel> = {};
 
-      if (bloodwork.markers.totalCholesterol) {
-        lipidPanel.totalCholesterol = getMarkerValue(bloodwork.markers.totalCholesterol) ?? undefined;
+      if (bloodworkData.markers.totalCholesterol) {
+        lipidPanel.totalCholesterol = getMarkerValue(bloodworkData.markers.totalCholesterol) ?? undefined;
       }
-      if (bloodwork.markers.ldl) {
-        lipidPanel.ldl = getMarkerValue(bloodwork.markers.ldl) ?? undefined;
+      if (bloodworkData.markers.ldl) {
+        lipidPanel.ldl = getMarkerValue(bloodworkData.markers.ldl) ?? undefined;
       }
-      if (bloodwork.markers.hdl) {
-        lipidPanel.hdl = getMarkerValue(bloodwork.markers.hdl) ?? undefined;
+      if (bloodworkData.markers.hdl) {
+        lipidPanel.hdl = getMarkerValue(bloodworkData.markers.hdl) ?? undefined;
       }
-      if (bloodwork.markers.triglycerides) {
-        lipidPanel.triglycerides = getMarkerValue(bloodwork.markers.triglycerides) ?? undefined;
+      if (bloodworkData.markers.triglycerides) {
+        lipidPanel.triglycerides = getMarkerValue(bloodworkData.markers.triglycerides) ?? undefined;
       }
 
       // Calculate estimated total cholesterol from LDL + HDL if total cholesterol is missing
@@ -560,14 +623,14 @@ export async function getCardiovascularRecommendation(
           hdl: lipidPanel.hdl,
           triglycerides: lipidPanel.triglycerides,
           totalCholesterol: lipidPanel.totalCholesterol,
-          cholesterolSource: bloodwork.markers.totalCholesterol ? 'bloodwork' : 'estimated',
+          cholesterolSource: bloodworkData.markers.totalCholesterol ? 'bloodwork' : 'estimated',
         });
       }
     }
 
     // Add inflammation marker if available
-    if (!inputs.hsCRP && bloodwork.markers.hsCRP) {
-      inputs.hsCRP = getMarkerValue(bloodwork.markers.hsCRP) ?? undefined;
+    if (!inputs.hsCRP && bloodworkData.markers.hsCRP) {
+      inputs.hsCRP = getMarkerValue(bloodworkData.markers.hsCRP) ?? undefined;
       logger.info('📊 [CARDIOVASCULAR ENGINE] Using hsCRP from bloodwork', { hsCRP: inputs.hsCRP });
     }
   } else {
@@ -579,7 +642,7 @@ export async function getCardiovascularRecommendation(
   logger.info('📊 [CARDIOVASCULAR ENGINE] Status determined', { cardiovascularStatus });
 
   // Step 2: Build evidence (include bloodwork)
-  const evidence = buildCardiovascularEvidence(inputs, cardiovascularStatus, bloodwork);
+  const evidence = buildCardiovascularEvidence(inputs, cardiovascularStatus, bloodworkData);
 
   // Step 3: Build fallback recommendation
   const fallbackRecommendation = buildCardiovascularFallbackRecommendation(cardiovascularStatus);
@@ -698,12 +761,18 @@ export async function getCardiovascularToday(userId: string, options?: { regener
     : undefined;
 
   // Extract cardiovascular context values (no hardcoded fallbacks)
-  const systolicBP = bpContext.status === 'fulfilled' ? getSystolic(bpContext.value) : undefined;
-  const diastolicBP = bpContext.status === 'fulfilled' ? getDiastolic(bpContext.value) : undefined;
+  const rawSystolicBP = bpContext.status === 'fulfilled' ? getSystolic(bpContext.value) : undefined;
+  const rawDiastolicBP = bpContext.status === 'fulfilled' ? getDiastolic(bpContext.value) : undefined;
+
+  // Validate BP ranges
+  const bpValidation = validateBloodPressure(rawSystolicBP, rawDiastolicBP);
+  const systolicBP = bpValidation.systolic ?? undefined;
+  const diastolicBP = bpValidation.diastolic ?? undefined;
+
   const restingHR = hrContext.status === 'fulfilled' ? getRestingHR(hrContext.value) : undefined;
   const hrv = hrvContext.status === 'fulfilled' ? getHRV(hrvContext.value) : undefined;
   const vo2Max = fitnessContext.status === 'fulfilled' ? getVO2Max(fitnessContext.value) : undefined;
-  
+
   // Extract baseline demographics
   const baseline = baselineContext.status === 'fulfilled' ? baselineContext.value : null;
   const age = baseline?.age ?? undefined;
@@ -711,13 +780,20 @@ export async function getCardiovascularToday(userId: string, options?: { regener
 
   // Extract bloodwork lipid panel
   const bloodwork = bloodworkContext.status === 'fulfilled' ? bloodworkContext.value : null;
+  const rawTotalCholesterol = bloodwork?.markers ? getMarkerValue(bloodwork.markers.totalCholesterol) : undefined;
+  const rawHdl = bloodwork?.markers ? getMarkerValue(bloodwork.markers.hdl) : undefined;
+  const rawLdl = bloodwork?.markers ? getMarkerValue(bloodwork.markers.ldl) : undefined;
+
+  // Validate cholesterol ranges
+  const cholesterolValidation = validateCholesterol(rawTotalCholesterol, rawHdl, rawLdl);
+
   const lipidPanel = bloodwork?.markers ? {
-    totalCholesterol: getMarkerValue(bloodwork.markers.totalCholesterol),
-    hdl: getMarkerValue(bloodwork.markers.hdl),
-    ldl: getMarkerValue(bloodwork.markers.ldl),
+    totalCholesterol: cholesterolValidation.totalCholesterol,
+    hdl: cholesterolValidation.hdl,
+    ldl: cholesterolValidation.ldl,
     triglycerides: getMarkerValue(bloodwork.markers.triglycerides),
-    cholesterolRatio: getMarkerValue(bloodwork.markers.totalCholesterol) && getMarkerValue(bloodwork.markers.hdl)
-      ? getMarkerValue(bloodwork.markers.totalCholesterol)! / getMarkerValue(bloodwork.markers.hdl)!
+    cholesterolRatio: cholesterolValidation.totalCholesterol && cholesterolValidation.hdl
+      ? cholesterolValidation.totalCholesterol / cholesterolValidation.hdl
       : undefined,
   } : undefined;
 
@@ -771,7 +847,7 @@ export async function getCardiovascularToday(userId: string, options?: { regener
     });
   }
 
-  return getCardiovascularRecommendation(userId, inputs);
+  return getCardiovascularRecommendation(userId, inputs, bloodwork);
 }
 
 export async function getCardiovascularHistory(userId: string): Promise<CardiovascularRecord[]> {

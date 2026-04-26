@@ -56,51 +56,53 @@ export function invalidateBaselineContext(userId: string): void {
 }
 
 /**
- * Helper to get specific baseline fields with safe fallbacks
+ * Helper to get specific baseline fields
+ * Returns null/undefined for missing fields (no hardcoded defaults)
+ * Callers should handle missing values appropriately
  */
 export async function getBaselineFields(userId: string): Promise<{
-  age: number;
-  sex: 'male' | 'female' | 'other';
-  race: 'white' | 'black' | 'asian' | 'hispanic' | 'other';
-  weight: number;
-  height: number;
-  activityLevel: string;
-  trainingExperience: string;
-  trtUsage: boolean;
-  diabetesStatus: string;
-  smokingStatus: 'never' | 'former' | 'current';
-  bloodPressureHistory: 'normal' | 'elevated' | 'hypertension_stage1' | 'hypertension_stage2';
-  sleepTarget: number;
-  trainingDaysPerWeek: number;
-  conditions: string[];
-  medications: string[];
-  familyHistory: Record<string, any>;
-  riskTolerance: string;
-  aggressiveness: string;
+  age?: number;
+  sex?: 'male' | 'female' | 'other';
+  race?: 'white' | 'black' | 'asian' | 'hispanic' | 'other';
+  weight?: number;
+  height?: number;
+  activityLevel?: string;
+  trainingExperience?: string;
+  trtUsage?: boolean;
+  diabetesStatus?: string;
+  smokingStatus?: 'never' | 'former' | 'current';
+  bloodPressureHistory?: 'normal' | 'elevated' | 'hypertension_stage1' | 'hypertension_stage2';
+  sleepTarget?: number;
+  trainingDaysPerWeek?: number;
+  conditions?: string[];
+  medications?: string[];
+  familyHistory?: Record<string, any>;
+  riskTolerance?: string;
+  aggressiveness?: string;
   dietQuality?: 'poor' | 'fair' | 'good' | 'excellent';
 }> {
   const context = await getBaselineContext(userId);
   const { profile, preferences } = context;
 
   return {
-    age: profile.age ?? 35,
-    sex: profile.sex ?? 'male',
-    race: profile.race ?? 'white',
-    weight: profile.weightLbs ?? 180,
-    height: profile.heightInches ?? 70,
-    activityLevel: profile.activityLevel ?? 'moderately_active',
-    trainingExperience: profile.trainingExperienceLevel ?? 'intermediate',
-    trtUsage: profile.trtUsage ?? false,
-    diabetesStatus: profile.diabetesStatus ?? 'none',
-    smokingStatus: profile.smokingStatus ?? 'never',
-    bloodPressureHistory: profile.bloodPressureHistory ?? 'normal',
-    sleepTarget: profile.sleepTargetHours ?? 7.5,
-    trainingDaysPerWeek: profile.trainingDaysPerWeek ?? 4,
-    conditions: profile.conditions ?? [],
-    medications: profile.medications ?? [],
-    familyHistory: profile.familyHistory ?? {},
-    riskTolerance: preferences?.riskTolerance ?? 'moderate',
-    aggressiveness: preferences?.aggressivenessLevel ?? 'moderate',
+    age: profile.age,
+    sex: profile.sex,
+    race: profile.race,
+    weight: profile.weightLbs,
+    height: profile.heightInches,
+    activityLevel: profile.activityLevel,
+    trainingExperience: profile.trainingExperienceLevel,
+    trtUsage: profile.trtUsage,
+    diabetesStatus: profile.diabetesStatus,
+    smokingStatus: profile.smokingStatus,
+    bloodPressureHistory: profile.bloodPressureHistory,
+    sleepTarget: profile.sleepTargetHours,
+    trainingDaysPerWeek: profile.trainingDaysPerWeek,
+    conditions: profile.conditions,
+    medications: profile.medications,
+    familyHistory: profile.familyHistory,
+    riskTolerance: preferences?.riskTolerance,
+    aggressiveness: preferences?.aggressivenessLevel,
     dietQuality: profile.dietQuality,
   };
 }
