@@ -1,5 +1,6 @@
 import { supabase } from '../config/supabase';
 import { logger } from '../utils/logger';
+import { invalidateCardiovascularCache } from './cardiovascularEngineService';
 
 export interface HealthDataSyncRequest {
   userId: string;
@@ -62,6 +63,10 @@ export class HealthDataService {
           break;
         case 'blood_pressure':
           recordsSaved = await this.saveBloodPressureData(userId, data, source);
+          // Invalidate cardiovascular cache when BP data changes
+          if (recordsSaved > 0) {
+            invalidateCardiovascularCache(userId);
+          }
           break;
         default:
           logger.warn('Unknown data type', { dataType });

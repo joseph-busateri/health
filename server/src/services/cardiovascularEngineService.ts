@@ -48,6 +48,18 @@ const USE_AI_ENRICHMENT = process.env.USE_AI_ENRICHMENT_CARDIOVASCULAR === 'true
 
 const cardiovascularRecordStore = new Map<string, CardiovascularRecord[]>();
 
+/**
+ * Invalidate cardiovascular cache for a user (for current day)
+ * Call this when dependent data changes (e.g., blood pressure, bloodwork)
+ */
+export function invalidateCardiovascularCache(userId: string): void {
+  const today = new Date().toISOString().slice(0, 10);
+  const userRecords = cardiovascularRecordStore.get(userId) ?? [];
+  const filteredRecords = userRecords.filter(record => record.date !== today);
+  cardiovascularRecordStore.set(userId, filteredRecords);
+  logger.info('🗑️ [CARDIOVASCULAR ENGINE] Cache invalidated', { userId, date: today });
+}
+
 // ============================================================================
 // LEGACY CALCULATION HELPERS (Preserved for backward compatibility)
 // ============================================================================
@@ -640,152 +652,6 @@ export async function getCardiovascularRecommendation(
   return record;
 }
 
-/**
- * Legacy calculate function (preserved for backward compatibility)
- */
-export async function calculateCardiovascular(userId: string): Promise<CardiovascularRecord | null> {
-  try {
-    logger.info('Calculating cardiovascular metrics', { userId });
-
-    // Get user baseline profile for age
-    const { data: baseline, error: baselineError } = await supabase
-      .from('baseline_profiles')
-      .select('demographics')
-      .eq('user_id', userId)
-      .single();
-
-    if (baselineError) {
-      logger.warn('No baseline profile found for cardiovascular calculation', { userId });
-    }
-
-    // Get latest recovery record for resting HR and HRV
-    const { data: recovery, error: recoveryError } = await supabase
-      .from('recovery_records')
-      .select('source_inputs')
-      .eq('user_id', userId)
-      .order('date', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (recoveryError) {
-      logger.warn('No recovery record found for cardiovascular calculation', { userId });
-    }
-
-    // Get latest bloodwork for lipid panel (if available)
-    const { data: bloodwork, error: bloodworkError } = await supabase
-      .from('bloodwork_results')
-      .select('biomarkers')
-      .eq('user_id', userId)
-      .order('test_date', { ascending: false })
-      .limit(1)
-      .single();
-
-    if (bloodworkError) {
-      logger.warn('No bloodwork found for cardiovascular calculation', { userId });
-    }
-
-    // Fetch cardiovascular context data
-    const [bpContext, hrContext, hrvContext] = await Promise.allSettled([
-      getLatestBloodPressureContext(userId),
-      getLatestHeartRateContext(userId),
-      getLatestHRVContext(userId),
-    ]);
-
-    // Extract values with fallbacks
-    const systolicBP = bpContext.status === 'fulfilled' ? getSystolic(bpContext.value) : undefined;
-    const diastolicBP = bpContext.status === 'fulfilled' ? getDiastolic(bpContext.value) : undefined;
-    const restingHR = hrContext.status === 'fulfilled' ? getRestingHR(hrContext.value) : recovery?.source_inputs?.restingHr;
-    const hrv = hrvContext.status === 'fulfilled' ? getHRV(hrvContext.value) : recovery?.source_inputs?.hrv;
-
-    // Build inputs from available data
-    const age = baseline?.demographics?.age ?? 35;
-    const inputs: CardiovascularInputs = {
-      restingHR,
-      hrv,
-      systolicBP,
-      diastolicBP,
-      lipidPanel: bloodwork?.biomarkers ? {
-        totalCholesterol: bloodwork.biomarkers.total_cholesterol,
-        ldl: bloodwork.biomarkers.ldl,
-        hdl: bloodwork.biomarkers.hdl,
-        triglycerides: bloodwork.biomarkers.triglycerides,
-        cholesterolRatio: bloodwork.biomarkers.total_cholesterol && bloodwork.biomarkers.hdl
-          ? bloodwork.biomarkers.total_cholesterol / bloodwork.biomarkers.hdl
-          : undefined,
-      } : undefined,
-      age,
-      smokingStatus: baseline?.demographics?.smoking_status ?? false,
-    };
-
-    // Calculate all metrics
-    const restingHRAnalysis = analyzeRestingHR(inputs.restingHR, age);
-    const bpAnalysis = analyzeBP(inputs.systolicBP, inputs.diastolicBP);
-    const cardiovascularRiskScore = calculateCardiovascularRiskScore(
-      restingHRAnalysis,
-      bpAnalysis,
-      inputs.hrv,
-      inputs.lipidPanel,
-      age,
-      inputs.smokingStatus ?? false
-    );
-    const cardiovascularRiskLevel = determineCardiovascularRiskLevel(cardiovascularRiskScore);
-
-    const record: CardiovascularRecord = {
-      id: uuidv4(),
-      userId,
-      date: new Date().toISOString().split('T')[0],
-      cardiovascularRiskScore,
-      cardiovascularRiskLevel,
-      restingHRAnalysis,
-      bpAnalysis,
-      hrvCardiovascularSignal: inputs.hrv,
-      lipidPanel: inputs.lipidPanel,
-      inputs,
-      // New required fields with fallback values
-      cardiovascularStatus: cardiovascularRiskLevel === 'low' ? 'optimal' : cardiovascularRiskLevel === 'moderate' ? 'moderate' : cardiovascularRiskLevel === 'elevated' ? 'elevated_risk' : 'high_risk',
-      recommendation: {
-        type: 'cardiovascular',
-        priority: cardiovascularRiskLevel === 'high' ? 'critical' : cardiovascularRiskLevel === 'elevated' ? 'important' : 'optimization',
-        summary: `Cardiovascular risk is ${cardiovascularRiskLevel}`,
-        actions: ['Monitor cardiovascular health'],
-        source: 'deterministic',
-      },
-      createdAt: new Date().toISOString(),
-    };
-
-    // Store record in database
-    const { error: insertError } = await supabase
-      .from('cardiovascular_records')
-      .insert({
-        id: record.id,
-        user_id: record.userId,
-        date: record.date,
-        cardiovascular_risk_score: record.cardiovascularRiskScore,
-        cardiovascular_risk_level: record.cardiovascularRiskLevel,
-        resting_hr_analysis: record.restingHRAnalysis,
-        bp_analysis: record.bpAnalysis,
-        hrv_cardiovascular_signal: record.hrvCardiovascularSignal,
-        lipid_panel: record.lipidPanel,
-        inputs: record.inputs,
-        created_at: record.createdAt,
-      });
-
-    if (insertError) {
-      logger.error('Failed to store cardiovascular record', { error: insertError, userId });
-    }
-
-    logger.info('Cardiovascular calculation complete', {
-      userId,
-      cardiovascularRiskScore,
-      cardiovascularRiskLevel,
-    });
-
-    return record;
-  } catch (error) {
-    logger.error('Cardiovascular calculation failed', { error, userId });
-    return null;
-  }
-}
 
 export async function getCardiovascularToday(userId: string, options?: { regenerate?: boolean }): Promise<CardiovascularRecord | null> {
   const today = new Date().toISOString().slice(0, 10);
@@ -804,7 +670,7 @@ export async function getCardiovascularToday(userId: string, options?: { regener
   }
   
   // Fetch real data from other engines and context services
-  const [bodyComp, stress, recovery, bpContext, hrContext, hrvContext, fitnessContext, bloodworkContext] = await Promise.allSettled([
+  const [bodyComp, stress, recovery, bpContext, hrContext, hrvContext, fitnessContext, bloodworkContext, baselineContext] = await Promise.allSettled([
     getLatestBodyCompositionContext(userId),
     getStressToday(userId),
     getRecoveryToday(userId),
@@ -813,6 +679,7 @@ export async function getCardiovascularToday(userId: string, options?: { regener
     getLatestHRVContext(userId),
     getLatestFitnessContext(userId),
     getLatestBloodworkContext(userId),
+    getBaselineFields(userId),
   ]);
 
   // Extract body fat percentage
@@ -830,12 +697,17 @@ export async function getCardiovascularToday(userId: string, options?: { regener
     ? recovery.value.recoveryScore
     : undefined;
 
-  // Extract cardiovascular context values with fallbacks to hardcoded demo values
+  // Extract cardiovascular context values (no hardcoded fallbacks)
   const systolicBP = bpContext.status === 'fulfilled' ? getSystolic(bpContext.value) : undefined;
   const diastolicBP = bpContext.status === 'fulfilled' ? getDiastolic(bpContext.value) : undefined;
   const restingHR = hrContext.status === 'fulfilled' ? getRestingHR(hrContext.value) : undefined;
   const hrv = hrvContext.status === 'fulfilled' ? getHRV(hrvContext.value) : undefined;
   const vo2Max = fitnessContext.status === 'fulfilled' ? getVO2Max(fitnessContext.value) : undefined;
+  
+  // Extract baseline demographics
+  const baseline = baselineContext.status === 'fulfilled' ? baselineContext.value : null;
+  const age = baseline?.age ?? undefined;
+  const smokingStatus = baseline?.smokingStatus ?? undefined;
 
   // Extract bloodwork lipid panel
   const bloodwork = bloodworkContext.status === 'fulfilled' ? bloodworkContext.value : null;
@@ -855,6 +727,8 @@ export async function getCardiovascularToday(userId: string, options?: { regener
 
   logger.info('📊 [CARDIOVASCULAR ENGINE] Fetched cross-engine data', {
     userId,
+    age,
+    smokingStatus,
     bodyFatPercentage,
     stressScore,
     recoveryScore,
@@ -866,27 +740,36 @@ export async function getCardiovascularToday(userId: string, options?: { regener
     hasLipidPanel: !!lipidPanel,
   });
   
-  // Build inputs with real data, fallback to hardcoded demo values only if unavailable
+  // Build inputs with real data only (no hardcoded fallbacks)
   const inputs: CardiovascularInputs = {
-    systolicBP: systolicBP ?? 118,
-    diastolicBP: diastolicBP ?? 76,
-    restingHR: restingHR ?? 62,
-    hrv: hrv ?? 55,
-    lipidPanel: lipidPanel ?? {
-      totalCholesterol: 180,
-      hdl: 55,
-      ldl: 100,
-      triglycerides: 125,
-      cholesterolRatio: 3.3,
-    },
+    systolicBP,
+    diastolicBP,
+    restingHR,
+    hrv,
+    lipidPanel,
+    age,
+    smokingStatus,
     vo2Max,
     apoB,
     lipoproteinA,
     hsCRP,
     bodyFat: bodyFatPercentage,
-    stressScore: stressScore,
-    recoveryScore: recoveryScore,
+    stressScore,
+    recoveryScore,
   };
+  
+  // Log undefined values for monitoring
+  const undefinedInputs = Object.entries(inputs)
+    .filter(([_, value]) => value === undefined)
+    .map(([key]) => key);
+  
+  if (undefinedInputs.length > 0) {
+    logger.info('⚠️ [CARDIOVASCULAR ENGINE] Some inputs unavailable', {
+      userId,
+      undefinedInputs,
+      dataAvailability: `${Object.keys(inputs).length - undefinedInputs.length}/${Object.keys(inputs).length}`,
+    });
+  }
 
   return getCardiovascularRecommendation(userId, inputs);
 }

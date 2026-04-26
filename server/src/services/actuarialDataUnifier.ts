@@ -102,9 +102,9 @@ async function buildDemographicProfile(
     const profile: DemographicProfile = {
       age: baseline?.age || 50,
       gender: (baseline?.sex as 'male' | 'female') || 'male',
-      race: 'white', // TODO: Add race to baseline profile
+      race: (baseline?.race as 'white' | 'black' | 'asian' | 'hispanic' | 'other') || 'white',
       familyHistory: baseline?.familyHistory?.cardiovascular_disease || false,
-      smokingStatus: 'never', // TODO: Add smoking status to baseline profile
+      smokingStatus: (baseline?.smokingStatus as 'never' | 'former' | 'current') || 'never',
     };
 
     // Apply overrides
@@ -117,6 +117,8 @@ async function buildDemographicProfile(
       userId,
       hasBaseline: !!baseline,
       age: finalProfile.age,
+      race: finalProfile.race,
+      smokingStatus: finalProfile.smokingStatus,
     });
 
     return finalProfile;
@@ -163,12 +165,25 @@ async function buildClinicalRiskFactors(
     }
 
     // Check for BP medication from baseline
-    // TODO: Add onBPmedication to baseline profile
-    factors.onBPmedication = false;
+    const baseline = await getBaselineFields(userId);
+    // Determine if user is on BP medication based on blood pressure history or medications list
+    const hasHypertensionHistory = baseline.bloodPressureHistory === 'hypertension_stage1' ||
+                                   baseline.bloodPressureHistory === 'hypertension_stage2';
+    const hasBPMedication = baseline.medications?.some(med =>
+      med.toLowerCase().includes('blood pressure') ||
+      med.toLowerCase().includes('lisinopril') ||
+      med.toLowerCase().includes('amlodipine') ||
+      med.toLowerCase().includes('losartan') ||
+      med.toLowerCase().includes('metoprolol') ||
+      med.toLowerCase().includes('hydrochlorothiazide')
+    ) || false;
+    factors.onBPmedication = hasHypertensionHistory || hasBPMedication;
 
     logger.info('✅ [CLINICAL] Clinical data integrated', {
       userId,
       hasBP: !!(factors.systolicBP && factors.diastolicBP),
+      onBPmedication: factors.onBPmedication,
+      bpHistory: baseline.bloodPressureHistory,
     });
 
     // Fetch bloodwork data for cholesterol
@@ -181,6 +196,7 @@ async function buildClinicalRiskFactors(
 
       // Calculate estimated total cholesterol from LDL + HDL if total cholesterol is missing
       // This is a conservative estimate (assumes normal triglycerides)
+      // Priority: 1) total_cholesterol column, 2) raw_test_name mapping, 3) LDL+HDL estimation
       if (!factors.totalCholesterol && factors.ldlCholesterol && factors.hdlCholesterol) {
         factors.totalCholesterol = factors.ldlCholesterol + factors.hdlCholesterol;
         logger.info('📊 [CLINICAL] Using estimated total cholesterol (LDL + HDL)', {
@@ -384,14 +400,13 @@ async function buildAdvancedRiskMarkers(
     if (bloodwork && bloodwork.hasBloodwork) {
       markers.hsCRP = getMarkerValue(bloodwork.markers.hsCRP) || undefined;
       markers.lipoproteinA = getMarkerValue(bloodwork.markers.lpa) || undefined;
-      markers.homocysteine = undefined; // Not in standard bloodwork context
-      markers.fibrinogen = undefined; // Not in standard bloodwork context
       markers.apoB = getMarkerValue(bloodwork.markers.apoB) || undefined;
 
       logger.info('✅ [ADVANCED] Advanced markers integrated', {
         userId,
         hasHsCRP: !!markers.hsCRP,
         hasLipoA: !!markers.lipoproteinA,
+        hasApoB: !!markers.apoB,
       });
     }
   } catch (error) {

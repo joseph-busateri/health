@@ -102,6 +102,33 @@ export async function calculateActuarialRisk(
       id: randomUUID(),
       userId,
       date: new Date().toISOString().split('T')[0],
+      timestamp: new Date().toISOString(),
+      overallRisk: evidence.combinedRiskPercentage,
+      riskCategory: evidence.combinedRiskCategory,
+      riskModels: {
+        framingham: {
+          score: framinghamRisk,
+          category: determineRiskCategory(framinghamRisk),
+          tenYearRisk: framinghamRisk,
+        },
+        ascvd: {
+          score: ascvdRisk,
+          category: determineRiskCategory(ascvdRisk),
+          tenYearRisk: ascvdRisk,
+        },
+        lifestyleModified: {
+          score: evidence.combinedRiskPercentage,
+          category: evidence.combinedRiskCategory,
+          tenYearRisk: evidence.combinedRiskPercentage,
+          modificationFactor: evidence.lifestyleAdjustment || 0,
+        },
+      },
+      riskFactorContributions: evidence.riskFactors.map(factor => ({
+        factor: factor.factor,
+        contribution: factor.contribution,
+        severity: factor.status === 'negative' ? 'high' : factor.status === 'positive' ? 'low' : 'moderate',
+        modifiable: true, // All risk factors are potentially modifiable
+      })),
       inputs,
       evidence,
       recommendation,

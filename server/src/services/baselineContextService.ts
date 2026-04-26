@@ -61,12 +61,15 @@ export function invalidateBaselineContext(userId: string): void {
 export async function getBaselineFields(userId: string): Promise<{
   age: number;
   sex: 'male' | 'female' | 'other';
+  race: 'white' | 'black' | 'asian' | 'hispanic' | 'other';
   weight: number;
   height: number;
   activityLevel: string;
   trainingExperience: string;
   trtUsage: boolean;
   diabetesStatus: string;
+  smokingStatus: 'never' | 'former' | 'current';
+  bloodPressureHistory: 'normal' | 'elevated' | 'hypertension_stage1' | 'hypertension_stage2';
   sleepTarget: number;
   trainingDaysPerWeek: number;
   conditions: string[];
@@ -82,12 +85,15 @@ export async function getBaselineFields(userId: string): Promise<{
   return {
     age: profile.age ?? 35,
     sex: profile.sex ?? 'male',
+    race: profile.race ?? 'white',
     weight: profile.weightLbs ?? 180,
     height: profile.heightInches ?? 70,
     activityLevel: profile.activityLevel ?? 'moderately_active',
     trainingExperience: profile.trainingExperienceLevel ?? 'intermediate',
     trtUsage: profile.trtUsage ?? false,
     diabetesStatus: profile.diabetesStatus ?? 'none',
+    smokingStatus: profile.smokingStatus ?? 'never',
+    bloodPressureHistory: profile.bloodPressureHistory ?? 'normal',
     sleepTarget: profile.sleepTargetHours ?? 7.5,
     trainingDaysPerWeek: profile.trainingDaysPerWeek ?? 4,
     conditions: profile.conditions ?? [],

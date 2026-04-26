@@ -7,6 +7,7 @@ export interface BaselineProfile {
   dateOfBirth?: Date;
   age?: number;
   sex?: 'male' | 'female' | 'other';
+  race?: 'white' | 'black' | 'asian' | 'hispanic' | 'other';
   heightInches?: number;
   weightLbs?: number;
   bodyFatPercent?: number;
@@ -23,6 +24,7 @@ export interface BaselineProfile {
   trtUsage?: boolean;
   diabetesStatus?: 'none' | 'prediabetic' | 'type1' | 'type2';
   bloodPressureHistory?: 'normal' | 'elevated' | 'hypertension_stage1' | 'hypertension_stage2';
+  smokingStatus?: 'never' | 'former' | 'current';
   sleepTargetHours?: number;
   trainingDaysPerWeek?: number;
   travelFrequency?: 'never' | 'rarely' | 'monthly' | 'weekly' | 'daily';
@@ -120,6 +122,7 @@ export async function getBaselineProfile(userId: string): Promise<BaselineProfil
       dateOfBirth: data.date_of_birth ? new Date(data.date_of_birth) : undefined,
       age: data.age,
       sex: data.sex,
+      race: data.race,
       heightInches: data.height_inches,
       weightLbs: data.weight_lbs,
       bodyFatPercent: data.body_fat_percent,
@@ -136,6 +139,7 @@ export async function getBaselineProfile(userId: string): Promise<BaselineProfil
       trtUsage: data.trt_usage,
       diabetesStatus: data.diabetes_status,
       bloodPressureHistory: data.blood_pressure_history,
+      smokingStatus: data.smoking_status,
       sleepTargetHours: data.sleep_target_hours,
       trainingDaysPerWeek: data.training_days_per_week,
       travelFrequency: data.travel_frequency,

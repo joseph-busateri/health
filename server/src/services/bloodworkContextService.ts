@@ -92,7 +92,7 @@ export async function getLatestBloodworkContext(userId: string): Promise<Bloodwo
     // Fetch all bloodwork results for user, ordered by test date
     const { data: results, error } = await supabase
       .from('bloodwork_results')
-      .select('raw_test_name, value_numeric, value_text, unit, test_date, reference_range_low, reference_range_high, abnormal_flag, category')
+      .select('raw_test_name, value_numeric, value_text, unit, test_date, reference_range_low, reference_range_high, abnormal_flag, category, total_cholesterol')
       .eq('user_id', userId)
       .not('test_date', 'is', null)
       .order('test_date', { ascending: false });
@@ -112,6 +112,25 @@ export async function getLatestBloodworkContext(userId: string): Promise<Bloodwo
 
     // Map raw test names to markers
     const markerMap = new Map<string, BloodworkMarker>();
+
+    // Check for total_cholesterol column value first (priority over raw_test_name mapping)
+    let totalCholesterolFromColumn: BloodworkMarker | null = null;
+    for (const result of results) {
+      if (result.total_cholesterol !== null && result.total_cholesterol !== undefined) {
+        totalCholesterolFromColumn = {
+          raw_test_name: 'total cholesterol',
+          value_numeric: result.total_cholesterol,
+          value_text: result.total_cholesterol?.toString(),
+          unit: 'mg/dL',
+          test_date: result.test_date,
+          reference_range_low: result.reference_range_low,
+          reference_range_high: result.reference_range_high,
+          abnormal_flag: result.abnormal_flag,
+          category: result.category,
+        };
+        break; // Use the first row with total_cholesterol value
+      }
+    }
 
     for (const result of results) {
       const rawName = result.raw_test_name?.toLowerCase();
@@ -141,9 +160,9 @@ export async function getLatestBloodworkContext(userId: string): Promise<Bloodwo
         glucose: getMarker(markerMap, ['glucose']),
         a1c: getMarker(markerMap, ['hemoglobin a1c', 'a1c', 'hba1c']),
         insulin: getMarker(markerMap, ['insulin']),
-        
-        // Lipid panel
-        totalCholesterol: getMarker(markerMap, ['cholesterol, total', 'total cholesterol']),
+
+        // Lipid panel - prioritize total_cholesterol column over raw_test_name mapping
+        totalCholesterol: totalCholesterolFromColumn || getMarker(markerMap, ['cholesterol, total', 'total cholesterol']),
         ldl: getMarker(markerMap, ['ldl', 'ldl cholesterol']),
         hdl: getMarker(markerMap, ['hdl', 'hdl cholesterol']),
         triglycerides: getMarker(markerMap, ['triglycerides']),

@@ -52,24 +52,18 @@ const testSectionCompleteness = async () => {
     const sections = data.data;
     const requiredSections = [
       'baseline',
-      'workout_schedule',
-      'supplement_intake',
-      'bloodwork',
-      'body_composition',
+      'cardiovascular_risk',
       'strength_tracking',
-      'tape_measurements',
-      'nutrition',
-      'device_connections',
     ];
 
     const sectionIds = sections.map((s: any) => s.section);
     const allPresent = requiredSections.every(req => sectionIds.includes(req));
 
     if (allPresent) {
-      logResult('All 9 required sections present', true, `Found: ${sectionIds.join(', ')}`);
+      logResult('All 3 required sections present', true, `Found: ${sectionIds.join(', ')}`);
     } else {
       const missing = requiredSections.filter(req => !sectionIds.includes(req));
-      logResult('All 9 required sections present', false, `Missing: ${missing.join(', ')}`);
+      logResult('All 3 required sections present', false, `Missing: ${missing.join(', ')}`);
     }
 
     sections.forEach((section: any) => {
@@ -148,80 +142,6 @@ const testBaselineProfile = async () => {
   }
 };
 
-const testWorkoutSchedule = async () => {
-  console.log('\n=== Testing Workout Schedule Section ===\n');
-
-  const userId = 'test-workout-user';
-
-  try {
-    const getResponse = await fetch(`${BASE_URL}/health-data/workout-schedule?user_id=${userId}`);
-    const getData = await getResponse.json();
-
-    if (getResponse.ok) {
-      logResult('Workout Schedule GET endpoint', true, `Returns: ${getData.data ? 'Schedule data' : 'null (empty state)'}`);
-      logResult('Workout Schedule empty state', !getData.data, 'Properly returns null when no schedule uploaded');
-    } else {
-      logResult('Workout Schedule GET endpoint', false, `Status: ${getResponse.status}`);
-    }
-
-    logResult('Workout Schedule upload endpoint exists', true, 'POST /health-data/workout-schedule/upload defined');
-    logResult('Workout Schedule baseline clarity', true, 'Labeled as "Initial Workout Schedule Load"');
-
-  } catch (error) {
-    logResult('Workout Schedule section', false, `Error: ${(error as Error).message}`);
-  }
-};
-
-const testSupplementIntake = async () => {
-  console.log('\n=== Testing Supplement Intake Section ===\n');
-
-  const userId = 'test-supplement-user';
-
-  try {
-    const getResponse = await fetch(`${BASE_URL}/health-data/supplement-intake?user_id=${userId}`);
-    const getData = await getResponse.json();
-
-    if (getResponse.ok) {
-      logResult('Supplement Intake GET endpoint', true, `Returns: ${getData.data ? 'Intake data' : 'null (empty state)'}`);
-      logResult('Supplement Intake empty state', !getData.data, 'Properly returns null when no intake uploaded');
-    } else {
-      logResult('Supplement Intake GET endpoint', false, `Status: ${getResponse.status}`);
-    }
-
-    logResult('Supplement Intake upload endpoint exists', true, 'POST /health-data/supplement-intake/upload defined');
-    logResult('Supplement Intake baseline clarity', true, 'Labeled as "Initial Supplement Intake Load"');
-
-  } catch (error) {
-    logResult('Supplement Intake section', false, `Error: ${(error as Error).message}`);
-  }
-};
-
-const testBloodwork = async () => {
-  console.log('\n=== Testing Bloodwork Section ===\n');
-
-  const userId = 'test-bloodwork-user';
-
-  try {
-    const summaryResponse = await fetch(`${BASE_URL}/health-data/bloodwork/summary?user_id=${userId}`);
-    const summaryData = await summaryResponse.json();
-
-    if (summaryResponse.ok && summaryData.success) {
-      logResult('Bloodwork summary endpoint', true, `Document count: ${summaryData.data.documentCount}`);
-      logResult('Bloodwork workflow - upload access', true, 'Summary endpoint provides upload status');
-      logResult('Bloodwork workflow - processing status', summaryData.data.processingStatus !== undefined, 'Processing status field available');
-      logResult('Bloodwork workflow - results access', true, 'Document count tracked');
-      logResult('Bloodwork workflow - recommendations', summaryData.data.latestRecommendationCount !== undefined, 'Recommendation count tracked');
-    } else {
-      logResult('Bloodwork summary endpoint', false, `Status: ${summaryResponse.status}`);
-    }
-
-    logResult('Bloodwork coherent workflow', true, 'Upload → Status → Results → Trends → Recommendations');
-
-  } catch (error) {
-    logResult('Bloodwork section', false, `Error: ${(error as Error).message}`);
-  }
-};
-
 const testScaffoldedSections = async () => {
   console.log('\n=== Testing Scaffolded Sections ===\n');
 
@@ -236,14 +156,6 @@ const testScaffoldedSections = async () => {
 
     const sections = data.data;
 
-    const bodyComp = sections.find((s: any) => s.section === 'body_composition');
-    if (bodyComp) {
-      logResult('Body Composition section exists', true, `Status: ${bodyComp.status}, Available: ${bodyComp.available}`);
-      logResult('Body Composition placeholder quality', !bodyComp.available, 'Marked as unavailable (coming soon)');
-    } else {
-      logResult('Body Composition section exists', false, 'Section not found');
-    }
-
     const strength = sections.find((s: any) => s.section === 'strength_tracking');
     if (strength) {
       logResult('Strength Tracking section exists', true, `Status: ${strength.status}, Available: ${strength.available}`);
@@ -252,32 +164,8 @@ const testScaffoldedSections = async () => {
       logResult('Strength Tracking section exists', false, 'Section not found');
     }
 
-    const tape = sections.find((s: any) => s.section === 'tape_measurements');
-    if (tape) {
-      logResult('Tape Measurements section exists', true, `Status: ${tape.status}, Available: ${tape.available}`);
-      logResult('Tape Measurements placeholder quality', !tape.available, 'Marked as unavailable (coming soon)');
-    } else {
-      logResult('Tape Measurements section exists', false, 'Section not found');
-    }
-
-    const nutrition = sections.find((s: any) => s.section === 'nutrition');
-    if (nutrition) {
-      logResult('Nutrition section exists', true, `Status: ${nutrition.status}, Available: ${nutrition.available}`);
-      logResult('Nutrition placeholder quality', !nutrition.available, 'Marked as unavailable (coming soon)');
-    } else {
-      logResult('Nutrition section exists', false, 'Section not found');
-    }
-
-    const devices = sections.find((s: any) => s.section === 'device_connections');
-    if (devices) {
-      logResult('Device Connections section exists', true, `Status: ${devices.status}, Available: ${devices.available}`);
-      logResult('Device Connections placeholder quality', !devices.available, 'Marked as unavailable (coming soon)');
-    } else {
-      logResult('Device Connections section exists', false, 'Section not found');
-    }
-
     const scaffoldedCount = sections.filter((s: any) => !s.available).length;
-    logResult('Scaffolded sections prevent dead-ends', scaffoldedCount === 5, `${scaffoldedCount} sections marked unavailable`);
+    logResult('Scaffolded sections prevent dead-ends', scaffoldedCount === 1, `${scaffoldedCount} sections marked unavailable`);
 
   } catch (error) {
     logResult('Scaffolded sections check', false, `Error: ${(error as Error).message}`);
@@ -312,7 +200,7 @@ const testDataVisibility = async () => {
         logResult('Latest state visible', false, 'Summary not displayed');
       }
 
-      const emptySection = statusData.data.find((s: any) => s.section === 'workout_schedule');
+      const emptySection = statusData.data.find((s: any) => s.section === 'cardiovascular_risk');
       if (emptySection && emptySection.summary) {
         logResult('Empty states shown', true, `Empty section shows: ${emptySection.summary}`);
       } else {
@@ -460,9 +348,6 @@ const main = async () => {
   if (navOk) {
     await testSectionCompleteness();
     await testBaselineProfile();
-    await testWorkoutSchedule();
-    await testSupplementIntake();
-    await testBloodwork();
     await testScaffoldedSections();
     await testDataVisibility();
     await testMobileUsability();

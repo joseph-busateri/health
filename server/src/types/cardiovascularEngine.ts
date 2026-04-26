@@ -39,7 +39,7 @@ export interface CardiovascularInputs {
   diastolicBP?: number;
   lipidPanel?: LipidPanel;
   age?: number;
-  smokingStatus?: boolean;
+  smokingStatus?: 'never' | 'former' | 'current' | boolean;
   // New fields for AI enrichment
   vo2Max?: number;
   apoB?: number;

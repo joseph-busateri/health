@@ -138,6 +138,33 @@ export interface ActuarialRiskRecord {
   id: string;
   userId: string;
   date: string;
+  timestamp: string;
+  overallRisk: number;
+  riskCategory: ActuarialRiskCategory;
+  riskModels: {
+    framingham: {
+      score: number;
+      category: string;
+      tenYearRisk: number;
+    };
+    ascvd: {
+      score: number;
+      category: string;
+      tenYearRisk: number;
+    };
+    lifestyleModified: {
+      score: number;
+      category: string;
+      tenYearRisk: number;
+      modificationFactor: number;
+    };
+  };
+  riskFactorContributions: Array<{
+    factor: string;
+    contribution: number;
+    severity: string;
+    modifiable: boolean;
+  }>;
   inputs: ActuarialRiskInputs;
   evidence: ActuarialEvidence;
   recommendation: ActuarialRecommendation;

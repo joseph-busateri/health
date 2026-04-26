@@ -10,7 +10,8 @@ export const getCardiovascularTodayHandler = async (req: Request, res: Response)
       return res.status(400).json({ error: 'Missing required parameter: userId' });
     }
 
-    const data = await getCardiovascularToday(Array.isArray(userId) ? userId[0] : userId);
+    const regenerate = req.query.regenerate === 'true';
+    const data = await getCardiovascularToday(Array.isArray(userId) ? userId[0] : userId, { regenerate });
 
     if (!data) {
       return res.status(404).json({ error: 'No cardiovascular data available' });

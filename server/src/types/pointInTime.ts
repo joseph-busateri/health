@@ -6,10 +6,10 @@ export type ChangeEventInsert = Database['public']['Tables']['change_events']['I
 export type ChangeEventUpdate = Database['public']['Tables']['change_events']['Update'];
 
 // Entity Types for Change Events
-export type EntityType = 'baseline_profile' | 'workout_baseline' | 'supplement_baseline' | 'supplement_item' | 'goal';
+export type EntityType = 'baseline_profile' | 'workout_baseline' | 'supplement_baseline' | 'supplement_item' | 'goal' | 'workout_plan' | 'workout_today';
 
 // Change Sources
-export type ChangeSource = 'document_upload' | 'agent_adjustment' | 'user_confirmation' | 'system_update';
+export type ChangeSource = 'document_upload' | 'agent_adjustment' | 'user_confirmation' | 'system_update' | 'integrated_workout_engine';
 
 // Reconstructed State Types
 export interface ReconstructedState {
