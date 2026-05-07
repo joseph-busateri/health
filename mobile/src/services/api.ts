@@ -92,6 +92,7 @@ export const healthApi = {
       api.put(`/api/supplements/${userId}/regimen/${supplementId}`, data),
     deleteSupplement: (userId: string, supplementId: string) => 
       api.delete(`/api/supplements/${userId}/regimen/${supplementId}`),
+    getBaseline: (userId: string) => api.get(`/supplement-baseline/${userId}`),
   },
 
   // Recovery endpoints

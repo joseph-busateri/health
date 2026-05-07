@@ -1,3 +1,5 @@
+import type { InputMetadata } from './inputMetadata';
+
 export type JointHealthStatus = 'stable' | 'caution' | 'aggravated';
 export type JointRiskLevel = 'low' | 'moderate' | 'high';
 export type JointArea = 'shoulder' | 'knee' | 'back' | 'elbow' | 'other';
@@ -28,4 +30,5 @@ export interface JointHealthRecord {
   inputs: JointHealthInputs;
   recommendation: JointWorkoutModificationRecommendation;
   createdAt: string;
+  detailedInputs?: InputMetadata[];
 }

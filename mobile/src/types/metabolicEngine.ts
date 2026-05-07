@@ -1,5 +1,22 @@
 export type MetabolicStatus = 'optimal' | 'moderate' | 'elevated_risk' | 'high_risk';
 
+export interface ScoreComponent {
+  score: number;
+  max: number;
+  percentage: number;
+  hasData: boolean;
+}
+
+export interface MetabolicScoreBreakdown {
+  glucoseControl: ScoreComponent;
+  lipidProfile: ScoreComponent;
+  bodyComposition: ScoreComponent;
+  vitals: ScoreComponent;
+  total: number;
+  maxTotal: number;
+  percentage: number;
+}
+
 export interface MetabolicEvidence {
   signals: Array<{
     name: string;
@@ -22,7 +39,11 @@ export interface MetabolicRecord {
   userId: string;
   date: string;
   metabolicStatus: MetabolicStatus;
+  metabolicScore?: number;
+  scoreBreakdown?: MetabolicScoreBreakdown;
   evidence?: MetabolicEvidence;
   recommendation: MetabolicRecommendation;
+  inputs?: Record<string, any>;
+  detailedInputs?: any[];
   createdAt: string;
 }

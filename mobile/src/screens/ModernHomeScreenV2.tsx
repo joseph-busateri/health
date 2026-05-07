@@ -17,15 +17,17 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DEFAULT_USER_ID, useUser } from '../context/UserContext';
 import { healthApi } from '../services/api';
 import { getRecoveryToday } from '../services/recoveryEngineService';
-import { getMetabolicToday } from '../services/metabolicEngineService';
+import { getMetabolicTodayV2 } from '../services/metabolicEngineService';
 import { getSexualHealthToday } from '../services/sexualHealthEngineService';
 import { getJointHealthToday } from '../services/jointHealthEngineService';
+import { API_BASE_URL } from '../config';
 
 import type { HomeStackParamList, InsightsStackParamList } from '../types/navigation';
 import type { RecoveryRecord } from '../types/recoveryEngine';
 import type { MetabolicRecord } from '../types/metabolicEngine';
 import type { SexualHealthRecord } from '../types/sexualHealthEngine';
 import type { JointHealthRecord } from '../types/jointHealthEngine';
+import type { PerformanceRecord } from '../types/performanceEngine';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
@@ -142,6 +144,7 @@ export default function ModernHomeScreenV2() {
   const [recoveryData, setRecoveryData] = useState<RecoveryRecord | null>(null);
   const [cardiovascularData, setCardiovascularData] = useState<any>(null);
   const [metabolicData, setMetabolicData] = useState<MetabolicRecord | null>(null);
+  const [performanceData, setPerformanceData] = useState<PerformanceRecord | null>(null);
   const [jointData, setJointData] = useState<JointHealthRecord | null>(null);
   const [sexualHealthData, setSexualHealthData] = useState<SexualHealthRecord | null>(null);
 
@@ -180,10 +183,11 @@ export default function ModernHomeScreenV2() {
       console.log('Loading all health data for userId:', resolvedUserId);
       
       // Load all data in parallel
-      const [recovery, cardiovascular, metabolic, joint, sexual, risk] = await Promise.allSettled([
+      const [recovery, cardiovascular, metabolic, performance, joint, sexual, risk] = await Promise.allSettled([
         getRecoveryToday(resolvedUserId, { regenerate: true }),
         healthApi.cardiovascular.getToday(resolvedUserId, { regenerate: true }),
-        getMetabolicToday(resolvedUserId),
+        getMetabolicTodayV2(resolvedUserId),
+        fetch(`${API_BASE_URL}/api/performance/${resolvedUserId}/today`).then(r => r.json()).then(d => d.data),
         getJointHealthToday(resolvedUserId),
         getSexualHealthToday(resolvedUserId),
         healthApi.actuarial.getRecord(resolvedUserId),
@@ -211,6 +215,14 @@ export default function ModernHomeScreenV2() {
         setMetabolicData(metabolic.value);
       } else {
         console.error('Metabolic data failed:', metabolic.reason);
+      }
+
+      // Performance
+      if (performance.status === 'fulfilled') {
+        console.log('Performance data loaded - Score:', performance.value.performanceScore, 'Status:', performance.value.performanceStatus);
+        setPerformanceData(performance.value);
+      } else {
+        console.error('Performance data failed:', performance.reason);
       }
 
       // Joint Health
@@ -267,9 +279,9 @@ export default function ModernHomeScreenV2() {
     const scores: number[] = [];
 
     if (recoveryData?.recoveryScore) scores.push(recoveryData.recoveryScore);
-    if (cardiovascularData?.cardiovascularStatus) scores.push(statusToScore(cardiovascularData.cardiovascularStatus));
-    if (metabolicData?.metabolicStatus) scores.push(statusToScore(metabolicData.metabolicStatus));
-    if (jointData?.riskLevel) scores.push(riskLevelToScore(jointData.riskLevel));
+    if (cardiovascularData?.cardiovascularScore) scores.push(cardiovascularData.cardiovascularScore);
+    if (metabolicData?.metabolicScore) scores.push(metabolicData.metabolicScore);
+    if (performanceData?.performanceScore) scores.push(performanceData.performanceScore);
     if (sexualHealthData?.sexualHealthStatus) scores.push(statusToScore(sexualHealthData.sexualHealthStatus));
 
     if (scores.length === 0) return 85; // Default fallback
@@ -293,7 +305,7 @@ export default function ModernHomeScreenV2() {
     {
       key: 'cardiovascular',
       title: 'Cardiovascular',
-      score: cardiovascularData ? String(statusToScore(cardiovascularData.cardiovascularStatus)) : '...',
+      score: cardiovascularData?.cardiovascularScore !== undefined ? String(cardiovascularData.cardiovascularScore) : '...',
       source: cardiovascularData?.cardiovascularStatus ? cardiovascularData.cardiovascularStatus.replace('_', ' ').toUpperCase() : 'Loading...',
       detail: cardiovascularData?.evidence?.summary || 'Loading cardiovascular data...',
       icon: 'heart-pulse',
@@ -303,9 +315,9 @@ export default function ModernHomeScreenV2() {
     {
       key: 'metabolic',
       title: 'Metabolic',
-      score: metabolicData ? String(statusToScore(metabolicData.metabolicStatus)) : '...',
+      score: metabolicData?.metabolicScore !== undefined ? String(metabolicData.metabolicScore) : '...',
       source: metabolicData?.metabolicStatus ? metabolicData.metabolicStatus.replace('_', ' ').toUpperCase() : 'Loading...',
-      detail: metabolicData?.evidence?.summary || 'Loading metabolic data...',
+      detail: metabolicData?.recommendation?.summary || 'Loading metabolic data...',
       icon: 'fire',
       color: '#FB923C',
       loading: !metabolicData,
@@ -313,12 +325,12 @@ export default function ModernHomeScreenV2() {
     {
       key: 'performance',
       title: 'Performance',
-      score: jointData ? String(riskLevelToScore(jointData.riskLevel)) : '...',
-      source: jointData?.riskLevel ? `${jointData.riskLevel.toUpperCase()} RISK` : 'Loading...',
-      detail: jointData?.recommendation?.summary || 'Loading joint health data...',
+      score: performanceData?.performanceScore ? String(Math.round(performanceData.performanceScore)) : '...',
+      source: performanceData?.performanceStatus ? performanceData.performanceStatus.toUpperCase() : 'Loading...',
+      detail: performanceData?.recommendation?.summary || 'Loading performance data...',
       icon: 'run-fast',
       color: '#22C55E',
-      loading: !jointData,
+      loading: !performanceData,
     },
     {
       key: 'sexualHealth',
@@ -341,7 +353,7 @@ export default function ModernHomeScreenV2() {
       case 'metabolic':
         return () => navigation.navigate('MetabolicHealthDashboard');
       case 'performance':
-        return () => navigation.navigate('JointHealthStatus', { userId: resolvedUserId });
+        return () => navigation.navigate('PerformanceDashboard');
       case 'sexualHealth':
         return () => navigation.navigate('SexualHealthDashboardV3');
       default:
@@ -384,7 +396,7 @@ export default function ModernHomeScreenV2() {
       : '10-year CVD risk assessment',
     icon: 'heart-pulse',
     color: getRiskCategoryColor(riskRecord?.evidence?.combinedRiskCategory ?? riskRecord?.riskCategory ?? 'low_risk'),
-    onPress: () => navigation.navigate('ActuarialRisk' as any),
+    onPress: () => navigation.navigate('ActuarialRiskDashboard' as any),
   };
 
   const CardiovascularRiskCard = ({ action, riskRecord }: { action: QuickAction; riskRecord: any }) => {

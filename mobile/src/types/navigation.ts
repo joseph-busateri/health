@@ -22,7 +22,7 @@ export type RootStackParamList = {
   AdherenceStatus: { userId: string };
   NotificationSettings: undefined;
   SupplementUpload: undefined;
-  SupplementSummary: { baseline: SupplementBaseline; items: SupplementItem[] };
+  SupplementSummary: { baseline?: SupplementBaseline; items?: SupplementItem[] };
   SupplementRecommendations: { userId: string };
   PointInTimeState: undefined;
   BloodworkUpload: undefined;
@@ -50,6 +50,7 @@ export type RootStackParamList = {
   StrengthTracking: undefined;
   RecoveryDashboard: undefined;
   AnalyticsDashboard: undefined;
+  PerformanceDashboard: undefined;
   TapeMeasurements: undefined;
   AutonomousAdjustments: undefined;
   InterviewSelector: undefined;
@@ -62,6 +63,7 @@ export type RootStackParamList = {
   OverloadRecommendations: undefined;
   SupplementBulkUpload: undefined;
   MetabolicHealthDashboard: undefined;
+  SexualHealthDashboardV3: undefined;
   // Future routes: set to undefined for now to keep extension lightweight.
   Reminders?: undefined;
   Nutrition?: undefined;
@@ -96,6 +98,8 @@ export type HomeStackParamList = {
   AIAssistant: undefined;
   AIChat: undefined;
   AnalyticsDashboard: undefined;
+  PerformanceDashboard: undefined;
+  MetabolicHealthDashboard: undefined;
 };
 
 export type InsightsStackParamList = {
@@ -117,6 +121,7 @@ export type InsightsStackParamList = {
   CorrelationInsights: undefined;
   CorrelationDetail: { correlation: any };
   AnalyticsDashboard: undefined;
+  PerformanceDashboard: undefined;
   MetabolicHealthDashboard: undefined;
 };
 

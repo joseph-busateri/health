@@ -11,10 +11,41 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { healthApi } from '../services/api';
+import type { InputMetadata } from '../types/inputMetadata';
 
 // ============================================================================
 // TYPES
 // ============================================================================
+
+export interface ModelInputMetadata {
+  key: string;
+  label: string;
+  value: any;
+  unit?: string;
+  source: 'ACTUAL' | 'DERIVED' | 'NOT_AVAILABLE';
+  sourceTable?: string;
+  sourceField?: string;
+  required: boolean;
+  available: boolean;
+  lastUpdated?: string;
+  contribution?: number;  // Percentage contribution to risk score
+}
+
+export interface ASCVDModelData {
+  riskPercentage: number;
+  riskCategory: string;
+  inputs: ModelInputMetadata[];
+  missingInputs: string[];
+  confidence?: number;
+}
+
+export interface FraminghamModelData {
+  riskPercentage: number;
+  riskCategory: string;
+  inputs: ModelInputMetadata[];
+  missingInputs: string[];
+  confidence?: number;
+}
 
 export interface ActuarialRiskRecord {
   id: string;
@@ -22,7 +53,8 @@ export interface ActuarialRiskRecord {
   date: string;
   timestamp: string;
   overallRisk: number;
-  riskCategory: 'low' | 'moderate' | 'high' | 'very_high';
+  baselineRisk?: number;  // Unadjusted clinical risk (average of ASCVD + Framingham)
+  riskCategory: 'low' | 'moderate' | 'high' | 'very_high' | 'low_risk' | 'moderate_risk' | 'high_risk' | 'very_high_risk';
   riskModels: {
     framingham: {
       score: number;
@@ -46,23 +78,27 @@ export interface ActuarialRiskRecord {
     contribution: number;
     severity: string;
     modifiable: boolean;
+    value?: string;
+    interpretation?: string;
   }>;
-  evidence: {
-    signals: any[];
-    summary: string;
-    interpretation: string;
+  lifestyleFactors?: {
+    exerciseFrequency: { value: number; unit: string; adjustment: number };
+    vo2Max?: { value: number; unit: string; adjustment: number };
+    bmi: { value: number; unit: string; adjustment: number };
+    bodyFatPercent?: { value: number; unit: string; adjustment: number };
+    dietQuality: { value: string; adjustment: number };
+    sleepQuality: { value: number; unit: string; adjustment: number };
+    stressLevel: { value: number; unit: string; adjustment: number };
+    alcoholConsumption?: { value: string; adjustment: number };
   };
-  recommendation: {
-    type: string;
-    priority: 'critical' | 'important' | 'optimization';
-    summary: string;
-    actions: string[];
-    riskReductionPotential: number;
-    primaryRiskDrivers: string[];
-    preventionStrategies: string[];
-    rationale?: string;
-    source: 'deterministic' | 'ai_enriched' | 'fallback';
-  };
+  inputs: any;
+  evidence: any;
+  recommendation: any;
+  detailedInputs?: InputMetadata[];
+  ascvdModelData?: ASCVDModelData;
+  framinghamModelData?: FraminghamModelData;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface UseActuarialRiskResult {

@@ -2,6 +2,7 @@
 // Extends V2 with raw hormone values for display
 
 import type { BloodworkTrend } from './bloodworkTrends';
+import type { InputMetadata } from './inputMetadata';
 import type {
   LibidoLevel,
   ErectilePerformance,
@@ -24,6 +25,23 @@ export type {
   SexualHealthStatus,
   SexualHealthRecommendation,
 } from './sexualHealthEngine';
+
+// Score breakdown types (following metabolic/cardiovascular pattern)
+export interface ScoreComponent {
+  score: number;
+  max: number;
+  percentage: number;
+  hasData: boolean;
+}
+
+export interface SexualHealthScoreBreakdown {
+  testosterone: ScoreComponent;      // 40 points max
+  libido: ScoreComponent;            // 30 points max
+  erectileFunction: ScoreComponent;  // 30 points max
+  total: number;
+  maxTotal: number;
+  percentage: number;
+}
 
 export interface SexualHealthInputsV3 {
   // Legacy fields from V1
@@ -126,4 +144,8 @@ export interface SexualHealthRecordV3 {
   // Trend metadata
   trendMetadata?: SexualHealthEvidenceV3['trendMetadata'];
   createdAt: string;
+  // Input transparency
+  detailedInputs?: InputMetadata[];
+  // Score breakdown
+  scoreBreakdown?: SexualHealthScoreBreakdown;
 }

@@ -15,16 +15,66 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useUser, DEFAULT_USER_ID } from '../context/UserContext';
 import { healthApi } from '../services/api';
 import { getRecoveryToday } from '../services/recoveryEngineService';
+import { InputDetailsPanel } from '../components/InputDetailsPanel';
 
 import type { InsightsStackParamList } from '../types/navigation';
 import type { RecoveryRecord } from '../types/recoveryEngine';
 import type { BodyCompositionScan } from '../types/bodyComposition';
+import type { InputMetadata } from '../types/inputMetadata';
+
+// Error boundary component to catch notification errors
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback?: React.ReactNode },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error('ErrorBoundary caught an error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || <View />;
+    }
+    return this.props.children;
+  }
+}
+
+interface ScoreComponent {
+  score: number;
+  max: number;
+  percentage: number;
+  hasData: boolean;
+}
+
+interface CardiovascularScoreBreakdown {
+  bloodPressure: ScoreComponent;
+  lipidProfile: ScoreComponent;
+  cardiacFunction: ScoreComponent;
+  fitnessMetabolism: ScoreComponent;
+  advancedMarkers: ScoreComponent;
+  lifestyle: ScoreComponent;
+  baselineAdjustment: ScoreComponent;
+  total: number;
+  maxTotal: number;
+  percentage: number;
+}
 
 interface CardiovascularRecord {
   id: string;
   userId: string;
   date: string;
   cardiovascularStatus: 'optimal' | 'moderate' | 'elevated_risk' | 'high_risk';
+  cardiovascularScore?: number;
+  scoreBreakdown?: CardiovascularScoreBreakdown;
   evidence?: {
     cardiovascularStatus: string;
     signals: Array<{
@@ -42,6 +92,31 @@ interface CardiovascularRecord {
     rationale?: string;
     source?: string;
   };
+  inputs?: {
+    restingHR?: number;
+    hrv?: number;
+    systolicBP?: number;
+    diastolicBP?: number;
+    lipidPanel?: {
+      totalCholesterol?: number;
+      ldl?: number;
+      hdl?: number;
+      triglycerides?: number;
+      cholesterolRatio?: number;
+      ldlHdlRatio?: number;
+    };
+    age?: number;
+    smokingStatus?: 'never' | 'former' | 'current' | boolean;
+    vo2Max?: number;
+    apoB?: number;
+    lipoproteinA?: number;
+    hsCRP?: number;
+    bodyFat?: number;
+    stressScore?: number;
+    recoveryScore?: number;
+    metabolicStatus?: string;
+  };
+  detailedInputs?: InputMetadata[];
   createdAt: string;
 }
 
@@ -72,9 +147,13 @@ const CardiovascularDashboardScreenV2: React.FC = () => {
       ]);
       
       // Handle cardiovascular data
-      if (cardioResponse.status === 'fulfilled' && cardioResponse.value.data?.data) {
-        setCardioData(cardioResponse.value.data.data);
-        console.log('Cardiovascular data loaded:', cardioResponse.value.data.data);
+      if (cardioResponse.status === 'fulfilled' && cardioResponse.value.data?.success) {
+        const cardioData = cardioResponse.value.data.data;
+        setCardioData(cardioData);
+        console.log('Cardiovascular data loaded:', cardioData.cardiovascularStatus);
+        console.log('Cardiovascular inputs:', cardioData.inputs);
+        console.log('Cardiovascular detailedInputs:', cardioData.detailedInputs);
+        console.log('DetailedInputs count:', cardioData.detailedInputs?.length || 0);
       } else {
         setError('No cardiovascular data available');
       }
@@ -118,6 +197,9 @@ const CardiovascularDashboardScreenV2: React.FC = () => {
     await loadData();
     setRefreshing(false);
   };
+
+  // Safety check for inputs field
+  const inputs = cardioData?.inputs || {};
 
   const getCardioScore = (status: string): number => {
     switch (status) {
@@ -228,15 +310,16 @@ const CardiovascularDashboardScreenV2: React.FC = () => {
     );
   }
 
-  const score = getCardioScore(cardioData.cardiovascularStatus);
+  const score = cardioData.cardiovascularScore ?? getCardioScore(cardioData.cardiovascularStatus);
   const statusLabel = getStatusLabel(cardioData.cardiovascularStatus);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        refreshControl={
+    <ErrorBoundary>
+      <SafeAreaView style={styles.container}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
@@ -246,81 +329,239 @@ const CardiovascularDashboardScreenV2: React.FC = () => {
         </View>
 
         <View style={styles.scoreCard}>
-          <View>
-            <Text style={styles.scoreLabel}>Current Score</Text>
-            <Text style={styles.scoreValue}>{score}</Text>
-            <Text style={styles.lastUpdated}>
-              Last updated {new Date(cardioData.createdAt).toLocaleDateString()}
-            </Text>
+          <View style={styles.scoreMainSection}>
+            <View style={styles.scoreIconContainer}>
+              <MaterialCommunityIcons name="heart-pulse" size={48} color="#3B82F6" />
+            </View>
+            <View style={styles.scoreDetails}>
+              <Text style={styles.scoreLabel}>Cardiovascular Health Score</Text>
+              <View style={styles.scoreValueContainer}>
+                <Text style={styles.scoreValue}>{score}</Text>
+                <Text style={styles.scoreMaxValue}>/100</Text>
+              </View>
+              <View style={styles.progressBarContainer}>
+                <View style={styles.progressBarBackground}>
+                  <View style={[styles.progressBarFill, { width: `${score}%` }]} />
+                </View>
+              </View>
+              <Text style={styles.lastUpdated}>
+                <MaterialCommunityIcons name="clock-outline" size={12} color="#94A3B8" />
+                {' '}Updated {new Date(cardioData.createdAt).toLocaleDateString()}
+              </Text>
+            </View>
           </View>
-          <View style={styles.statusWrapper}>
-            <Text style={styles.statusLabel}>Status</Text>
+          <View style={styles.statusBadgeContainer}>
             <View style={getStatusBadgeStyle(cardioData.cardiovascularStatus)}>
+              <MaterialCommunityIcons 
+                name={cardioData.cardiovascularStatus === 'optimal' ? 'check-circle' : 
+                      cardioData.cardiovascularStatus === 'moderate' ? 'information' :
+                      cardioData.cardiovascularStatus === 'elevated_risk' ? 'alert' : 'alert-circle'} 
+                size={16} 
+                color="#0F172A" 
+              />
               <Text style={styles.statusText}>{statusLabel}</Text>
             </View>
-            <Text style={styles.riskLevel}>
-              {cardioData.cardiovascularStatus.replace('_', ' ').toUpperCase()}
-            </Text>
           </View>
         </View>
+
+        {cardioData.scoreBreakdown && cardioData.detailedInputs && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Score Breakdown</Text>
+            
+            {/* Blood Pressure Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="heart-pulse" size={20} color="#EF4444" />
+                  <Text style={styles.categoryTitle}>Blood Pressure</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${cardioData.scoreBreakdown.bloodPressure.percentage}%`, backgroundColor: cardioData.scoreBreakdown.bloodPressure.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.bloodPressure.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {cardioData.scoreBreakdown.bloodPressure.score}/{cardioData.scoreBreakdown.bloodPressure.max}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: cardioData.scoreBreakdown.bloodPressure.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.bloodPressure.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {cardioData.scoreBreakdown.bloodPressure.percentage}%
+                  </Text>
+                </View>
+              </View>
+              <InputDetailsPanel 
+                inputs={cardioData.detailedInputs.filter(i => 
+                  ['Systolic Blood Pressure', 'Diastolic Blood Pressure'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Lipid Profile Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="water" size={20} color="#3B82F6" />
+                  <Text style={styles.categoryTitle}>Lipid Profile</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${cardioData.scoreBreakdown.lipidProfile.percentage}%`, backgroundColor: cardioData.scoreBreakdown.lipidProfile.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.lipidProfile.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {cardioData.scoreBreakdown.lipidProfile.score}/{cardioData.scoreBreakdown.lipidProfile.max}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: cardioData.scoreBreakdown.lipidProfile.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.lipidProfile.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {cardioData.scoreBreakdown.lipidProfile.percentage}%
+                  </Text>
+                </View>
+              </View>
+              <InputDetailsPanel 
+                inputs={cardioData.detailedInputs.filter(i => 
+                  ['Total Cholesterol', 'LDL Cholesterol', 'HDL Cholesterol', 'Triglycerides', 'Total Cholesterol/HDL Ratio'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Cardiac Function Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="heart-outline" size={20} color="#EC4899" />
+                  <Text style={styles.categoryTitle}>Cardiac Function</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    {cardioData.scoreBreakdown.cardiacFunction.hasData ? (
+                      <View style={[styles.categoryProgressFill, { width: `${cardioData.scoreBreakdown.cardiacFunction.percentage}%`, backgroundColor: cardioData.scoreBreakdown.cardiacFunction.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.cardiacFunction.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                    ) : null}
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {cardioData.scoreBreakdown.cardiacFunction.hasData 
+                      ? `${cardioData.scoreBreakdown.cardiacFunction.score}/${cardioData.scoreBreakdown.cardiacFunction.max}`
+                      : 'N/A'}
+                  </Text>
+                  {cardioData.scoreBreakdown.cardiacFunction.hasData && (
+                    <Text style={[styles.categoryPercentage, { color: cardioData.scoreBreakdown.cardiacFunction.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.cardiacFunction.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                      {cardioData.scoreBreakdown.cardiacFunction.percentage}%
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <InputDetailsPanel 
+                inputs={cardioData.detailedInputs.filter(i => 
+                  ['Resting Heart Rate', 'Heart Rate Variability'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Fitness & Metabolism Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="run" size={20} color="#8B5CF6" />
+                  <Text style={styles.categoryTitle}>Fitness & Metabolism</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${cardioData.scoreBreakdown.fitnessMetabolism.percentage}%`, backgroundColor: cardioData.scoreBreakdown.fitnessMetabolism.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.fitnessMetabolism.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {cardioData.scoreBreakdown.fitnessMetabolism.score}/{cardioData.scoreBreakdown.fitnessMetabolism.max}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: cardioData.scoreBreakdown.fitnessMetabolism.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.fitnessMetabolism.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {cardioData.scoreBreakdown.fitnessMetabolism.percentage}%
+                  </Text>
+                </View>
+              </View>
+              <InputDetailsPanel 
+                inputs={cardioData.detailedInputs.filter(i => 
+                  ['VO2 Max', 'Body Fat Percentage'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Advanced Markers Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="flask" size={20} color="#06B6D4" />
+                  <Text style={styles.categoryTitle}>Advanced Markers</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    {cardioData.scoreBreakdown.advancedMarkers.hasData ? (
+                      <View style={[styles.categoryProgressFill, { width: `${cardioData.scoreBreakdown.advancedMarkers.percentage}%`, backgroundColor: cardioData.scoreBreakdown.advancedMarkers.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.advancedMarkers.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                    ) : null}
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {cardioData.scoreBreakdown.advancedMarkers.hasData 
+                      ? `${cardioData.scoreBreakdown.advancedMarkers.score}/${cardioData.scoreBreakdown.advancedMarkers.max}`
+                      : 'N/A'}
+                  </Text>
+                  {cardioData.scoreBreakdown.advancedMarkers.hasData && (
+                    <Text style={[styles.categoryPercentage, { color: cardioData.scoreBreakdown.advancedMarkers.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.advancedMarkers.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                      {cardioData.scoreBreakdown.advancedMarkers.percentage}%
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <InputDetailsPanel 
+                inputs={cardioData.detailedInputs.filter(i => 
+                  ['Apolipoprotein B', 'Lipoprotein(a)', 'High-Sensitivity C-Reactive Protein'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Lifestyle Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="human" size={20} color="#F59E0B" />
+                  <Text style={styles.categoryTitle}>Lifestyle & Demographics</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${cardioData.scoreBreakdown.lifestyle.percentage}%`, backgroundColor: cardioData.scoreBreakdown.lifestyle.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.lifestyle.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {cardioData.scoreBreakdown.lifestyle.score}/{cardioData.scoreBreakdown.lifestyle.max}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: cardioData.scoreBreakdown.lifestyle.percentage >= 70 ? '#22C55E' : cardioData.scoreBreakdown.lifestyle.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {cardioData.scoreBreakdown.lifestyle.percentage}%
+                  </Text>
+                </View>
+              </View>
+              <InputDetailsPanel 
+                inputs={cardioData.detailedInputs.filter(i => 
+                  ['Age', 'Smoking Status', 'Stress Score', 'Recovery Score'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Total Score */}
+            <View style={styles.card}>
+              <View style={[styles.breakdownRow, styles.breakdownTotal]}>
+                <Text style={styles.breakdownLabelTotal}>Total Score</Text>
+                <Text style={styles.breakdownScoreTotal}>
+                  {cardioData.scoreBreakdown.total}/{cardioData.scoreBreakdown.maxTotal}
+                </Text>
+                <Text style={styles.breakdownPercentageTotal}>
+                  {cardioData.scoreBreakdown.percentage}%
+                </Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {cardioData.evidence?.summary && (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Summary</Text>
             <View style={styles.card}>
               <Text style={styles.summaryText}>{cardioData.evidence.summary}</Text>
-            </View>
-          </View>
-        )}
-
-        {cardioData.evidence?.signals && cardioData.evidence.signals.length > 0 && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Health Signals</Text>
-            <View style={styles.card}>
-              {cardioData.evidence.signals.map((signal, index) => (
-                <View key={index} style={styles.signalRow}>
-                  <View style={styles.signalHeader}>
-                    <MaterialCommunityIcons name="heart-pulse" size={18} color="#EF4444" />
-                    <Text style={styles.signalLabel}>{signal.name}</Text>
-                  </View>
-                  <Text style={styles.signalValue}>
-                    {signal.value !== null ? String(signal.value) : 'N/A'}
-                  </Text>
-                  <Text style={styles.signalNote}>{signal.interpretation}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        )}
-
-        {(recoveryData || bodyComposition) && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Contributing Inputs</Text>
-            <View style={styles.card}>
-              {bodyComposition?.bodyFatPercentage && (
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>Body Fat %</Text>
-                  <Text style={styles.inputValue}>{bodyComposition.bodyFatPercentage.toFixed(1)}%</Text>
-                </View>
-              )}
-              {recoveryData?.recoveryScore && (
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>Recovery Score</Text>
-                  <Text style={styles.inputValue}>{Math.round(recoveryData.recoveryScore)}</Text>
-                </View>
-              )}
-              {recoveryData?.sourceInputs?.stressLevel && (
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>Stress Level</Text>
-                  <Text style={styles.inputValue}>{recoveryData.sourceInputs.stressLevel}/5</Text>
-                </View>
-              )}
-              {recoveryData?.sourceInputs?.hrv && (
-                <View style={styles.inputRow}>
-                  <Text style={styles.inputLabel}>HRV</Text>
-                  <Text style={styles.inputValue}>{Math.round(recoveryData.sourceInputs.hrv)} ms</Text>
-                </View>
-              )}
             </View>
           </View>
         )}
@@ -372,7 +613,8 @@ const CardiovascularDashboardScreenV2: React.FC = () => {
           <Text style={styles.ctaText}>Discuss with AI Coach</Text>
         </TouchableOpacity>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ErrorBoundary>
   );
 };
 
@@ -402,43 +644,84 @@ const styles = StyleSheet.create({
     color: '#475569',
   },
   scoreCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 20,
+    padding: 24,
     shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  scoreMainSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  scoreIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  scoreDetails: {
+    flex: 1,
   },
   scoreLabel: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#64748B',
-  },
-  scoreValue: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  lastUpdated: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#94A3B8',
-  },
-  statusWrapper: {
-    alignItems: 'flex-end',
-  },
-  statusLabel: {
-    fontSize: 12,
-    color: '#64748B',
+    fontWeight: '500',
     marginBottom: 4,
   },
+  scoreValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  scoreValue: {
+    fontSize: 40,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -1,
+  },
+  scoreMaxValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginLeft: 2,
+  },
+  progressBarContainer: {
+    marginBottom: 6,
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#3B82F6',
+    borderRadius: 999,
+  },
+  lastUpdated: {
+    fontSize: 11,
+    color: '#94A3B8',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statusBadgeContainer: {
+    alignItems: 'flex-end',
+  },
   statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 999,
   },
   statusOptimal: {
@@ -569,10 +852,40 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
   },
+  inputLabelContainer: {
+    flex: 1,
+    gap: 4,
+  },
   inputLabel: {
     fontSize: 14,
     color: '#64748B',
     fontWeight: '500',
+  },
+  inputInterpretation: {
+    fontSize: 12,
+    color: '#475569',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  dataSourceBadge: {
+    fontSize: 10,
+    fontWeight: '600',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  realData: {
+    backgroundColor: '#DCFCE7',
+    color: '#166534',
+  },
+  mockData: {
+    backgroundColor: '#FEF3C7',
+    color: '#92400E',
+  },
+  noData: {
+    backgroundColor: '#F1F5F9',
+    color: '#64748B',
   },
   inputValue: {
     fontSize: 16,
@@ -641,6 +954,114 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  breakdownRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  breakdownLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#64748B',
+  },
+  breakdownScore: {
+    fontSize: 14,
+    color: '#0F172A',
+    fontWeight: '500',
+    marginRight: 12,
+  },
+  breakdownPercentage: {
+    fontSize: 14,
+    color: '#3B82F6',
+    fontWeight: '600',
+    minWidth: 50,
+    textAlign: 'right',
+  },
+  breakdownTotal: {
+    borderBottomWidth: 0,
+    borderTopWidth: 2,
+    borderTopColor: '#E2E8F0',
+    marginTop: 8,
+    paddingTop: 16,
+  },
+  breakdownLabelTotal: {
+    flex: 1,
+    fontSize: 16,
+    color: '#0F172A',
+    fontWeight: '700',
+  },
+  breakdownScoreTotal: {
+    fontSize: 16,
+    color: '#0F172A',
+    fontWeight: '700',
+    marginRight: 12,
+  },
+  breakdownPercentageTotal: {
+    fontSize: 16,
+    color: '#3B82F6',
+    fontWeight: '700',
+    minWidth: 50,
+    textAlign: 'right',
+  },
+  categoryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginBottom: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  categoryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  categoryScoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryScore: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  categoryPercentage: {
+    fontSize: 14,
+    color: '#3B82F6',
+    fontWeight: '700',
+    minWidth: 45,
+    textAlign: 'right',
+  },
+  categoryTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryProgressBar: {
+    height: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginRight: 12,
+  },
+  categoryProgressFill: {
+    height: '100%',
+    borderRadius: 999,
   },
 });
 

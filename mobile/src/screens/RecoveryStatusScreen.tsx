@@ -1,199 +1,304 @@
-import React, { useCallback, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View, SafeAreaView } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-
-import type { RootStackParamList } from '../types/navigation';
+import React, { useState, useEffect } from 'react';
+import {
+  SafeAreaView,
+  ScrollView,
+  View,
+  Text,
+  StyleSheet,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useUser } from '../context/UserContext';
+import { getRecoveryToday } from '../services/recoveryEngineService';
+import { InputDetailsPanel } from '../components/InputDetailsPanel';
 import type { RecoveryRecord } from '../types/recoveryEngine';
-import { getRecoveryHistory, getRecoveryToday } from '../services/recoveryEngineService';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'RecoveryStatus'>;
-
-const metricLabel = (key: string): string => {
-  switch (key) {
-    case 'hrv':
-      return 'HRV';
-    case 'sleepDurationHours':
-      return 'Sleep Duration';
-    case 'sleepQuality':
-      return 'Sleep Quality';
-    case 'restingHr':
-      return 'Resting HR';
-    case 'stressLevel':
-      return 'Stress';
-    case 'workoutLoad':
-      return 'Workout Load';
-    case 'verbalRecoveryFeeling':
-      return 'Verbal Recovery';
-    case 'adherenceScore':
-      return 'Adherence';
-    default:
-      return key;
-  }
-};
-
-const metricInterpretation = (key: string, value: number | null): string => {
-  if (value === null) return 'No data';
-  
-  switch (key) {
-    case 'hrv':
-      if (value >= 60) return 'Excellent HRV';
-      if (value >= 45) return 'Good HRV';
-      if (value >= 30) return 'Moderate HRV';
-      return 'Low HRV';
-    case 'sleepDurationHours':
-      if (value >= 8) return 'Optimal sleep';
-      if (value >= 7) return 'Good sleep';
-      if (value >= 6) return 'Adequate sleep';
-      return 'Insufficient sleep';
-    case 'sleepQuality':
-      if (value >= 80) return 'Excellent sleep quality';
-      if (value >= 60) return 'Good sleep quality';
-      if (value >= 40) return 'Moderate sleep quality';
-      return 'Poor sleep quality';
-    case 'restingHr':
-      if (value < 60) return 'Excellent resting HR';
-      if (value < 70) return 'Good resting HR';
-      if (value < 80) return 'Average resting HR';
-      return 'Elevated resting HR';
-    case 'stressLevel':
-      if (value <= 2) return 'Low stress';
-      if (value <= 3) return 'Moderate stress';
-      return 'High stress';
-    case 'workoutLoad':
-      if (value >= 80) return 'High workout load';
-      if (value >= 50) return 'Moderate workout load';
-      return 'Light workout load';
-    case 'verbalRecoveryFeeling':
-      if (value >= 8) return 'Feeling great';
-      if (value >= 6) return 'Feeling good';
-      if (value >= 4) return 'Feeling okay';
-      return 'Feeling poor';
-    case 'adherenceScore':
-      if (value >= 80) return 'Excellent adherence';
-      if (value >= 60) return 'Good adherence';
-      if (value >= 40) return 'Moderate adherence';
-      return 'Poor adherence';
-    default:
-      return '';
-  }
-};
-
-const formatMetricValue = (key: string, value: number | null): string => {
-  if (value === null) return 'N/A';
-  
-  switch (key) {
-    case 'sleepDurationHours':
-      return `${value} hrs`;
-    case 'stressLevel':
-    case 'verbalRecoveryFeeling':
-      return `${value}/10`;
-    case 'adherenceScore':
-    case 'sleepQuality':
-    case 'workoutLoad':
-      return `${value}%`;
-    case 'restingHr':
-      return `${value} bpm`;
-    case 'hrv':
-      return `${value} ms`;
-    default:
-      return String(value);
-  }
-};
-
-const RecoveryStatusScreen: React.FC<Props> = ({ route }) => {
-  const { userId } = route.params;
+const RecoveryDashboardScreenV2: React.FC = () => {
+  const { userId } = useUser();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [data, setData] = useState<RecoveryRecord | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [today, setToday] = useState<RecoveryRecord | null>(null);
-  const [history, setHistory] = useState<RecoveryRecord[]>([]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  const loadData = async (isRefresh = false) => {
+    if (!userId) {
+      setError('No user ID available');
+      setLoading(false);
+      return;
+    }
+
     try {
-      const [todayResponse, historyResponse] = await Promise.all([
-        getRecoveryToday(userId),
-        getRecoveryHistory(userId),
-      ]);
-      setToday(todayResponse);
-      setHistory(historyResponse);
-      console.log('Recovery data loaded:', { todayResponse, sourceInputs: todayResponse?.sourceInputs });
-    } catch (err: any) {
-      setError(err?.response?.data?.error || err?.message || 'Failed to load recovery data');
+      if (isRefresh) setRefreshing(true);
+      else setLoading(true);
+
+      const recoveryData = await getRecoveryToday(userId, { regenerate: isRefresh });
+      setData(recoveryData);
+      setError(null);
+    } catch (err) {
+      console.error('Error loading recovery data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load recovery data');
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
+  };
+
+  useEffect(() => {
+    loadData();
   }, [userId]);
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load]),
-  );
+  const handleRefresh = () => {
+    loadData(true);
+  };
+
+  const statusLabel = (status: string): string => {
+    switch (status) {
+      case 'fully_recovered':
+        return 'Fully Recovered';
+      case 'moderate_recovery':
+        return 'Moderate Recovery';
+      case 'poor_recovery':
+        return 'Poor Recovery';
+      default:
+        return status;
+    }
+  };
+
+  const statusToScore = (status: string): number => {
+    switch (status) {
+      case 'fully_recovered':
+        return 85;
+      case 'moderate_recovery':
+        return 60;
+      case 'poor_recovery':
+        return 35;
+      default:
+        return 50;
+    }
+  };
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2563EB" />
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.centerContainer}>
+          <ActivityIndicator size="large" color="#10B981" />
+          <Text style={styles.loadingText}>Loading recovery data...</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
-  if (error || !today) {
+  if (error || !data) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error ?? 'No recovery record found'}</Text>
-      </View>
+      <SafeAreaView style={styles.container}>
+        <View style={styles.errorContainer}>
+          <MaterialCommunityIcons name="alert-circle" size={48} color="#EF4444" />
+          <Text style={styles.errorTitle}>Error Loading Data</Text>
+          <Text style={styles.errorMessage}>{error || 'No data available'}</Text>
+        </View>
+      </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Recovery Status</Text>
-      <Text style={styles.score}>{today.recoveryScore}/100</Text>
-      <Text style={styles.subtitle}>{today.recoveryStatus.replace('_', ' ').toUpperCase()}</Text>
-      <Text style={styles.readiness}>Readiness: {today.readinessClassification.replace('_', ' ')}</Text>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+        }
+      >
+        <View style={styles.header}>
+          <Text style={styles.title}>Recovery</Text>
+          <Text style={styles.subtitle}>Track your recovery and readiness</Text>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Recommendation</Text>
-        <Text style={styles.text}>{today.recommendation.summary}</Text>
-        {today.recommendation.actions.map((action, index) => (
-          <Text key={`action-${index}`} style={styles.bullet}>{`- ${action}`}</Text>
-        ))}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Health Signals</Text>
-        {!today.sourceInputs || Object.keys(today.sourceInputs).length === 0 ? (
-          <Text style={styles.text}>No health signals available.</Text>
-        ) : (
-          Object.entries(today.sourceInputs).map(([key, value]) => (
-            <View key={key} style={styles.signalRow}>
-              <View style={styles.signalHeader}>
-                <Text style={styles.signalLabel}>{metricLabel(key)}</Text>
-              </View>
-              <Text style={styles.signalValue}>
-                {formatMetricValue(key, value)}
-              </Text>
-              <Text style={styles.signalNote}>{metricInterpretation(key, value)}</Text>
+        {/* Main Score Card */}
+        <View style={styles.scoreCard}>
+          <View style={styles.scoreMainSection}>
+            <View style={styles.scoreIconContainer}>
+              <MaterialCommunityIcons name="heart-pulse" size={48} color="#10B981" />
             </View>
-          ))
-        )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>History</Text>
-        {history.length === 0 ? <Text style={styles.text}>No history yet.</Text> : null}
-        {history.slice(0, 7).map(record => (
-          <View key={record.id} style={styles.historyRow}>
-            <Text style={styles.historyDate}>{record.date}</Text>
-            <Text style={styles.historyValue}>{record.recoveryScore} ({record.recoveryStatus.replace('_', ' ')})</Text>
+            <View style={styles.scoreDetails}>
+              <Text style={styles.scoreLabel}>Recovery Score</Text>
+              {data.scoreBreakdown && (
+                <View style={styles.scoreValueContainer}>
+                  <Text style={styles.scoreValue}>{Math.round(data.scoreBreakdown.total)}</Text>
+                  <Text style={styles.scoreMaxValue}>/100</Text>
+                </View>
+              )}
+              <View style={styles.progressBarContainer}>
+                <View style={styles.progressBarBackground}>
+                  <View style={[styles.progressBarFill, { width: `${data.scoreBreakdown?.percentage || statusToScore(data.recoveryStatus)}%` }]} />
+                </View>
+              </View>
+              <Text style={styles.lastUpdated}>
+                <MaterialCommunityIcons name="clock-outline" size={12} color="#94A3B8" />
+                {' '}Updated {new Date(data.createdAt).toLocaleDateString()}
+              </Text>
+            </View>
           </View>
-        ))}
-      </View>
-    </ScrollView>
+          <View style={styles.statusBadgeContainer}>
+            <View style={styles.statusBadge}>
+              <MaterialCommunityIcons
+                name={data.recoveryStatus === 'fully_recovered' ? 'check-circle' :
+                      data.recoveryStatus === 'moderate_recovery' ? 'information' : 'alert-circle'}
+                size={16}
+                color="#0F172A"
+              />
+              <Text style={styles.statusText}>{statusLabel(data.recoveryStatus)}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Score Breakdown */}
+        {data.scoreBreakdown && data.detailedInputs && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Score Breakdown</Text>
+
+            {/* Sleep Recovery Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="sleep" size={20} color="#8B5CF6" />
+                  <Text style={styles.categoryTitle}>Sleep Recovery</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${data.scoreBreakdown.sleepRecovery.percentage}%`, backgroundColor: data.scoreBreakdown.sleepRecovery.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.sleepRecovery.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {data.scoreBreakdown.sleepRecovery.score}/{data.scoreBreakdown.sleepRecovery.max}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: data.scoreBreakdown.sleepRecovery.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.sleepRecovery.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {data.scoreBreakdown.sleepRecovery.percentage}%
+                  </Text>
+                </View>
+              </View>
+              <InputDetailsPanel
+                inputs={data.detailedInputs.filter(i =>
+                  ['Sleep Duration', 'Sleep Quality'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Cardiovascular Recovery Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="heart-pulse" size={20} color="#EF4444" />
+                  <Text style={styles.categoryTitle}>Cardiovascular Recovery</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${data.scoreBreakdown.cardiovascularRecovery.percentage}%`, backgroundColor: data.scoreBreakdown.cardiovascularRecovery.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.cardiovascularRecovery.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {data.scoreBreakdown.cardiovascularRecovery.score}/{data.scoreBreakdown.cardiovascularRecovery.max}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: data.scoreBreakdown.cardiovascularRecovery.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.cardiovascularRecovery.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {data.scoreBreakdown.cardiovascularRecovery.percentage}%
+                  </Text>
+                </View>
+              </View>
+              <InputDetailsPanel
+                inputs={data.detailedInputs.filter(i =>
+                  ['Heart Rate Variability', 'Resting Heart Rate'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Training Load Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="dumbbell" size={20} color="#F59E0B" />
+                  <Text style={styles.categoryTitle}>Training Load</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${data.scoreBreakdown.trainingLoad.percentage}%`, backgroundColor: data.scoreBreakdown.trainingLoad.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.trainingLoad.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {data.scoreBreakdown.trainingLoad.score}/{data.scoreBreakdown.trainingLoad.max}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: data.scoreBreakdown.trainingLoad.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.trainingLoad.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {data.scoreBreakdown.trainingLoad.percentage}%
+                  </Text>
+                </View>
+              </View>
+              <InputDetailsPanel
+                inputs={data.detailedInputs.filter(i =>
+                  ['Workout Load', 'Adherence Score'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Subjective Recovery Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="head-heart" size={20} color="#3B82F6" />
+                  <Text style={styles.categoryTitle}>Subjective Recovery</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${data.scoreBreakdown.subjectiveRecovery.percentage}%`, backgroundColor: data.scoreBreakdown.subjectiveRecovery.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.subjectiveRecovery.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {data.scoreBreakdown.subjectiveRecovery.score}/{data.scoreBreakdown.subjectiveRecovery.max}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: data.scoreBreakdown.subjectiveRecovery.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.subjectiveRecovery.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {data.scoreBreakdown.subjectiveRecovery.percentage}%
+                  </Text>
+                </View>
+              </View>
+              <InputDetailsPanel
+                inputs={data.detailedInputs.filter(i =>
+                  ['Stress Level', 'Verbal Recovery Feeling'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Total Score Summary */}
+            <View style={styles.totalCard}>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Total Recovery Score</Text>
+                <View style={styles.totalScoreContainer}>
+                  <Text style={styles.totalScore}>{data.scoreBreakdown.total}</Text>
+                  <Text style={styles.totalMax}>/{data.scoreBreakdown.maxTotal}</Text>
+                  <Text style={[styles.totalPercentage, { 
+                    color: data.scoreBreakdown.percentage >= 70 ? '#22C55E' : 
+                           data.scoreBreakdown.percentage >= 50 ? '#F59E0B' : '#EF4444' 
+                  }]}>
+                    ({data.scoreBreakdown.percentage}%)
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+        )}
+
+        {/* Recommendations */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Recommendations</Text>
+          <View style={styles.card}>
+            <Text style={styles.summaryText}>{data.recommendation.summary}</Text>
+            {data.recommendation.actions.map((action, idx) => (
+              <View key={idx} style={styles.actionRow}>
+                <MaterialCommunityIcons name="chevron-right" size={20} color="#10B981" />
+                <Text style={styles.actionText}>{action}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 };
@@ -201,119 +306,281 @@ const RecoveryStatusScreen: React.FC<Props> = ({ route }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: '#F8FAFC',
+  },
+  centerContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    color: '#94A3B8',
+    marginTop: 16,
+    fontSize: 16,
   },
   scrollView: {
     flex: 1,
   },
   content: {
-    padding: 16,
-    paddingBottom: 100, // Extra padding for tab bar
-    gap: 12,
+    paddingBottom: 24,
   },
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
+  header: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: '700',
-    color: '#111827',
-  },
-  score: {
-    fontSize: 36,
-    fontWeight: '800',
-    color: '#2563EB',
+    color: '#0F172A',
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 14,
-    color: '#1F2937',
+    fontSize: 15,
+    color: '#64748B',
+    fontWeight: '500',
   },
-  readiness: {
+  scoreCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  scoreMainSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  scoreIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: '#ECFDF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  scoreDetails: {
+    flex: 1,
+  },
+  scoreLabel: {
     fontSize: 13,
-    color: '#4B5563',
+    color: '#64748B',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  scoreValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginBottom: 8,
+  },
+  scoreValue: {
+    fontSize: 40,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -1,
+  },
+  scoreMaxValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginLeft: 2,
+  },
+  progressBarContainer: {
+    marginBottom: 6,
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#10B981',
+    borderRadius: 999,
+  },
+  lastUpdated: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  statusBadgeContainer: {
+    alignItems: 'flex-end',
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  statusText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  section: {
+    paddingHorizontal: 16,
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 16,
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 14,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 8,
-    color: '#111827',
-  },
-  text: {
-    fontSize: 14,
-    color: '#1F2937',
-    marginBottom: 6,
-  },
-  bullet: {
-    fontSize: 13,
-    color: '#374151',
-    marginBottom: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  label: {
-    fontSize: 13,
-    color: '#4B5563',
-  },
-  value: {
-    fontSize: 13,
-    color: '#111827',
-    fontWeight: '600',
-  },
-  historyRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  historyDate: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  historyValue: {
-    fontSize: 12,
-    color: '#111827',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#DC2626',
-    textAlign: 'center',
-  },
-  signalRow: {
+    borderRadius: 16,
+    padding: 16,
     marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  signalHeader: {
+  categoryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  categoryTitleContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    gap: 8,
   },
-  signalLabel: {
+  categoryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  categoryScoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryProgressBar: {
+    height: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  categoryProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  categoryScore: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#111827',
+    color: '#64748B',
   },
-  signalValue: {
-    fontSize: 18,
+  categoryPercentage: {
+    fontSize: 14,
     fontWeight: '700',
-    color: '#2563EB',
-    marginBottom: 2,
+    minWidth: 45,
+    textAlign: 'right',
   },
-  signalNote: {
-    fontSize: 12,
-    color: '#6B7280',
+  totalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 8,
+    marginBottom: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 2,
+    borderColor: '#10B981',
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  totalScoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  totalScore: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  totalMax: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  totalPercentage: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+  summaryText: {
+    fontSize: 14,
+    color: '#475569',
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  actionText: {
+    color: '#475569',
+    fontSize: 14,
+    marginLeft: 8,
+    flex: 1,
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  errorTitle: {
+    color: '#EF4444',
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 8,
+    marginTop: 16,
+  },
+  errorMessage: {
+    color: '#64748B',
+    fontSize: 14,
+    textAlign: 'center',
   },
 });
 
-export default RecoveryStatusScreen;
+export default RecoveryDashboardScreenV2;

@@ -15,11 +15,18 @@ import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger';
 import { calculateFraminghamRisk, type FraminghamInputs } from './framinghamRiskCalculator';
 import { calculateASCVDRisk, type ASCVDInputs } from './ascvdRiskCalculator';
+import { buildASCVDMetadata } from './ascvdMetadataBuilder';
+import { buildFraminghamMetadata } from './framinghamMetadataBuilder';
 import { calculateLifestyleModifiedRisk, type LifestyleFactors } from './lifestyleRiskModifier';
 import { enrichActuarialRecommendation } from './actuarialAIEnrichment';
 import { normalizeActuarialRecommendation } from './actuarialRecommendationNormalizer';
 import { validateActuarialRecommendation } from './actuarialRecommendationValidator';
 import { createRecommendation } from './recommendationEngineService';
+import { getBaselineFields } from './baselineContextService';
+import { getLatestBloodworkContext, getMarkerValue } from './bloodworkContextService';
+import { getLatestBloodPressureContext, getSystolic, getDiastolic } from './bloodPressureContextService';
+import { getLatestBodyCompositionContext } from './bodyCompositionContextService';
+import { getLatestFitnessContext, getVO2Max } from './fitnessContextService';
 import type {
   ActuarialRiskRecord,
   ActuarialRiskInputs,
@@ -30,8 +37,10 @@ import type {
   RiskFactorContribution,
   RiskModelResult,
 } from '../types/actuarialRiskEngine';
+import type { InputMetadata } from '../types/inputMetadata';
 
 const USE_AI_ENRICHMENT = process.env.USE_AI_ENRICHMENT_ACTUARIAL === 'true';
+const SHOW_DETAIL_SCREEN_INPUTS = process.env.SHOW_DETAIL_SCREEN_INPUTS === 'true';
 
 // ============================================================================
 // IN-MEMORY PERSISTENCE
@@ -62,6 +71,12 @@ export async function calculateActuarialRisk(
       framinghamRisk: framinghamRisk.toFixed(1),
       ascvdRisk: ascvdRisk.toFixed(1),
     });
+
+    // Step 1.5: Calculate lifestyle modification (needed for record creation)
+    const lifestyleResult = calculateLifestyleModifiedRisk(
+      (framinghamRisk + ascvdRisk) / 2,
+      inputs.lifestyle
+    );
 
     // Step 2: Build evidence
     const evidence = buildActuarialEvidence(inputs, framinghamRisk, ascvdRisk);
@@ -97,13 +112,78 @@ export async function calculateActuarialRisk(
       throw new Error('Actuarial recommendation validation failed');
     }
 
-    // Step 7: Create record
+    // Step 7: Build detailed inputs (if enabled)
+    let detailedInputs: InputMetadata[] | undefined;
+    let ascvdModelData;
+    let framinghamModelData;
+    if (SHOW_DETAIL_SCREEN_INPUTS) {
+      try {
+        detailedInputs = await buildActuarialInputMetadata(userId, inputs);
+        logger.info('✅ [ACTUARIAL RISK] Detailed inputs built', {
+          userId,
+          inputCount: detailedInputs.length,
+        });
+
+        // Build ASCVD-specific metadata
+        const ascvdInputs: ASCVDInputs = {
+          age: inputs.demographic.age,
+          gender: inputs.demographic.gender,
+          race: inputs.demographic.race === 'white' || inputs.demographic.race === 'black'
+            ? inputs.demographic.race
+            : 'other',
+          totalCholesterol: inputs.clinical.totalCholesterol,
+          hdlCholesterol: inputs.clinical.hdlCholesterol,
+          systolicBP: inputs.clinical.systolicBP,
+          onBPmedication: inputs.clinical.onBPmedication,
+          smoking: inputs.demographic.smokingStatus === 'current',
+          diabetes: inputs.clinical.diabetesStatus === 'diabetes',
+        };
+        ascvdModelData = await buildASCVDMetadata(
+          userId,
+          ascvdInputs,
+          ascvdRisk,
+          determineRiskCategory(ascvdRisk)
+        );
+
+        // Build Framingham-specific metadata
+        const framinghamInputs: FraminghamInputs = {
+          age: inputs.demographic.age,
+          gender: inputs.demographic.gender,
+          totalCholesterol: inputs.clinical.totalCholesterol,
+          hdlCholesterol: inputs.clinical.hdlCholesterol,
+          systolicBP: inputs.clinical.systolicBP,
+          onBPmedication: inputs.clinical.onBPmedication,
+          smoking: inputs.demographic.smokingStatus === 'current',
+          diabetes: inputs.clinical.diabetesStatus === 'diabetes',
+        };
+        framinghamModelData = await buildFraminghamMetadata(
+          userId,
+          framinghamInputs,
+          framinghamRisk,
+          determineRiskCategory(framinghamRisk)
+        );
+
+        logger.info('✅ [ACTUARIAL RISK] Model-specific metadata built', {
+          userId,
+          ascvdInputs: ascvdModelData.inputs.length,
+          framinghamInputs: framinghamModelData.inputs.length,
+        });
+      } catch (error) {
+        logger.warn('⚠️ [ACTUARIAL RISK] Failed to build detailed inputs', {
+          userId,
+          error: (error as Error).message,
+        });
+      }
+    }
+
+    // Step 8: Create record
     const record: ActuarialRiskRecord = {
       id: randomUUID(),
       userId,
       date: new Date().toISOString().split('T')[0],
       timestamp: new Date().toISOString(),
       overallRisk: evidence.combinedRiskPercentage,
+      baselineRisk: (framinghamRisk + ascvdRisk) / 2,
       riskCategory: evidence.combinedRiskCategory,
       riskModels: {
         framingham: {
@@ -128,10 +208,55 @@ export async function calculateActuarialRisk(
         contribution: factor.contribution,
         severity: factor.status === 'negative' ? 'high' : factor.status === 'positive' ? 'low' : 'moderate',
         modifiable: true, // All risk factors are potentially modifiable
+        value: factor.value,
+        interpretation: factor.interpretation,
       })),
+      lifestyleFactors: {
+        exerciseFrequency: {
+          value: inputs.lifestyle.exerciseFrequency,
+          unit: 'days/week',
+          adjustment: lifestyleResult.exerciseAdjustment * 100,
+        },
+        vo2Max: inputs.lifestyle.vo2Max ? {
+          value: inputs.lifestyle.vo2Max,
+          unit: 'ml/kg/min',
+          adjustment: lifestyleResult.fitnessAdjustment * 100,
+        } : undefined,
+        bmi: {
+          value: inputs.lifestyle.bmi,
+          unit: '',
+          adjustment: lifestyleResult.bodyCompositionAdjustment * 100,
+        },
+        bodyFatPercent: inputs.lifestyle.bodyFatPercent ? {
+          value: inputs.lifestyle.bodyFatPercent,
+          unit: '%',
+          adjustment: 0, // Included in bodyCompositionAdjustment
+        } : undefined,
+        dietQuality: {
+          value: inputs.lifestyle.dietQuality,
+          adjustment: lifestyleResult.dietAdjustment * 100,
+        },
+        sleepQuality: {
+          value: inputs.lifestyle.sleepQuality,
+          unit: '/100',
+          adjustment: lifestyleResult.sleepAdjustment * 100,
+        },
+        stressLevel: {
+          value: inputs.lifestyle.stressLevel,
+          unit: '/100',
+          adjustment: lifestyleResult.stressAdjustment * 100,
+        },
+        alcoholConsumption: inputs.lifestyle.alcoholConsumption ? {
+          value: inputs.lifestyle.alcoholConsumption,
+          adjustment: lifestyleResult.alcoholAdjustment * 100,
+        } : undefined,
+      },
       inputs,
       evidence,
       recommendation,
+      detailedInputs,
+      ascvdModelData,
+      framinghamModelData,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -565,6 +690,437 @@ function buildActuarialFallbackRecommendation(
         source: 'deterministic',
       };
   }
+}
+
+// ============================================================================
+// INPUT METADATA BUILDER
+// ============================================================================
+
+/**
+ * Build detailed input metadata for actuarial risk calculation
+ * Shows all inputs used in the risk calculation with their sources
+ */
+async function buildActuarialInputMetadata(
+  userId: string,
+  inputs: ActuarialRiskInputs
+): Promise<InputMetadata[]> {
+  const metadata: InputMetadata[] = [];
+
+  // Load context data
+  const [baselineContext, bloodworkContext, bpContext, bodyComp, fitnessContext] = await Promise.allSettled([
+    getBaselineFields(userId),
+    getLatestBloodworkContext(userId),
+    getLatestBloodPressureContext(userId),
+    getLatestBodyCompositionContext(userId),
+    getLatestFitnessContext(userId),
+  ]);
+
+  const baseline = baselineContext.status === 'fulfilled' ? baselineContext.value : null;
+  const bloodwork = bloodworkContext.status === 'fulfilled' ? bloodworkContext.value : null;
+  const bp = bpContext.status === 'fulfilled' ? bpContext.value : null;
+  const body = bodyComp.status === 'fulfilled' ? bodyComp.value : null;
+  const fitness = fitnessContext.status === 'fulfilled' ? fitnessContext.value : null;
+
+  // ==================== DEMOGRAPHICS ====================
+
+  // Age - use actual DB value
+  metadata.push({
+    name: 'Age',
+    value: baseline?.age ?? inputs.demographic.age,
+    source: baseline?.age ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'baseline_profile',
+      field: 'age',
+    },
+    unit: 'years',
+    category: 'demographics',
+  });
+
+  // Gender - use actual DB value
+  metadata.push({
+    name: 'Gender',
+    value: baseline?.sex ?? inputs.demographic.gender,
+    source: baseline?.sex ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'baseline_profile',
+      field: 'sex',
+    },
+    category: 'demographics',
+  });
+
+  // Race - use actual DB value
+  metadata.push({
+    name: 'Race',
+    value: baseline?.race ?? inputs.demographic.race,
+    source: baseline?.race ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'baseline_profile',
+      field: 'race',
+    },
+    category: 'demographics',
+  });
+
+  // Family History - use actual DB value
+  const familyHistoryCVD = baseline?.familyHistory?.cardiovascular_disease;
+  metadata.push({
+    name: 'Family History of CVD',
+    value: familyHistoryCVD !== undefined ? (familyHistoryCVD ? 'Yes' : 'No') : (inputs.demographic.familyHistory ? 'Yes' : 'No'),
+    source: familyHistoryCVD !== undefined ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'baseline_profile',
+      field: 'familyHistory.cardiovascular_disease',
+    },
+    category: 'medical_history',
+  });
+
+  // Smoking Status - use actual DB value
+  metadata.push({
+    name: 'Smoking Status',
+    value: baseline?.smokingStatus ?? inputs.demographic.smokingStatus,
+    source: baseline?.smokingStatus ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'baseline_profile',
+      field: 'smokingStatus',
+    },
+    category: 'lifestyle',
+  });
+
+  // ==================== BLOODWORK ====================
+
+  // Total Cholesterol - use actual DB value
+  const totalCholFromDB = bloodwork ? getMarkerValue(bloodwork.markers.totalCholesterol) : null;
+  metadata.push({
+    name: 'Total Cholesterol',
+    value: totalCholFromDB ?? inputs.clinical.totalCholesterol,
+    source: totalCholFromDB ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'bloodwork_results',
+      field: 'total_cholesterol',
+    },
+    lastUpdated: bloodwork?.latestTestDate,
+    unit: 'mg/dL',
+    category: 'bloodwork',
+  });
+
+  // HDL Cholesterol - use actual DB value
+  const hdlFromDB = bloodwork ? getMarkerValue(bloodwork.markers.hdl) : null;
+  metadata.push({
+    name: 'HDL Cholesterol',
+    value: hdlFromDB ?? inputs.clinical.hdlCholesterol,
+    source: hdlFromDB ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'bloodwork_results',
+      field: 'hdl',
+    },
+    lastUpdated: bloodwork?.latestTestDate,
+    unit: 'mg/dL',
+    category: 'bloodwork',
+  });
+
+  // LDL Cholesterol - use actual DB value
+  const ldlFromDB = bloodwork ? getMarkerValue(bloodwork.markers.ldl) : null;
+  const ldlValue = ldlFromDB ?? inputs.clinical.ldlCholesterol;
+  if (ldlValue) {
+    metadata.push({
+      name: 'LDL Cholesterol',
+      value: ldlValue,
+      source: ldlFromDB ? 'ACTUAL' : 'DERIVED',
+      sourceDetails: {
+        table: 'bloodwork_results',
+        field: 'ldl',
+      },
+      lastUpdated: bloodwork?.latestTestDate,
+      unit: 'mg/dL',
+      category: 'bloodwork',
+    });
+  }
+
+  // Triglycerides - use actual DB value
+  const triglyceridesFromDB = bloodwork ? getMarkerValue(bloodwork.markers.triglycerides) : null;
+  const triglyceridesValue = triglyceridesFromDB ?? inputs.clinical.triglycerides;
+  if (triglyceridesValue) {
+    metadata.push({
+      name: 'Triglycerides',
+      value: triglyceridesValue,
+      source: triglyceridesFromDB ? 'ACTUAL' : 'DERIVED',
+      sourceDetails: {
+        table: 'bloodwork_results',
+        field: 'triglycerides',
+      },
+      lastUpdated: bloodwork?.latestTestDate,
+      unit: 'mg/dL',
+      category: 'bloodwork',
+    });
+  }
+
+  // Diabetes Status - use actual DB value
+  metadata.push({
+    name: 'Diabetes Status',
+    value: baseline?.diabetesStatus ?? inputs.clinical.diabetesStatus,
+    source: baseline?.diabetesStatus ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'baseline_profile',
+      field: 'diabetesStatus',
+    },
+    category: 'medical_history',
+  });
+
+  // A1C - use actual DB value
+  const a1cFromDB = bloodwork ? getMarkerValue(bloodwork.markers.a1c) : null;
+  const a1cValue = a1cFromDB ?? inputs.clinical.a1c;
+  if (a1cValue) {
+    metadata.push({
+      name: 'A1C',
+      value: a1cValue,
+      source: a1cFromDB ? 'ACTUAL' : 'DERIVED',
+      sourceDetails: {
+        table: 'bloodwork_results',
+        field: 'a1c',
+      },
+      lastUpdated: bloodwork?.latestTestDate,
+      unit: '%',
+      category: 'bloodwork',
+    });
+  }
+
+  // ==================== VITALS ====================
+
+  // Systolic Blood Pressure - use actual DB value
+  const systolicFromDB = bp?.hasBloodPressure ? getSystolic(bp) : null;
+  metadata.push({
+    name: 'Systolic Blood Pressure',
+    value: systolicFromDB ?? inputs.clinical.systolicBP,
+    source: systolicFromDB ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'blood_pressure_readings',
+      field: 'systolic_bp',
+      integration: bp?.reading?.source || 'manual',
+    },
+    lastUpdated: bp?.latestReadingDate,
+    unit: 'mmHg',
+    category: 'vitals',
+  });
+
+  // Diastolic Blood Pressure - use actual DB value
+  const diastolicFromDB = bp?.hasBloodPressure ? getDiastolic(bp) : null;
+  metadata.push({
+    name: 'Diastolic Blood Pressure',
+    value: diastolicFromDB ?? inputs.clinical.diastolicBP,
+    source: diastolicFromDB ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'blood_pressure_readings',
+      field: 'diastolic_bp',
+      integration: bp?.reading?.source || 'manual',
+    },
+    lastUpdated: bp?.latestReadingDate,
+    unit: 'mmHg',
+    category: 'vitals',
+  });
+
+  // On BP Medication - use actual DB value from baseline
+  const hasHypertensionHistory = baseline?.bloodPressureHistory === 'hypertension_stage1' ||
+                                 baseline?.bloodPressureHistory === 'hypertension_stage2';
+  const hasBPMedication = baseline?.medications?.some(med =>
+    med.toLowerCase().includes('blood pressure') ||
+    med.toLowerCase().includes('lisinopril') ||
+    med.toLowerCase().includes('amlodipine') ||
+    med.toLowerCase().includes('losartan') ||
+    med.toLowerCase().includes('metoprolol') ||
+    med.toLowerCase().includes('hydrochlorothiazide')
+  ) || false;
+  const onBPMedFromDB = hasHypertensionHistory || hasBPMedication;
+  const bpTreatmentValue = onBPMedFromDB !== undefined ? onBPMedFromDB : inputs.clinical.onBPmedication;
+  metadata.push({
+    name: 'On BP Medication',
+    value: bpTreatmentValue ? 'Yes' : 'No',
+    source: (baseline?.bloodPressureHistory || baseline?.medications?.length > 0) ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'baseline_profile',
+      field: 'medications',
+    },
+    category: 'medications',
+  });
+
+  // ==================== LIFESTYLE ====================
+
+  // Exercise Frequency - use actual DB value
+  const exerciseFreqFromDB = baseline?.trainingDaysPerWeek;
+  metadata.push({
+    name: 'Exercise Frequency',
+    value: exerciseFreqFromDB ?? inputs.lifestyle.exerciseFrequency,
+    source: exerciseFreqFromDB !== undefined ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'baseline_profile',
+      field: 'trainingDaysPerWeek',
+    },
+    unit: 'days/week',
+    category: 'lifestyle',
+  });
+
+  // VO2 Max - use actual DB value
+  const vo2MaxFromDB = fitness ? getVO2Max(fitness) : null;
+  const vo2MaxValue = vo2MaxFromDB ?? inputs.lifestyle.vo2Max;
+  if (vo2MaxValue) {
+    metadata.push({
+      name: 'VO2 Max',
+      value: vo2MaxValue,
+      source: vo2MaxFromDB ? 'ACTUAL' : 'DERIVED',
+      sourceDetails: {
+        table: 'fitness_assessments',
+        field: 'vo2_max',
+        integration: fitness?.source || 'wearable',
+      },
+      lastUpdated: fitness?.lastUpdated,
+      unit: 'ml/kg/min',
+      category: 'fitness',
+    });
+  }
+
+  // BMI - use actual DB value
+  const bmiFromDB = body?.bmi;
+  metadata.push({
+    name: 'BMI',
+    value: bmiFromDB ?? inputs.lifestyle.bmi,
+    source: bmiFromDB ? 'ACTUAL' : 'DERIVED',
+    sourceDetails: {
+      table: 'body_composition_scans',
+      field: 'bmi',
+      integration: body?.scanSource || 'manual',
+    },
+    lastUpdated: body?.latestScanDate,
+    category: 'body_composition',
+  });
+
+  // Body Fat Percentage - use actual DB value
+  const bodyFatFromDB = body?.bodyFatPercentage;
+  const bodyFatValue = bodyFatFromDB ?? inputs.lifestyle.bodyFatPercent;
+  if (bodyFatValue) {
+    metadata.push({
+      name: 'Body Fat Percentage',
+      value: bodyFatValue,
+      source: bodyFatFromDB ? 'ACTUAL' : 'DERIVED',
+      sourceDetails: {
+        table: 'body_composition_scans',
+        field: 'bodyFatPercentage',
+        integration: body?.scanSource || 'manual',
+      },
+      lastUpdated: body?.latestScanDate,
+      unit: '%',
+      category: 'body_composition',
+    });
+  }
+
+  // Diet Quality
+  metadata.push({
+    name: 'Diet Quality',
+    value: inputs.lifestyle.dietQuality,
+    source: 'ACTUAL',
+    sourceDetails: {
+      table: 'baseline_profile',
+      field: 'dietQuality',
+    },
+    category: 'lifestyle',
+  });
+
+  // Sleep Quality
+  metadata.push({
+    name: 'Sleep Quality',
+    value: inputs.lifestyle.sleepQuality,
+    source: 'DERIVED',
+    sourceDetails: {
+      derivedFrom: ['sleep_duration', 'sleep_efficiency', 'sleep_stages'],
+      formula: 'Sleep Engine Algorithm',
+    },
+    unit: 'score',
+    category: 'derived_metrics',
+  });
+
+  // Stress Level
+  metadata.push({
+    name: 'Stress Level',
+    value: inputs.lifestyle.stressLevel,
+    source: 'DERIVED',
+    sourceDetails: {
+      derivedFrom: ['hrv', 'sleep_quality', 'activity_level'],
+      formula: 'Stress Engine Algorithm',
+    },
+    unit: 'score',
+    category: 'derived_metrics',
+  });
+
+  // ==================== ADVANCED MARKERS ====================
+
+  if (inputs.advanced) {
+    // hs-CRP
+    if (inputs.advanced.hsCRP) {
+      metadata.push({
+        name: 'High-Sensitivity C-Reactive Protein',
+        value: inputs.advanced.hsCRP,
+        source: 'ACTUAL',
+        sourceDetails: {
+          table: 'bloodwork_results',
+          field: 'hs_crp',
+        },
+        lastUpdated: bloodwork?.latestTestDate,
+        unit: 'mg/L',
+        category: 'bloodwork',
+      });
+    }
+
+    // ApoB
+    if (inputs.advanced.apoB) {
+      metadata.push({
+        name: 'Apolipoprotein B',
+        value: inputs.advanced.apoB,
+        source: 'ACTUAL',
+        sourceDetails: {
+          table: 'bloodwork_results',
+          field: 'apo_b',
+        },
+        lastUpdated: bloodwork?.latestTestDate,
+        unit: 'mg/dL',
+        category: 'bloodwork',
+      });
+    }
+
+    // Lipoprotein(a)
+    if (inputs.advanced.lipoproteinA) {
+      metadata.push({
+        name: 'Lipoprotein(a)',
+        value: inputs.advanced.lipoproteinA,
+        source: 'ACTUAL',
+        sourceDetails: {
+          table: 'bloodwork_results',
+          field: 'lpa',
+        },
+        lastUpdated: bloodwork?.latestTestDate,
+        unit: 'mg/dL',
+        category: 'bloodwork',
+      });
+    }
+
+    // CAC Score
+    if (inputs.advanced.cacScore) {
+      metadata.push({
+        name: 'Coronary Artery Calcium Score',
+        value: inputs.advanced.cacScore,
+        source: 'ACTUAL',
+        sourceDetails: {
+          table: 'medical_imaging',
+          field: 'cac_score',
+        },
+        unit: 'Agatston units',
+        category: 'advanced_imaging',
+      });
+    }
+  }
+
+  logger.info('📊 [ACTUARIAL RISK] Built input metadata', {
+    userId,
+    inputCount: metadata.length,
+  });
+
+  return metadata;
 }
 
 // ============================================================================

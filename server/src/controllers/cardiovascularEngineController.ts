@@ -17,6 +17,13 @@ export const getCardiovascularTodayHandler = async (req: Request, res: Response)
       return res.status(404).json({ error: 'No cardiovascular data available' });
     }
 
+    logger.info('🚀 [CARDIOVASCULAR CONTROLLER] Sending response to frontend', {
+      userId,
+      hasDetailedInputs: !!data.detailedInputs,
+      detailedInputsCount: data.detailedInputs?.length || 0,
+      responseKeys: Object.keys(data),
+    });
+
     res.status(200).json({ success: true, data });
   } catch (error) {
     logger.error('Failed to get cardiovascular today', { error: (error as Error).message });

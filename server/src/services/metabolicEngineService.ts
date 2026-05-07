@@ -1,7 +1,7 @@
 /**
  * Metabolic Engine Service
  * AI-enriched metabolic intelligence with deterministic fallback
- * 
+ *
  * Architecture:
  * Deterministic Engine → Evidence Builder → AI Enrichment → Normalizer → Validator → Persistence
  */
@@ -24,8 +24,10 @@ import type {
   MetabolicEvidenceSignal,
   MetabolicRecommendation,
 } from '../types/metabolicEngine';
+import type { InputMetadata } from '../types/inputMetadata';
 
 const USE_AI_ENRICHMENT = process.env.USE_AI_ENRICHMENT_METABOLIC === 'true';
+const SHOW_DETAIL_SCREEN_INPUTS = process.env.SHOW_DETAIL_SCREEN_INPUTS === 'true';
 
 // ============================================================================
 // DATABASE PERSISTENCE (Supabase)
@@ -281,12 +283,201 @@ function buildMetabolicFallbackRecommendation(status: MetabolicStatus): Metaboli
     actions,
     source: 'deterministic',
   };
-}
-
+};
 
 // ============================================================================
 // MAIN ENGINE FLOW
 // ============================================================================
+
+interface MetabolicContextData {
+  bloodwork: any;
+  bodyComp: any;
+  baseline: any;
+}
+
+const buildMetabolicInputMetadata = (
+  inputs: MetabolicInputs,
+  contextData: MetabolicContextData
+): InputMetadata[] => {
+  const metadata: InputMetadata[] = [];
+  const now = new Date().toISOString();
+
+  // Fasting Glucose - from bloodwork
+  metadata.push({
+    name: 'Fasting Glucose',
+    value: inputs.fastingGlucose,
+    unit: 'mg/dL',
+    source: inputs.fastingGlucose !== undefined
+      ? (contextData.bloodwork?.markers?.glucose ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.fastingGlucose !== undefined
+      ? { table: 'bloodwork_results', field: 'glucose' }
+      : undefined,
+    lastUpdated: inputs.fastingGlucose !== undefined ? contextData.bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+  });
+
+  // A1C - from bloodwork
+  metadata.push({
+    name: 'A1C',
+    value: inputs.a1c,
+    unit: '%',
+    source: inputs.a1c !== undefined
+      ? (contextData.bloodwork?.markers?.a1c ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.a1c !== undefined
+      ? { table: 'bloodwork_results', field: 'a1c' }
+      : undefined,
+    lastUpdated: inputs.a1c !== undefined ? contextData.bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+  });
+
+  // Resting Heart Rate - from device or derived
+  metadata.push({
+    name: 'Resting Heart Rate',
+    value: inputs.restingHeartRate,
+    unit: 'bpm',
+    source: inputs.restingHeartRate !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.restingHeartRate !== undefined
+      ? { integration: 'wearable' }
+      : undefined,
+    lastUpdated: inputs.restingHeartRate !== undefined ? now : undefined,
+    category: 'Vitals',
+  });
+
+  // Body Fat - from body composition
+  metadata.push({
+    name: 'Body Fat',
+    value: inputs.bodyFat,
+    unit: '%',
+    source: inputs.bodyFat !== undefined
+      ? (contextData.bodyComp?.hasBodyComposition ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.bodyFat !== undefined
+      ? { table: 'body_composition', field: 'body_fat_percentage' }
+      : undefined,
+    lastUpdated: inputs.bodyFat !== undefined ? contextData.bodyComp?.latestScanDate : undefined,
+    category: 'Body Composition',
+  });
+
+  // Weight Trend - from baseline or derived
+  metadata.push({
+    name: 'Weight Trend',
+    value: inputs.weightTrend,
+    unit: 'trend',
+    source: inputs.weightTrend !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.weightTrend !== undefined
+      ? { derivedFrom: ['weight_history'] }
+      : undefined,
+    lastUpdated: inputs.weightTrend !== undefined ? now : undefined,
+    category: 'Body Composition',
+  });
+
+  // Insulin Resistance - from bloodwork or derived
+  metadata.push({
+    name: 'Insulin Resistance',
+    value: inputs.insulinResistance,
+    unit: 'level',
+    source: inputs.insulinResistance !== undefined
+      ? (contextData.bloodwork?.markers?.insulin ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.insulinResistance !== undefined
+      ? { table: contextData.bloodwork?.markers?.insulin ? 'bloodwork_results' : undefined, derivedFrom: contextData.bloodwork?.markers?.insulin ? undefined : ['fasting_glucose', 'fasting_insulin'] }
+      : undefined,
+    lastUpdated: inputs.insulinResistance !== undefined ? contextData.bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+  });
+
+  // Triglycerides - from bloodwork
+  metadata.push({
+    name: 'Triglycerides',
+    value: inputs.triglycerides,
+    unit: 'mg/dL',
+    source: inputs.triglycerides !== undefined
+      ? (contextData.bloodwork?.markers?.triglycerides ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.triglycerides !== undefined
+      ? { table: 'bloodwork_results', field: 'triglycerides' }
+      : undefined,
+    lastUpdated: inputs.triglycerides !== undefined ? contextData.bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+  });
+
+  // HDL - from bloodwork
+  metadata.push({
+    name: 'HDL Cholesterol',
+    value: inputs.hdl,
+    unit: 'mg/dL',
+    source: inputs.hdl !== undefined
+      ? (contextData.bloodwork?.markers?.hdl ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.hdl !== undefined
+      ? { table: 'bloodwork_results', field: 'hdl' }
+      : undefined,
+    lastUpdated: inputs.hdl !== undefined ? contextData.bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+  });
+
+  // LDL - from bloodwork
+  metadata.push({
+    name: 'LDL Cholesterol',
+    value: inputs.ldl,
+    unit: 'mg/dL',
+    source: inputs.ldl !== undefined
+      ? (contextData.bloodwork?.markers?.ldl ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.ldl !== undefined
+      ? { table: 'bloodwork_results', field: 'ldl' }
+      : undefined,
+    lastUpdated: inputs.ldl !== undefined ? contextData.bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+  });
+
+  // Weight - from baseline or body composition
+  metadata.push({
+    name: 'Weight',
+    value: inputs.weight,
+    unit: 'lbs',
+    source: inputs.weight !== undefined
+      ? (contextData.baseline?.weight ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.weight !== undefined
+      ? { table: 'baseline_profile', field: 'weight' }
+      : undefined,
+    lastUpdated: inputs.weight !== undefined ? now : undefined,
+    category: 'Body Composition',
+  });
+
+  // Waist Circumference - from baseline
+  metadata.push({
+    name: 'Waist Circumference',
+    value: inputs.waistCircumference,
+    unit: 'inches',
+    source: inputs.waistCircumference !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.waistCircumference !== undefined
+      ? { table: 'baseline_profile', field: 'waist_circumference' }
+      : undefined,
+    lastUpdated: inputs.waistCircumference !== undefined ? now : undefined,
+    category: 'Body Composition',
+  });
+
+  // Fasting Insulin - from bloodwork
+  metadata.push({
+    name: 'Fasting Insulin',
+    value: inputs.fastingInsulin,
+    unit: 'µIU/mL',
+    source: inputs.fastingInsulin !== undefined
+      ? (contextData.bloodwork?.markers?.insulin ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.fastingInsulin !== undefined
+      ? { table: 'bloodwork_results', field: 'insulin' }
+      : undefined,
+    lastUpdated: inputs.fastingInsulin !== undefined ? contextData.bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+  });
+
+  return metadata;
+};
 
 export async function getMetabolicRecommendation(
   userId: string,
@@ -377,7 +568,25 @@ export async function getMetabolicRecommendation(
     recommendation = normalizeMetabolicRecommendation(fallbackRecommendation);
   }
 
-  // Step 7: Create record
+  // Step 7: Build detailed input metadata (if feature flag enabled)
+  let detailedInputs: InputMetadata[] | undefined;
+  if (SHOW_DETAIL_SCREEN_INPUTS) {
+    const contextData: MetabolicContextData = {
+      bloodwork,
+      bodyComp,
+      baseline,
+    };
+    detailedInputs = buildMetabolicInputMetadata(inputs, contextData);
+    logger.info('✅ [METABOLIC ENGINE] Built detailed input metadata', {
+      userId,
+      inputCount: detailedInputs.length,
+      actualCount: detailedInputs.filter(i => i.source === 'ACTUAL').length,
+      derivedCount: detailedInputs.filter(i => i.source === 'DERIVED').length,
+      notAvailableCount: detailedInputs.filter(i => i.source === 'NOT_AVAILABLE').length,
+    });
+  }
+
+  // Step 8: Create record
   const record: MetabolicRecord = {
     id: randomUUID(),
     userId,
@@ -386,6 +595,7 @@ export async function getMetabolicRecommendation(
     evidence,
     recommendation,
     createdAt: new Date().toISOString(),
+    ...(detailedInputs && { detailedInputs }),
   };
 
   // Step 8: Persist to database
@@ -430,16 +640,16 @@ export async function getMetabolicRecommendation(
   try {
     await createRecommendation({
       userId,
-      type: 'metabolic',
-      priority: recommendation.priority,
-      summary: recommendation.summary,
-      actions: recommendation.actions,
-      rationale: recommendation.rationale,
-      sourceEngine: 'metabolic',
-      metadata: {
-        metabolicStatus,
-        evidenceSignalCount: evidence.signals.length,
-        source: recommendation.source,
+      request: {
+        sourceEngine: 'metabolic',
+        title: recommendation.summary,
+        description: recommendation.actions.join('. '),
+        rationale: recommendation.rationale,
+        priority: recommendation.priority,
+        category: 'health_monitoring',
+        confidenceLevel: recommendation.source === 'ai_enriched' ? 'high' : 'medium',
+        actionType: 'monitor',
+        actionTarget: 'metabolic_health',
       },
     });
     logger.info('✅ [METABOLIC ENGINE] Persisted to RecommendationEngine');
@@ -460,63 +670,9 @@ export async function getMetabolicRecommendation(
 }
 
 export async function getMetabolicToday(userId: string): Promise<MetabolicRecord | null> {
-  const today = new Date().toISOString().slice(0, 10);
-  
-  // Try to fetch from database first
-  try {
-    const { data, error } = await supabase
-      .from('metabolic_records')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('date', today)
-      .single();
-
-    if (data && !error) {
-      logger.info('📋 [METABOLIC ENGINE] Returning database record', { userId, date: today });
-      
-      // Map database record to MetabolicRecord format
-      const inputs = data.inputs as MetabolicInputs;
-      const metabolicStatus = data.metabolic_status === 'optimal' ? 'optimal' : 
-                             data.metabolic_status === 'healthy' ? 'moderate' :
-                             data.metabolic_status === 'at_risk' ? 'elevated_risk' : 'high_risk';
-      
-      return {
-        id: data.id,
-        userId: data.user_id,
-        date: data.date,
-        metabolicStatus,
-        evidence: {
-          signals: [],
-          summary: `Metabolic status: ${data.metabolic_status}`,
-        },
-        recommendation: {
-          priority: data.metabolic_risk === 'very_high' ? 'high' : data.metabolic_risk === 'high' ? 'medium' : 'low',
-          summary: `Metabolic health assessment for ${data.date}`,
-          actions: [],
-          rationale: `Based on metabolic score: ${data.metabolic_score}`,
-          source: 'deterministic',
-        },
-        createdAt: data.created_at,
-      };
-    }
-  } catch (error) {
-    logger.warn('⚠️ [METABOLIC ENGINE] Database fetch failed, will generate new', {
-      error: (error as Error).message,
-    });
-  }
-
-  logger.info('🔄 [METABOLIC ENGINE] No database record, generating new', { userId });
-  
-  // Default inputs for demo
-  const inputs: MetabolicInputs = {
-    a1c: 5.5,
-    fastingGlucose: 92,
-    bodyFat: 18,
-    weightTrend: 'stable',
-    insulinResistance: 'low',
-  };
-
-  return getMetabolicRecommendation(userId, inputs);
+  // Redirect to V2 service which has weighted scoring
+  const { getMetabolicTodayV2 } = await import('./metabolicEngineServiceV2');
+  return getMetabolicTodayV2(userId);
 }
 
 export async function getMetabolicHistory(userId: string): Promise<MetabolicRecord[]> {
@@ -547,11 +703,13 @@ export async function getMetabolicHistory(userId: string): Promise<MetabolicReco
         date: row.date,
         metabolicStatus,
         evidence: {
+          metabolicStatus,
           signals: [],
           summary: `Metabolic status: ${row.metabolic_status}`,
         },
         recommendation: {
-          priority: row.metabolic_risk === 'very_high' ? 'high' : row.metabolic_risk === 'high' ? 'medium' : 'low',
+          type: 'metabolic',
+          priority: row.metabolic_risk === 'very_high' ? 'critical' : row.metabolic_risk === 'high' ? 'important' : 'optimization',
           summary: `Metabolic health assessment for ${row.date}`,
           actions: [],
           rationale: `Based on metabolic score: ${row.metabolic_score}`,

@@ -30,6 +30,7 @@ import bloodworkTrendsRoutes from './bloodworkTrendsRoutes';
 import adherenceEngineRoutes from './adherenceEngineRoutes';
 import autonomousRoutes from './autonomousRoutes';
 import healthDataRoutes from './healthData.routes';
+import performanceRoutes from './performance.routes';
 
 const router = Router();
 
@@ -46,6 +47,7 @@ router.use('/tape-measurements', tapeMeasurementsRoutes);
 router.use('/ai-agent', aiAgentRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/recovery', recoveryRoutes);
+router.use('/performance', performanceRoutes);
 router.use('/injury', injuryRoutes);
 router.use('/goals', goalsRoutes);
 router.use('/recommendations', recommendationEngineRoutes);

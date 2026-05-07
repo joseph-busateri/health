@@ -1,3 +1,5 @@
+import type { InputMetadata } from './inputMetadata';
+
 export type RecoveryStatus = 'fully_recovered' | 'moderate_recovery' | 'poor_recovery';
 export type RecoveryReadiness = 'ready' | 'caution' | 'recovery_focus';
 
@@ -17,6 +19,23 @@ export interface RecoveryRecommendation {
   actions: string[];
 }
 
+export interface ScoreComponent {
+  score: number;
+  max: number;
+  percentage: number;
+  hasData: boolean;
+}
+
+export interface RecoveryScoreBreakdown {
+  sleepRecovery: ScoreComponent;
+  cardiovascularRecovery: ScoreComponent;
+  trainingLoad: ScoreComponent;
+  subjectiveRecovery: ScoreComponent;
+  total: number;
+  maxTotal: number;
+  percentage: number;
+}
+
 export interface RecoveryRecord {
   id: string;
   userId: string;
@@ -27,4 +46,6 @@ export interface RecoveryRecord {
   sourceInputs: RecoverySourceInputs;
   recommendation: RecoveryRecommendation;
   createdAt: string;
+  detailedInputs?: InputMetadata[];
+  scoreBreakdown?: RecoveryScoreBreakdown;
 }

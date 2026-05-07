@@ -9,11 +9,13 @@ import type {
   SupplementStack,
   SupplementRegimenItem,
 } from '../types/supplementEngine';
+import type { SupplementBaseline, SupplementItem } from '../types/supplementDocument';
 import {
   getCurrentSupplementStack,
   getSupplementRecommendations,
   generateSupplementRecommendations,
 } from '../services/supplementEngineService';
+import { healthApi } from '../services/api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupplementRecommendations'>;
 
@@ -24,6 +26,8 @@ const SupplementRecommendationsScreen: React.FC<Props> = ({ route }) => {
   const [error, setError] = useState<string | null>(null);
   const [stack, setStack] = useState<SupplementStack | null>(null);
   const [recommendations, setRecommendations] = useState<SupplementRecommendation[]>([]);
+  const [baseline, setBaseline] = useState<SupplementBaseline | null>(null);
+  const [baselineItems, setBaselineItems] = useState<SupplementItem[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -35,8 +39,32 @@ const SupplementRecommendationsScreen: React.FC<Props> = ({ route }) => {
       ]);
       setStack(stackData);
       setRecommendations(recsData);
+
+      // If no stack data, try to get from baseline endpoint
+      if (!stackData) {
+        try {
+          const baselineResponse = await healthApi.supplements.getBaseline(userId);
+          if (baselineResponse.data?.success && baselineResponse.data?.data) {
+            setBaseline(baselineResponse.data.data.baseline);
+            setBaselineItems(baselineResponse.data.data.items || []);
+          }
+        } catch (baselineErr) {
+          console.log('No baseline data found either');
+        }
+      }
     } catch (err: any) {
-      setError(err?.response?.data?.error || err?.message || 'Failed to load supplement data');
+      // If main endpoint fails, try baseline as fallback
+      try {
+        const baselineResponse = await healthApi.supplements.getBaseline(userId);
+        if (baselineResponse.data?.success && baselineResponse.data?.data) {
+          setBaseline(baselineResponse.data.data.baseline);
+          setBaselineItems(baselineResponse.data.data.items || []);
+        } else {
+          setError(err?.response?.data?.error || err?.message || 'Failed to load supplement data');
+        }
+      } catch (fallbackErr) {
+        setError(err?.response?.data?.error || err?.message || 'Failed to load supplement data');
+      }
     } finally {
       setLoading(false);
     }
@@ -55,13 +83,14 @@ const SupplementRecommendationsScreen: React.FC<Props> = ({ route }) => {
     }
   }, [userId]);
 
-  const getStatusStyle = (status: SupplementRegimenItem['status']) => {
+  const getStatusStyle = (status: string) => {
     switch (status) {
       case 'active':
         return styles.status_active;
       case 'paused':
         return styles.status_paused;
       case 'discontinued':
+      case 'removed':
       default:
         return styles.status_discontinued;
     }
@@ -179,6 +208,34 @@ const SupplementRecommendationsScreen: React.FC<Props> = ({ route }) => {
                   </Text>
                 )}
               </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {baseline && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{baseline.stack_name}</Text>
+          <Text style={styles.subtitle}>Created {new Date(baseline.created_at).toLocaleDateString()}</Text>
+          {baseline.stack_notes && <Text style={styles.sectionSubtitle}>{baseline.stack_notes}</Text>}
+
+          <View style={styles.metricsRow}>
+            <View style={styles.metricPill}>
+              <Text style={styles.metricLabel}>Total Items</Text>
+              <Text style={styles.metricValue}>{baseline.total_active_items || baselineItems.length}</Text>
+            </View>
+          </View>
+
+          {baselineItems.map(item => (
+            <View key={item.id} style={styles.itemRow}>
+              <View style={styles.itemHeader}>
+                <Text style={styles.itemName}>{item.supplement_name}</Text>
+                <Text style={[styles.statusBadge, getStatusStyle(item.status)]}>{item.status.toUpperCase()}</Text>
+              </View>
+              <Text style={styles.itemDetail}>
+                {item.dosage} {item.dosage_unit} • {item.frequency} • {item.timing}
+              </Text>
+              {item.notes && <Text style={styles.itemHint}>{item.notes}</Text>}
             </View>
           ))}
         </View>

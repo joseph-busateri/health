@@ -73,32 +73,11 @@ export default function HealthDataHubScreen() {
       case 'baseline':
         navigation.navigate('BaselineProfile' as never);
         break;
-      case 'workout_schedule':
-        navigation.navigate('WorkoutSchedule' as never);
-        break;
-      case 'supplement_intake':
-        navigation.navigate('SupplementIntake' as never);
-        break;
-      case 'bloodwork':
-        navigation.navigate('Bloodwork' as never);
-        break;
       case 'cardiovascular_risk':
         navigation.navigate('ActuarialRisk' as never);
         break;
-      case 'body_composition':
-        navigation.navigate('BodyComposition' as never);
-        break;
       case 'strength_tracking':
         navigation.navigate('StrengthTracking' as never);
-        break;
-      case 'tape_measurements':
-        navigation.navigate('TapeMeasurements' as never);
-        break;
-      case 'nutrition':
-        navigation.navigate('Nutrition' as never);
-        break;
-      case 'device_connections':
-        navigation.navigate('DeviceConnections' as never);
         break;
     }
   };

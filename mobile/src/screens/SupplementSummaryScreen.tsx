@@ -1,18 +1,53 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
+  ActivityIndicator,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types/navigation';
 import type { SupplementBaseline, SupplementItem } from '../types/supplementDocument';
+import { useUser } from '../context/UserContext';
+import { healthApi } from '../services/api';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'SupplementSummary'>;
 
 const SupplementSummaryScreen: React.FC<Props> = ({ route, navigation }) => {
-  const { baseline, items } = route.params;
+  const { userId } = useUser();
+  const [loading, setLoading] = useState(true);
+  const [baseline, setBaseline] = useState<SupplementBaseline | null>(null);
+  const [items, setItems] = useState<SupplementItem[]>([]);
+
+  // Check if data is passed via route params (from upload flow)
+  const routeParamsData = route.params?.baseline && route.params?.items;
+
+  useEffect(() => {
+    const loadSupplements = async () => {
+      if (routeParamsData) {
+        // Data passed from upload flow
+        setBaseline(route.params!.baseline);
+        setItems(route.params!.items);
+        setLoading(false);
+      } else {
+        // Fetch from API
+        try {
+          const response = await healthApi.supplements.getBaseline(userId || '0');
+          if (response.data?.success && response.data?.data) {
+            setBaseline(response.data.data.baseline);
+            setItems(response.data.data.items || []);
+          }
+        } catch (error) {
+          console.error('Error loading supplements:', error);
+        } finally {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadSupplements();
+  }, [userId, routeParamsData]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -41,8 +76,26 @@ const SupplementSummaryScreen: React.FC<Props> = ({ route, navigation }) => {
   };
 
   return (
-    <ScrollView className="flex-1 bg-gray-50">
-      <View className="p-4">
+    <ScrollView style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+      {loading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <ActivityIndicator size="large" color="#3B82F6" />
+          <Text style={{ marginTop: 10, color: '#6B7280' }}>Loading supplements...</Text>
+        </View>
+      ) : !baseline ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Text style={{ fontSize: 16, color: '#6B7280', textAlign: 'center' }}>
+            No supplement data found. Upload a supplement stack to get started.
+          </Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate('SupplementUpload')}
+            style={{ marginTop: 20, backgroundColor: '#3B82F6', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8 }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '600' }}>Upload Supplement Stack</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <View style={{ padding: 16 }}>
         {/* Header */}
         <View className="mb-6">
           <Text className="text-2xl font-bold text-gray-900 mb-2">

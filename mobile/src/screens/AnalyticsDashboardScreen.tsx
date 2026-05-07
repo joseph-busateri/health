@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types/navigation';
+import { InputDetailsPanel } from '../components/InputDetailsPanel';
+import type { InputMetadata } from '../types/inputMetadata';
 
 const { width } = Dimensions.get('window');
 
@@ -60,6 +62,98 @@ export default function AnalyticsDashboardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<'insights' | 'correlations' | 'trends' | 'goals'>('insights');
+  const [detailedInputs, setDetailedInputs] = useState<InputMetadata[]>([]);
+
+  useEffect(() => {
+    loadAnalyticsData();
+  }, []);
+
+  const loadAnalyticsData = async () => {
+    setLoading(true);
+    try {
+      // Mock detailed inputs for analytics/performance
+      const mockDetailedInputs: InputMetadata[] = [
+        {
+          name: 'Workout Volume',
+          value: 45000,
+          unit: 'lbs',
+          source: 'ACTUAL',
+          sourceDetails: { table: 'workout_sessions', field: 'total_volume' },
+          lastUpdated: new Date().toISOString(),
+          category: 'Training',
+        },
+        {
+          name: 'Training Frequency',
+          value: 6,
+          unit: 'days/week',
+          source: 'ACTUAL',
+          sourceDetails: { table: 'workout_sessions', field: 'frequency' },
+          lastUpdated: new Date().toISOString(),
+          category: 'Training',
+        },
+        {
+          name: 'VO2 Max',
+          value: 45,
+          unit: 'ml/kg/min',
+          source: 'DERIVED',
+          sourceDetails: { derivedFrom: ['heart_rate', 'pace'], formula: 'estimated from recent runs' },
+          lastUpdated: new Date().toISOString(),
+          category: 'Cardiovascular',
+        },
+        {
+          name: '1RM Bench Press',
+          value: 225,
+          unit: 'lbs',
+          source: 'ACTUAL',
+          sourceDetails: { table: 'strength_tests', field: 'bench_press_1rm' },
+          lastUpdated: new Date().toISOString(),
+          category: 'Strength',
+        },
+        {
+          name: 'Sleep Quality',
+          value: 7.5,
+          unit: 'hours',
+          source: 'ACTUAL',
+          sourceDetails: { table: 'sleep_data', field: 'duration' },
+          lastUpdated: new Date().toISOString(),
+          category: 'Recovery',
+        },
+        {
+          name: 'HRV',
+          value: 65,
+          unit: 'ms',
+          source: 'ACTUAL',
+          sourceDetails: { table: 'heart_rate_data', field: 'hrv_rmssd' },
+          lastUpdated: new Date().toISOString(),
+          category: 'Recovery',
+        },
+        {
+          name: 'Body Fat Percentage',
+          value: 10.3,
+          unit: '%',
+          source: 'ACTUAL',
+          sourceDetails: { table: 'body_composition', field: 'body_fat_percentage' },
+          lastUpdated: new Date().toISOString(),
+          category: 'Body Composition',
+        },
+        {
+          name: 'Weight Trend',
+          value: -2.3,
+          unit: '%',
+          source: 'DERIVED',
+          sourceDetails: { derivedFrom: ['weight_history'], formula: '30-day change' },
+          lastUpdated: new Date().toISOString(),
+          category: 'Body Composition',
+        },
+      ];
+      setDetailedInputs(mockDetailedInputs);
+      console.log('Analytics detailedInputs loaded:', mockDetailedInputs.length);
+    } catch (error) {
+      console.error('Error loading analytics data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
   
   // Mock data - replace with API calls
   const [insights, setInsights] = useState<Insight[]>([
@@ -408,9 +502,9 @@ export default function AnalyticsDashboardScreen() {
         style={styles.domainsScroll}
         contentContainerStyle={styles.domainsContent}
       >
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.domainCard}
-          onPress={() => navigation.navigate('SexualHealthDashboard')}
+          onPress={() => navigation.navigate('SexualHealthDashboardV3')}
         >
           <Text style={styles.domainIcon}>🌡️</Text>
           <Text style={styles.domainName}>Sexual Health</Text>
@@ -531,6 +625,14 @@ export default function AnalyticsDashboardScreen() {
         {selectedTab === 'correlations' && renderCorrelations()}
         {selectedTab === 'trends' && renderTrends()}
         {selectedTab === 'goals' && renderGoals()}
+
+        {/* Performance Inputs */}
+        {detailedInputs && detailedInputs.length > 0 && (
+          <InputDetailsPanel
+            inputs={detailedInputs}
+            title="Performance Inputs"
+          />
+        )}
       </ScrollView>
     </View>
   );

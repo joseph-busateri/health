@@ -6,6 +6,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types/navigation';
 import type { JointHealthRecord } from '../types/jointHealthEngine';
 import { getJointHealthHistory, getJointHealthToday } from '../services/jointHealthEngineService';
+import { InputDetailsPanel } from '../components/InputDetailsPanel';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'JointHealthStatus'>;
 
@@ -47,6 +48,8 @@ const JointHealthStatusScreen: React.FC<Props> = ({ route }) => {
       ]);
       setToday(todayRecord);
       setHistory(historyRecords);
+      console.log('Joint Health data loaded:', todayRecord);
+      console.log('Joint Health detailedInputs:', todayRecord?.detailedInputs);
     } catch (err: any) {
       setError(err?.response?.data?.error || err?.message || 'Failed to load joint health data');
     } finally {
@@ -83,6 +86,13 @@ const JointHealthStatusScreen: React.FC<Props> = ({ route }) => {
       <Text style={styles.subtitle}>Area: {today.affectedArea.toUpperCase()}</Text>
       <Text style={styles.subtitle}>Status: {today.jointHealthStatus.toUpperCase()}</Text>
       <Text style={styles.subtitle}>Risk: {today.riskLevel.toUpperCase()}</Text>
+
+      {today.detailedInputs && today.detailedInputs.length > 0 && (
+        <InputDetailsPanel
+          inputs={today.detailedInputs}
+          title="Performance Inputs"
+        />
+      )}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Workout Modifications</Text>

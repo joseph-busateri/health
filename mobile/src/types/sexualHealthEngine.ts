@@ -1,4 +1,23 @@
+import type { InputMetadata } from './inputMetadata';
+
 export type SexualHealthStatus = 'optimal' | 'moderate' | 'elevated_risk' | 'high_risk' | 'reduced';
+
+// Score breakdown types (following metabolic/cardiovascular pattern)
+export interface ScoreComponent {
+  score: number;
+  max: number;
+  percentage: number;
+  hasData: boolean;
+}
+
+export interface SexualHealthScoreBreakdown {
+  testosterone: ScoreComponent;      // 40 points max
+  libido: ScoreComponent;            // 30 points max
+  erectileFunction: ScoreComponent;  // 30 points max
+  total: number;
+  maxTotal: number;
+  percentage: number;
+}
 
 export interface SexualHealthEvidence {
   sexualHealthStatus: string;
@@ -95,4 +114,6 @@ export interface SexualHealthRecordV3 {
   recommendation: SexualHealthRecommendation;
   trendMetadata?: SexualHealthEvidenceV3['trendMetadata'];
   createdAt: string;
+  detailedInputs?: InputMetadata[];
+  scoreBreakdown?: SexualHealthScoreBreakdown;
 }

@@ -134,12 +134,43 @@ export interface ActuarialRecommendation {
 // RECORD (follows established pattern)
 // ============================================================================
 
+export interface ModelInputMetadata {
+  key: string;
+  label: string;
+  value: any;
+  unit?: string;
+  source: 'ACTUAL' | 'DERIVED' | 'NOT_AVAILABLE';
+  sourceTable?: string;
+  sourceField?: string;
+  required: boolean;
+  available: boolean;
+  lastUpdated?: string;
+  contribution?: number;  // Percentage contribution to risk score
+}
+
+export interface ASCVDModelData {
+  riskPercentage: number;
+  riskCategory: string;
+  inputs: ModelInputMetadata[];
+  missingInputs: string[];
+  confidence?: number;
+}
+
+export interface FraminghamModelData {
+  riskPercentage: number;
+  riskCategory: string;
+  inputs: ModelInputMetadata[];
+  missingInputs: string[];
+  confidence?: number;
+}
+
 export interface ActuarialRiskRecord {
   id: string;
   userId: string;
   date: string;
   timestamp: string;
-  overallRisk: number;
+  overallRisk: number;  // Lifestyle-adjusted risk
+  baselineRisk?: number;  // Unadjusted clinical risk (average of ASCVD + Framingham)
   riskCategory: ActuarialRiskCategory;
   riskModels: {
     framingham: {
@@ -164,10 +195,25 @@ export interface ActuarialRiskRecord {
     contribution: number;
     severity: string;
     modifiable: boolean;
+    value?: string;
+    interpretation?: string;
   }>;
+  lifestyleFactors?: {
+    exerciseFrequency: { value: number; unit: string; adjustment: number };
+    vo2Max?: { value: number; unit: string; adjustment: number };
+    bmi: { value: number; unit: string; adjustment: number };
+    bodyFatPercent?: { value: number; unit: string; adjustment: number };
+    dietQuality: { value: string; adjustment: number };
+    sleepQuality: { value: number; unit: string; adjustment: number };
+    stressLevel: { value: number; unit: string; adjustment: number };
+    alcoholConsumption?: { value: string; adjustment: number };
+  };
   inputs: ActuarialRiskInputs;
   evidence: ActuarialEvidence;
   recommendation: ActuarialRecommendation;
+  detailedInputs?: import('./inputMetadata').InputMetadata[];
+  ascvdModelData?: ASCVDModelData;
+  framinghamModelData?: FraminghamModelData;
   createdAt: string;
   updatedAt: string;
 }

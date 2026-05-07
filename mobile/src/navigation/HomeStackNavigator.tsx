@@ -17,6 +17,7 @@ import SupplementRecommendationsScreen from '../screens/SupplementRecommendation
 import DailyLogsScreen from '../screens/DailyLogsScreen';
 import CardiovascularDashboardScreen from '../screens/CardiovascularDashboardScreen';
 import CardiovascularDashboardScreenV2 from '../screens/CardiovascularDashboardScreenV2';
+import MetabolicHealthDashboardScreen from '../screens/MetabolicHealthDashboardScreen';
 import SexualHealthDashboardScreen from '../screens/SexualHealthDashboardScreen';
 import SexualHealthDashboardScreenV2 from '../screens/SexualHealthDashboardScreenV2';
 import SexualHealthDashboardScreenV3 from '../screens/SexualHealthDashboardScreenV3';
@@ -28,6 +29,7 @@ import NutritionExtractionScreen from '../screens/NutritionExtractionScreen';
 import AIAssistantScreen from '../screens/AIAssistantScreen';
 import AIChatScreen from '../screens/AIChatScreen';
 import AnalyticsDashboardScreen from '../screens/AnalyticsDashboardScreen';
+import PerformanceDashboardScreen from '../screens/PerformanceDashboardScreen';
 import type { HomeStackParamList } from '../types/navigation';
 
 const HomeStack = createNativeStackNavigator<HomeStackParamList>();
@@ -49,6 +51,7 @@ const HomeStackNavigator: React.FC = () => (
     <HomeStack.Screen name="DailyLogs" component={DailyLogsScreen} />
     <HomeStack.Screen name="CardiovascularDashboard" component={CardiovascularDashboardScreen} />
     <HomeStack.Screen name="CardiovascularDashboardV2" component={CardiovascularDashboardScreenV2} />
+    <HomeStack.Screen name="MetabolicHealthDashboard" component={MetabolicHealthDashboardScreen} />
     <HomeStack.Screen name="SexualHealthDashboard" component={SexualHealthDashboardScreen} />
     <HomeStack.Screen name="SexualHealthDashboardV2" component={SexualHealthDashboardScreenV2} />
     <HomeStack.Screen name="SexualHealthDashboardV3" component={SexualHealthDashboardScreenV3} />
@@ -60,6 +63,7 @@ const HomeStackNavigator: React.FC = () => (
     <HomeStack.Screen name="AIAssistant" component={AIAssistantScreen} />
     <HomeStack.Screen name="AIChat" component={AIChatScreen} />
     <HomeStack.Screen name="AnalyticsDashboard" component={AnalyticsDashboardScreen} />
+    <HomeStack.Screen name="PerformanceDashboard" component={PerformanceDashboardScreen} />
   </HomeStack.Navigator>
 );
 

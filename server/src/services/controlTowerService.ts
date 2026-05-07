@@ -2,6 +2,7 @@ import { getRecoveryToday } from './recoveryEngineService';
 import { getStressToday } from './stressEngineService';
 import { getJointHealthToday } from './jointHealthEngineService';
 import { getAdherenceToday } from './adherenceEngineService';
+import { getPerformanceToday } from './performanceEngineService';
 import { logger } from '../utils/logger';
 
 export type ComponentStatus = 'Optimal' | 'Stable' | 'Moderate' | 'At Risk';
@@ -50,11 +51,12 @@ function calculateOverallStatus(score: number | null): OverallStatus {
 export async function getControlTowerOverallHealth(userId: string): Promise<ControlTowerData> {
   try {
     // Fetch data from all engines in parallel
-    const [recoveryResult, stressResult, jointHealthResult, adherenceResult] = await Promise.allSettled([
+    const [recoveryResult, stressResult, jointHealthResult, adherenceResult, performanceResult] = await Promise.allSettled([
       getRecoveryToday(userId),
       getStressToday(userId),
       getJointHealthToday(userId),
       getAdherenceToday(userId),
+      getPerformanceToday(userId),
     ]);
 
     // Extract data with fallbacks
@@ -62,6 +64,7 @@ export async function getControlTowerOverallHealth(userId: string): Promise<Cont
     const stress = stressResult.status === 'fulfilled' ? stressResult.value : null;
     const jointHealth = jointHealthResult.status === 'fulfilled' ? jointHealthResult.value : null;
     const adherence = adherenceResult.status === 'fulfilled' ? adherenceResult.value : null;
+    const performance = performanceResult.status === 'fulfilled' ? performanceResult.value : null;
 
     // Track data availability
     const dataAvailability = {
@@ -83,22 +86,8 @@ export async function getControlTowerOverallHealth(userId: string): Promise<Cont
     // Metabolic (MET) - Based on adherence nutrition
     const metScore = adherence?.breakdown?.nutrition ?? 75;
     
-    // Performance (PERF) - Based on joint health and adherence workout
-    let perfScore: number | null = null;
-    if (jointHealth && adherence) {
-      // Derive joint score from status: stable=85, caution=65, aggravated=40
-      const jointScoreMap = { stable: 85, caution: 65, aggravated: 40 };
-      const jointScore = jointScoreMap[jointHealth.jointHealthStatus] || 70;
-      const workoutScore = adherence.breakdown?.workout ?? 70;
-      perfScore = Math.round((jointScore + workoutScore) / 2);
-    } else if (jointHealth) {
-      const jointScoreMap = { stable: 85, caution: 65, aggravated: 40 };
-      perfScore = jointScoreMap[jointHealth.jointHealthStatus] || 70;
-    } else if (adherence?.breakdown?.workout) {
-      perfScore = adherence.breakdown.workout;
-    } else {
-      perfScore = 70;
-    }
+    // Performance (PERF) - From dedicated Performance Engine
+    const perfScore = performance?.performanceScore ?? null;
     
     // Sexual Health (SH) - Placeholder (would come from bloodwork/interviews)
     // For now, use recovery as proxy (good recovery correlates with hormones)

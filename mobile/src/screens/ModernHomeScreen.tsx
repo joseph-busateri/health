@@ -15,8 +15,16 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { DEFAULT_USER_ID, useUser } from '../context/UserContext';
 import { healthApi } from '../services/api';
+import { getRecoveryToday } from '../services/recoveryEngineService';
+import { getMetabolicTodayV2 } from '../services/metabolicEngineService';
+import { getSexualHealthToday } from '../services/sexualHealthEngineService';
+import { API_BASE_URL } from '../config';
 
 import type { HomeStackParamList, InsightsStackParamList } from '../types/navigation';
+import type { RecoveryRecord } from '../types/recoveryEngine';
+import type { MetabolicRecord } from '../types/metabolicEngine';
+import type { SexualHealthRecord } from '../types/sexualHealthEngine';
+import type { PerformanceRecord } from '../types/performanceEngine';
 
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
 
@@ -234,9 +242,9 @@ export default function ModernHomeScreen() {
       case 'metabolic':
         return () => navigation.navigate('InsightsHome');
       case 'performance':
-        return () => navigation.navigate('JointHealthStatus', { userId: resolvedUserId });
+        return () => navigation.navigate('PerformanceDashboard');
       case 'sexualHealth':
-        return () => navigation.navigate('SexualHealthDashboard');
+        return () => navigation.navigate('SexualHealthDashboardV3');
       default:
         return undefined;
     }

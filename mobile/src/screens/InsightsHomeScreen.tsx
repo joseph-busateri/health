@@ -104,8 +104,8 @@ const microPractices: MicroPractice[] = [
 const InsightsHomeScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<InsightsStackParamList>>();
 
-  const navigateToCardio = () => navigation.navigate('CardiovascularDashboard');
-  const navigateToSexualHealth = () => navigation.navigate('SexualHealthDashboard');
+  const navigateToCardio = () => navigation.navigate('CardiovascularDashboardV2');
+  const navigateToSexualHealth = () => navigation.navigate('SexualHealthDashboardV3');
   const navigateToControlTower = () => navigation.navigate('ControlTower');
   const navigateToHealthDataHub = () => navigation.navigate('HealthDataHub');
   const navigateToActuarialRisk = () => navigation.navigate('ActuarialRisk' as never);

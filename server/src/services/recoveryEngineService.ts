@@ -34,8 +34,19 @@ import type {
   RecoverySourceInputs,
   RecoveryStatus,
 } from '../types/recoveryEngine';
+import type { InputMetadata, InputSource } from '../types/inputMetadata';
+
+const SHOW_DETAIL_SCREEN_INPUTS = process.env.SHOW_DETAIL_SCREEN_INPUTS === 'true';
 
 const recoveryStore = new Map<string, RecoveryRecord[]>();
+
+/**
+ * Clear all recovery cache
+ */
+export function clearRecoveryCache(): void {
+  recoveryStore.clear();
+  logger.info('🗑️ [RECOVERY ENGINE] All cache cleared');
+}
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
@@ -76,6 +87,111 @@ export const calculateRecoveryScore = (inputs: RecoverySourceInputs): number => 
   const weightedScore = weightedSignals.reduce((sum, signal) => sum + signal.score * signal.weight, 0);
 
   return Math.round(clamp(weightedScore / totalWeight, 0, 100));
+};
+
+export const calculateRecoveryScoreBreakdown = (inputs: RecoverySourceInputs): any => {
+  // Category 1: Sleep Recovery (33 points = 19% + 14%)
+  const sleepHasData = inputs.sleepDurationHours != null || inputs.sleepQuality != null;
+  let sleepRecoveryScore = 0;
+  if (sleepHasData) {
+    const sleepDurationNormalized = inputs.sleepDurationHours != null 
+      ? normalizeSleepDuration(inputs.sleepDurationHours) 
+      : 65;
+    const sleepQualityNormalized = inputs.sleepQuality != null 
+      ? normalizeSleepQuality(inputs.sleepQuality) 
+      : 65;
+    sleepRecoveryScore = Math.round((sleepDurationNormalized * 0.19 + sleepQualityNormalized * 0.14));
+  }
+  const sleepRecoveryPercentage = sleepHasData ? Math.round((sleepRecoveryScore / 33) * 100) : 0;
+
+  // Category 2: Cardiovascular Recovery (30 points = 16% + 14%)
+  const cardiovascularHasData = inputs.hrv != null || inputs.restingHr != null;
+  let cardiovascularRecoveryScore = 0;
+  if (cardiovascularHasData) {
+    const hrvNormalized = inputs.hrv != null ? normalizeHrv(inputs.hrv) : 65;
+    const restingHrNormalized = inputs.restingHr != null ? normalizeRestingHr(inputs.restingHr) : 65;
+    cardiovascularRecoveryScore = Math.round((hrvNormalized * 0.16 + restingHrNormalized * 0.14));
+  }
+  const cardiovascularRecoveryPercentage = cardiovascularHasData ? Math.round((cardiovascularRecoveryScore / 30) * 100) : 0;
+
+  // Category 3: Training Load (14 points = 9% + 5%)
+  const trainingHasData = inputs.workoutLoad != null || inputs.adherenceScore != null;
+  let trainingLoadScore = 0;
+  if (trainingHasData) {
+    const workoutLoadNormalized = inputs.workoutLoad != null ? normalizeWorkoutLoad(inputs.workoutLoad) : 65;
+    const adherenceNormalized = inputs.adherenceScore != null ? normalizeAdherence(inputs.adherenceScore) : 65;
+    trainingLoadScore = Math.round((workoutLoadNormalized * 0.09 + adherenceNormalized * 0.05));
+  }
+  const trainingLoadPercentage = trainingHasData ? Math.round((trainingLoadScore / 14) * 100) : 0;
+
+  // Category 4: Subjective Recovery (23 points = 14% + 9%)
+  const subjectiveHasData = inputs.stressLevel != null || inputs.verbalRecoveryFeeling != null;
+  let subjectiveRecoveryScore = 0;
+  if (subjectiveHasData) {
+    const stressNormalized = inputs.stressLevel != null ? normalizeStress(inputs.stressLevel) : 65;
+    const verbalRecoveryNormalized = inputs.verbalRecoveryFeeling != null 
+      ? normalizeVerbalRecovery(inputs.verbalRecoveryFeeling) 
+      : 65;
+    subjectiveRecoveryScore = Math.round((stressNormalized * 0.14 + verbalRecoveryNormalized * 0.09));
+  }
+  const subjectiveRecoveryPercentage = subjectiveHasData ? Math.round((subjectiveRecoveryScore / 23) * 100) : 0;
+
+  // Only include categories with data in total calculation
+  let total = 0;
+  let maxTotal = 0;
+
+  if (sleepHasData) {
+    total += sleepRecoveryScore;
+    maxTotal += 33;
+  }
+
+  if (cardiovascularHasData) {
+    total += cardiovascularRecoveryScore;
+    maxTotal += 30;
+  }
+
+  if (trainingHasData) {
+    total += trainingLoadScore;
+    maxTotal += 14;
+  }
+
+  if (subjectiveHasData) {
+    total += subjectiveRecoveryScore;
+    maxTotal += 23;
+  }
+
+  // Calculate percentage (handle division by zero)
+  const percentage = maxTotal > 0 ? Math.round((total / maxTotal) * 100) : 0;
+
+  return {
+    sleepRecovery: {
+      score: sleepRecoveryScore,
+      max: 33,
+      percentage: sleepRecoveryPercentage,
+      hasData: sleepHasData,
+    },
+    cardiovascularRecovery: {
+      score: cardiovascularRecoveryScore,
+      max: 30,
+      percentage: cardiovascularRecoveryPercentage,
+      hasData: cardiovascularHasData,
+    },
+    trainingLoad: {
+      score: trainingLoadScore,
+      max: 14,
+      percentage: trainingLoadPercentage,
+      hasData: trainingHasData,
+    },
+    subjectiveRecovery: {
+      score: subjectiveRecoveryScore,
+      max: 23,
+      percentage: subjectiveRecoveryPercentage,
+      hasData: subjectiveHasData,
+    },
+    total,
+    maxTotal,
+    percentage,
+  };
 };
 
 export const evaluateRecoveryStatus = (
@@ -301,7 +417,213 @@ function buildAIRecommendationRequest(
     isInsightOnly: Boolean(normalized.isInsightOnly),
     requiresUserDecision: Boolean(normalized.requiresUserDecision),
   };
+};
+
+interface RecoveryContextData {
+  deviceContext: any;
+  dailyLog: any;
+  engineSnapshot: any;
 }
+
+/**
+ * Calculate individual input score based on value and optimal ranges
+ * Returns: 90 (optimal), 70 (moderate), 50 (elevated_risk), or 30 (high_risk)
+ */
+function calculateRecoveryInputScore(name: string, value: any): number | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  switch (name) {
+    case 'Heart Rate Variability':
+      if (value >= 60) return 90;  // optimal
+      if (value >= 45) return 70;  // moderate
+      if (value >= 30) return 50;  // elevated_risk
+      return 30;                    // high_risk
+
+    case 'Sleep Duration':
+      if (value >= 8) return 90;   // optimal
+      if (value >= 7) return 70;   // moderate
+      if (value >= 6) return 50;   // elevated_risk
+      return 30;                    // high_risk
+
+    case 'Sleep Quality':
+      if (value >= 80) return 90;  // optimal
+      if (value >= 60) return 70;  // moderate
+      if (value >= 40) return 50;  // elevated_risk
+      return 30;                    // high_risk
+
+    case 'Resting Heart Rate':
+      if (value < 60) return 90;   // optimal (athletic)
+      if (value < 70) return 70;   // moderate
+      if (value < 80) return 50;   // elevated_risk
+      return 30;                    // high_risk
+
+    case 'Stress Level':
+      if (value <= 2) return 90;   // optimal
+      if (value <= 3) return 70;   // moderate
+      if (value <= 4) return 50;   // elevated_risk
+      return 30;                    // high_risk
+
+    case 'Workout Load':
+      // Lower is better for recovery
+      if (value <= 3) return 90;   // optimal (light load)
+      if (value <= 5) return 70;   // moderate
+      if (value <= 7) return 50;   // elevated_risk
+      return 30;                    // high_risk (overtraining)
+
+    case 'Verbal Recovery Feeling':
+      if (value >= 4) return 90;   // optimal (feeling great on 1-5 scale)
+      if (value >= 3) return 70;   // moderate
+      if (value >= 2) return 50;   // elevated_risk
+      return 30;                    // high_risk
+
+    case 'Adherence Score':
+      if (value >= 80) return 90;  // optimal
+      if (value >= 60) return 70;  // moderate
+      if (value >= 40) return 50;  // elevated_risk
+      return 30;                    // high_risk
+
+    default:
+      return undefined;
+  }
+}
+
+const buildRecoveryInputMetadata = (
+  inputs: RecoverySourceInputs,
+  contextData: RecoveryContextData
+): InputMetadata[] => {
+  const metadata: InputMetadata[] = [];
+  const now = new Date().toISOString();
+
+  // HRV - from device context or derived
+  metadata.push({
+    name: 'Heart Rate Variability',
+    value: inputs.hrv,
+    unit: 'ms',
+    source: inputs.hrv !== undefined
+      ? (contextData.deviceContext?.cardiovascular?.source ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.hrv !== undefined
+      ? { integration: contextData.deviceContext?.cardiovascular?.source || 'device' }
+      : undefined,
+    lastUpdated: inputs.hrv !== undefined ? now : undefined,
+    category: 'Vitals',
+    score: calculateRecoveryInputScore('Heart Rate Variability', inputs.hrv),
+  });
+
+  // Sleep Duration - from device context or daily log
+  metadata.push({
+    name: 'Sleep Duration',
+    value: inputs.sleepDurationHours,
+    unit: 'hours',
+    source: inputs.sleepDurationHours !== undefined
+      ? (contextData.deviceContext?.sleep?.source ? 'ACTUAL' : 'ACTUAL')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.sleepDurationHours !== undefined
+      ? { integration: contextData.deviceContext?.sleep?.source || 'daily log' }
+      : undefined,
+    lastUpdated: inputs.sleepDurationHours !== undefined ? now : undefined,
+    category: 'Sleep',
+    score: calculateRecoveryInputScore('Sleep Duration', inputs.sleepDurationHours),
+  });
+
+  // Sleep Quality - from device context or daily log
+  metadata.push({
+    name: 'Sleep Quality',
+    value: inputs.sleepQuality,
+    unit: 'scale (1-5)',
+    source: inputs.sleepQuality !== undefined
+      ? (contextData.deviceContext?.sleep?.source ? 'ACTUAL' : 'ACTUAL')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.sleepQuality !== undefined
+      ? { integration: contextData.deviceContext?.sleep?.source || 'daily log' }
+      : undefined,
+    lastUpdated: inputs.sleepQuality !== undefined ? now : undefined,
+    category: 'Sleep',
+    score: calculateRecoveryInputScore('Sleep Quality', inputs.sleepQuality),
+  });
+
+  // Resting Heart Rate - from device context
+  metadata.push({
+    name: 'Resting Heart Rate',
+    value: inputs.restingHr,
+    unit: 'bpm',
+    source: inputs.restingHr !== undefined
+      ? (contextData.deviceContext?.cardiovascular?.source ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.restingHr !== undefined
+      ? { integration: contextData.deviceContext?.cardiovascular?.source || 'device' }
+      : undefined,
+    lastUpdated: inputs.restingHr !== undefined ? now : undefined,
+    category: 'Vitals',
+    score: calculateRecoveryInputScore('Resting Heart Rate', inputs.restingHr),
+  });
+
+  // Stress Level - from daily log or engine snapshot
+  metadata.push({
+    name: 'Stress Level',
+    value: inputs.stressLevel,
+    unit: 'scale (1-5)',
+    source: inputs.stressLevel !== undefined
+      ? (contextData.dailyLog?.stressLevel ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.stressLevel !== undefined
+      ? { table: contextData.dailyLog?.stressLevel ? 'daily_logs' : 'engine_snapshot', field: 'stressLevel' }
+      : undefined,
+    lastUpdated: inputs.stressLevel !== undefined ? now : undefined,
+    category: 'Wellness',
+    score: calculateRecoveryInputScore('Stress Level', inputs.stressLevel),
+  });
+
+  // Workout Load - from engine snapshot
+  metadata.push({
+    name: 'Workout Load',
+    value: inputs.workoutLoad,
+    unit: 'scale (1-10)',
+    source: inputs.workoutLoad !== undefined
+      ? (contextData.engineSnapshot?.recoveryCluster?.workoutLoad ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.workoutLoad !== undefined
+      ? { table: 'engine_snapshot', field: 'workoutLoad' }
+      : undefined,
+    lastUpdated: inputs.workoutLoad !== undefined ? now : undefined,
+    category: 'Training',
+    score: calculateRecoveryInputScore('Workout Load', inputs.workoutLoad),
+  });
+
+  // Verbal Recovery Feeling - from device context or daily log
+  metadata.push({
+    name: 'Verbal Recovery Feeling',
+    value: inputs.verbalRecoveryFeeling,
+    unit: 'scale (1-5)',
+    source: inputs.verbalRecoveryFeeling !== undefined
+      ? (contextData.deviceContext?.recovery?.source ? 'ACTUAL' : 'ACTUAL')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.verbalRecoveryFeeling !== undefined
+      ? { integration: contextData.deviceContext?.recovery?.source || 'daily log' }
+      : undefined,
+    lastUpdated: inputs.verbalRecoveryFeeling !== undefined ? now : undefined,
+    category: 'Subjective',
+    score: calculateRecoveryInputScore('Verbal Recovery Feeling', inputs.verbalRecoveryFeeling),
+  });
+
+  // Adherence Score - from daily log
+  metadata.push({
+    name: 'Adherence Score',
+    value: inputs.adherenceScore,
+    unit: 'percentage',
+    source: inputs.adherenceScore !== undefined
+      ? (contextData.dailyLog?.workoutAdherence ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.adherenceScore !== undefined
+      ? { table: 'daily_logs', field: 'workoutAdherence' }
+      : undefined,
+    lastUpdated: inputs.adherenceScore !== undefined ? now : undefined,
+    category: 'Training',
+    score: calculateRecoveryInputScore('Adherence Score', inputs.adherenceScore),
+  });
+
+  return metadata;
+};
 
 export const getRecoveryToday = async (
   userId: string,
@@ -324,9 +646,30 @@ export const getRecoveryToday = async (
   });
 
   const sourceInputs = await mergeInputs(userId, options?.override);
-  const recoveryScore = calculateRecoveryScore(sourceInputs);
+  const scoreBreakdown = calculateRecoveryScoreBreakdown(sourceInputs);
+  const recoveryScore = scoreBreakdown.total; // Use breakdown total for consistency
   const { recoveryStatus, readinessClassification } = evaluateRecoveryStatus(recoveryScore);
   const recommendation = generateRecoveryRecommendation(recoveryStatus, sourceInputs);
+
+  // Build context data for detailed input metadata (if feature flag enabled)
+  const contextData = SHOW_DETAIL_SCREEN_INPUTS ? {
+    deviceContext: await getDeviceContext(userId).catch(() => null),
+    dailyLog: (await getDailyLogsForUser(userId, 1))[0] || null,
+    engineSnapshot: await getEngineSnapshot(userId).catch(() => null),
+  } : undefined;
+
+  // Build detailed input metadata (if feature flag enabled)
+  let detailedInputs: InputMetadata[] | undefined;
+  if (SHOW_DETAIL_SCREEN_INPUTS && contextData) {
+    detailedInputs = buildRecoveryInputMetadata(sourceInputs, contextData);
+    logger.info('✅ [RECOVERY ENGINE] Built detailed input metadata', {
+      userId,
+      inputCount: detailedInputs.length,
+      actualCount: detailedInputs.filter(i => i.source === 'ACTUAL').length,
+      derivedCount: detailedInputs.filter(i => i.source === 'DERIVED').length,
+      notAvailableCount: detailedInputs.filter(i => i.source === 'NOT_AVAILABLE').length,
+    });
+  }
 
   const record: RecoveryRecord = {
     id: randomUUID(),
@@ -337,7 +680,9 @@ export const getRecoveryToday = async (
     readinessClassification,
     sourceInputs,
     recommendation,
+    scoreBreakdown,
     createdAt: new Date().toISOString(),
+    ...(detailedInputs && { detailedInputs }),
   };
 
   logger.info('Recovery scoring complete', {

@@ -9,6 +9,10 @@ import {
   Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useUser } from '../context/UserContext';
+import { InputDetailsPanel } from '../components/InputDetailsPanel';
+import type { InputMetadata } from '../types/inputMetadata';
+import { getRecoveryToday } from '../services/recoveryEngineService';
 
 interface RecoveryScore {
   overallScore: number;
@@ -24,6 +28,7 @@ interface RecoveryScore {
   recommendedIntensity: string;
   summary: string;
   keyFactors: string[];
+  detailedInputs?: InputMetadata[];
 }
 
 interface WorkoutReadiness {
@@ -52,6 +57,7 @@ interface DeloadRecommendation {
 }
 
 export default function RecoveryDashboardScreen() {
+  const { userId } = useUser();
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<'overview' | 'readiness' | 'deload' | 'strategies'>('overview');
   
@@ -113,8 +119,33 @@ export default function RecoveryDashboardScreen() {
   const loadRecoveryData = async () => {
     setLoading(true);
     try {
-      // TODO: Implement API calls when server is running
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!userId) {
+        console.warn('No user ID available');
+        setLoading(false);
+        return;
+      }
+
+      const data = await getRecoveryToday(userId, { regenerate: true });
+      console.log('Recovery data received:', data);
+      console.log('Recovery detailedInputs:', data.detailedInputs);
+
+      // Transform API response to UI format
+      setRecoveryScore({
+        overallScore: data.recoveryScore || 78,
+        status: data.recoveryStatus || 'good',
+        hrvScore: data.sourceInputs?.hrv || 65,
+        sleepScore: data.sourceInputs?.sleepQuality ? data.sourceInputs.sleepQuality * 20 : 80,
+        sorenessScore: 70,
+        stressScore: data.sourceInputs?.stressLevel ? (5 - data.sourceInputs.stressLevel) * 20 : 75,
+        fatigueScore: 72,
+        hrvDeviation: 5.2,
+        acwr: data.sourceInputs?.workoutLoad ? data.sourceInputs.workoutLoad / 10 : 1.15,
+        readinessScore: data.recoveryScore || 78,
+        recommendedIntensity: data.readinessClassification || 'moderate',
+        summary: data.recommendation?.summary || 'Recovery is good',
+        keyFactors: data.recommendation?.actions || ['Good sleep quality', 'HRV is elevated'],
+        detailedInputs: data.detailedInputs,
+      });
     } catch (error) {
       console.error('Error loading recovery data:', error);
     } finally {
@@ -227,6 +258,14 @@ export default function RecoveryDashboardScreen() {
           </View>
         ))}
       </View>
+
+      {/* Recovery Inputs */}
+      {recoveryScore.detailedInputs && recoveryScore.detailedInputs.length > 0 && (
+        <InputDetailsPanel
+          inputs={recoveryScore.detailedInputs}
+          title="Recovery Inputs"
+        />
+      )}
     </View>
   );
 

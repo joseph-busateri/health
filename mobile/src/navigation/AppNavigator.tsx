@@ -45,7 +45,7 @@ import OuraConnectScreenV2 from '../screens/OuraConnectScreenV2';
 import BodyCompositionUploadScreenV2 from '../screens/BodyCompositionUploadScreenV2';
 import InjuryPreventionScreen from '../screens/InjuryPreventionScreen';
 import StrengthTrackingScreen from '../screens/StrengthTrackingScreen';
-import RecoveryDashboardScreen from '../screens/RecoveryDashboardScreen';
+import RecoveryDashboardScreen from '../screens/RecoveryDashboardScreenV2';
 import AnalyticsDashboardScreen from '../screens/AnalyticsDashboardScreen';
 import TapeMeasurementsScreen from '../screens/TapeMeasurementsScreen';
 import AutonomousAdjustmentsScreen from '../screens/AutonomousAdjustmentsScreen';
@@ -58,6 +58,7 @@ import OverloadRecommendationsScreen from '../screens/OverloadRecommendationsScr
 import SupplementBulkUploadScreen from '../screens/SupplementBulkUploadScreen';
 import MetabolicHealthDashboardScreen from '../screens/MetabolicHealthDashboardScreen';
 import SourceProvenanceScreen from '../screens/SourceProvenanceScreen';
+import PerformanceDashboardScreen from '../screens/PerformanceDashboardScreen';
 import type { RootStackParamList } from '../types/navigation';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -306,6 +307,11 @@ const AppNavigator: React.FC = () => {
       name="AnalyticsDashboard"
       component={AnalyticsDashboardScreen}
       options={{ title: 'Analytics Dashboard' }}
+    />
+    <Stack.Screen
+      name="PerformanceDashboard"
+      component={PerformanceDashboardScreen}
+      options={{ title: 'Performance' }}
     />
     <Stack.Screen
       name="TapeMeasurements"

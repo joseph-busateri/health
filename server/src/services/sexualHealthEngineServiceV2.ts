@@ -40,9 +40,11 @@ import type {
   HormonalRiskLevel,
 } from '../types/sexualHealthEngineV2';
 import type { BloodworkTrend, GetBloodworkTrendsResponse } from '../types/bloodworkTrends';
+import type { InputMetadata } from '../types/inputMetadata';
 
 const USE_AI_ENRICHMENT = process.env.USE_AI_ENRICHMENT_SEXUAL_HEALTH === 'true';
 const USE_TREND_ANALYSIS = process.env.USE_TREND_ANALYSIS_SEXUAL_HEALTH === 'true';
+const SHOW_DETAIL_SCREEN_INPUTS = process.env.SHOW_DETAIL_SCREEN_INPUTS === 'true';
 
 // ============================================================================
 // IN-MEMORY PERSISTENCE
@@ -594,6 +596,261 @@ async function loadSexualHealthTrends(userId: string): Promise<{
   }
 }
 
+interface SexualHealthContextData {
+  bloodwork: any;
+  baseline: any;
+}
+
+const buildSexualHealthInputMetadata = (
+  inputs: SexualHealthInputsV2,
+  contextData: SexualHealthContextData
+): InputMetadata[] => {
+  const metadata: InputMetadata[] = [];
+  const now = new Date().toISOString();
+
+  // Total Testosterone - from bloodwork
+  metadata.push({
+    name: 'Total Testosterone',
+    value: inputs.totalTestosterone,
+    unit: 'ng/dL',
+    source: inputs.totalTestosterone !== undefined
+      ? (contextData.bloodwork?.markers?.totalTestosterone ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.totalTestosterone !== undefined
+      ? { table: 'bloodwork_results', field: 'total_testosterone' }
+      : undefined,
+    lastUpdated: inputs.totalTestosterone !== undefined ? contextData.bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+  });
+
+  // Free Testosterone - from bloodwork
+  metadata.push({
+    name: 'Free Testosterone',
+    value: inputs.freeTestosterone,
+    unit: 'pg/mL',
+    source: inputs.freeTestosterone !== undefined
+      ? (contextData.bloodwork?.markers?.freeTestosterone ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.freeTestosterone !== undefined
+      ? { table: 'bloodwork_results', field: 'free_testosterone' }
+      : undefined,
+    lastUpdated: inputs.freeTestosterone !== undefined ? contextData.bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+  });
+
+  // Libido Self Rating - subjective
+  metadata.push({
+    name: 'Libido Self Rating',
+    value: inputs.libidoSelfRating,
+    unit: 'scale (1-10)',
+    source: inputs.libidoSelfRating !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.libidoSelfRating !== undefined
+      ? { table: 'daily_logs', field: 'libido_rating' }
+      : undefined,
+    lastUpdated: inputs.libidoSelfRating !== undefined ? now : undefined,
+    category: 'Subjective',
+  });
+
+  // Erectile Function Rating - subjective
+  metadata.push({
+    name: 'Erectile Function Rating',
+    value: inputs.erectileFunctionRating,
+    unit: 'scale (1-10)',
+    source: inputs.erectileFunctionRating !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.erectileFunctionRating !== undefined
+      ? { table: 'daily_logs', field: 'erectile_function_rating' }
+      : undefined,
+    lastUpdated: inputs.erectileFunctionRating !== undefined ? now : undefined,
+    category: 'Subjective',
+  });
+
+  // Morning Erections Frequency - subjective
+  metadata.push({
+    name: 'Morning Erections Frequency',
+    value: inputs.morningErectionsFrequency,
+    unit: 'frequency',
+    source: inputs.morningErectionsFrequency !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.morningErectionsFrequency !== undefined
+      ? { table: 'daily_logs', field: 'morning_erections' }
+      : undefined,
+    lastUpdated: inputs.morningErectionsFrequency !== undefined ? now : undefined,
+    category: 'Subjective',
+  });
+
+  // Age - from baseline
+  metadata.push({
+    name: 'Age',
+    value: inputs.age,
+    unit: 'years',
+    source: inputs.age !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.age !== undefined
+      ? { table: 'baseline_profile', field: 'age' }
+      : undefined,
+    lastUpdated: inputs.age !== undefined ? now : undefined,
+    category: 'Demographics',
+  });
+
+  // Stress Level - from other engines
+  metadata.push({
+    name: 'Stress Level',
+    value: inputs.stressLevel,
+    unit: 'scale (1-10)',
+    source: inputs.stressLevel !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.stressLevel !== undefined
+      ? { derivedFrom: ['recovery_engine'] }
+      : undefined,
+    lastUpdated: inputs.stressLevel !== undefined ? now : undefined,
+    category: 'Wellness',
+  });
+
+  // Sleep Quality - from other engines
+  metadata.push({
+    name: 'Sleep Quality',
+    value: inputs.sleepQuality,
+    unit: 'scale (1-5)',
+    source: inputs.sleepQuality !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.sleepQuality !== undefined
+      ? { derivedFrom: ['recovery_engine'] }
+      : undefined,
+    lastUpdated: inputs.sleepQuality !== undefined ? now : undefined,
+    category: 'Sleep',
+  });
+
+  // Recovery Score - from recovery engine
+  metadata.push({
+    name: 'Recovery Score',
+    value: inputs.recoveryScore,
+    unit: 'score',
+    source: inputs.recoveryScore !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.recoveryScore !== undefined
+      ? { derivedFrom: ['recovery_engine'] }
+      : undefined,
+    lastUpdated: inputs.recoveryScore !== undefined ? now : undefined,
+    category: 'Wellness',
+  });
+
+  // Stress Score - from recovery engine
+  metadata.push({
+    name: 'Stress Score',
+    value: inputs.stressScore,
+    unit: 'score',
+    source: inputs.stressScore !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.stressScore !== undefined
+      ? { derivedFrom: ['recovery_engine'] }
+      : undefined,
+    lastUpdated: inputs.stressScore !== undefined ? now : undefined,
+    category: 'Wellness',
+  });
+
+  // Cardiovascular Status - from cardiovascular engine
+  metadata.push({
+    name: 'Cardiovascular Status',
+    value: inputs.cardiovascularStatus,
+    unit: 'status',
+    source: inputs.cardiovascularStatus !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.cardiovascularStatus !== undefined
+      ? { derivedFrom: ['cardiovascular_engine'] }
+      : undefined,
+    lastUpdated: inputs.cardiovascularStatus !== undefined ? now : undefined,
+    category: 'Health Status',
+  });
+
+  // Metabolic Status - from metabolic engine
+  metadata.push({
+    name: 'Metabolic Status',
+    value: inputs.metabolicStatus,
+    unit: 'status',
+    source: inputs.metabolicStatus !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.metabolicStatus !== undefined
+      ? { derivedFrom: ['metabolic_engine'] }
+      : undefined,
+    lastUpdated: inputs.metabolicStatus !== undefined ? now : undefined,
+    category: 'Health Status',
+  });
+
+  // Testosterone - from bloodwork
+  metadata.push({
+    name: 'Testosterone',
+    value: inputs.testosterone,
+    unit: 'ng/dL',
+    source: inputs.testosterone !== undefined
+      ? (contextData.bloodwork?.markers?.totalTestosterone ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.testosterone !== undefined
+      ? { table: 'bloodwork_results', field: 'testosterone' }
+      : undefined,
+    lastUpdated: inputs.testosterone !== undefined ? contextData.bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+  });
+
+  // Resting Heart Rate - from device
+  metadata.push({
+    name: 'Resting Heart Rate',
+    value: inputs.restingHeartRate,
+    unit: 'bpm',
+    source: inputs.restingHeartRate !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.restingHeartRate !== undefined
+      ? { integration: 'wearable' }
+      : undefined,
+    lastUpdated: inputs.restingHeartRate !== undefined ? now : undefined,
+    category: 'Vitals',
+  });
+
+  // HRV - from device
+  metadata.push({
+    name: 'Heart Rate Variability',
+    value: inputs.hrv,
+    unit: 'ms',
+    source: inputs.hrv !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.hrv !== undefined
+      ? { integration: 'wearable' }
+      : undefined,
+    lastUpdated: inputs.hrv !== undefined ? now : undefined,
+    category: 'Vitals',
+  });
+
+  // Sleep Hours - from device
+  metadata.push({
+    name: 'Sleep Hours',
+    value: inputs.sleepHours,
+    unit: 'hours',
+    source: inputs.sleepHours !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.sleepHours !== undefined
+      ? { integration: 'wearable' }
+      : undefined,
+    lastUpdated: inputs.sleepHours !== undefined ? now : undefined,
+    category: 'Sleep',
+  });
+
+  // Adherence Score - from training data
+  metadata.push({
+    name: 'Adherence Score',
+    value: inputs.adherenceScore,
+    unit: 'percentage',
+    source: inputs.adherenceScore !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.adherenceScore !== undefined
+      ? { derivedFrom: ['workout_tracking'] }
+      : undefined,
+    lastUpdated: inputs.adherenceScore !== undefined ? now : undefined,
+    category: 'Training',
+  });
+
+  // Fatigue Score - from subjective
+  metadata.push({
+    name: 'Fatigue Score',
+    value: inputs.fatigueScore,
+    unit: 'score',
+    source: inputs.fatigueScore !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.fatigueScore !== undefined
+      ? { table: 'daily_logs', field: 'fatigue_score' }
+      : undefined,
+    lastUpdated: inputs.fatigueScore !== undefined ? now : undefined,
+    category: 'Subjective',
+  });
+
+  return metadata;
+};
+
 export async function getSexualHealthRecommendationV2(
   userId: string,
   inputs: SexualHealthInputsV2
@@ -786,7 +1043,24 @@ export async function getSexualHealthRecommendationV2(
     recommendation = normalizeSexualHealthRecommendation(fallbackRecommendation);
   }
 
-  // Step 8: Create record
+  // Step 8: Build detailed input metadata (if feature flag enabled)
+  let detailedInputs: InputMetadata[] | undefined;
+  if (SHOW_DETAIL_SCREEN_INPUTS) {
+    const contextData: SexualHealthContextData = {
+      bloodwork,
+      baseline,
+    };
+    detailedInputs = buildSexualHealthInputMetadata(inputs, contextData);
+    logger.info('✅ [SEXUAL HEALTH V2] Built detailed input metadata', {
+      userId,
+      inputCount: detailedInputs.length,
+      actualCount: detailedInputs.filter(i => i.source === 'ACTUAL').length,
+      derivedCount: detailedInputs.filter(i => i.source === 'DERIVED').length,
+      notAvailableCount: detailedInputs.filter(i => i.source === 'NOT_AVAILABLE').length,
+    });
+  }
+
+  // Step 9: Create record
   const record: SexualHealthRecordV2 = {
     id: randomUUID(),
     userId,
@@ -802,13 +1076,14 @@ export async function getSexualHealthRecommendationV2(
     recommendation,
     trendMetadata: evidence.trendMetadata,
     createdAt: new Date().toISOString(),
+    ...(detailedInputs && { detailedInputs }),
   };
 
-  // Step 9: Persist to in-memory store
+  // Step 10: Persist to in-memory store
   const userRecords = sexualHealthRecordStoreV2.get(userId) ?? [];
   sexualHealthRecordStoreV2.set(userId, [record, ...userRecords]);
 
-  // Step 10: Persist to RecommendationEngine
+  // Step 11: Persist to RecommendationEngine
   try {
     await createRecommendation({
       userId,

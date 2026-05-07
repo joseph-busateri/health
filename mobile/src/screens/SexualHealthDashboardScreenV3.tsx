@@ -14,6 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useUser } from '../context/UserContext';
 import { getSexualHealthTodayV3 } from '../services/sexualHealthEngineService';
+import { InputDetailsPanel } from '../components/InputDetailsPanel';
 
 import type { InsightsStackParamList } from '../types/navigation';
 import type { SexualHealthRecordV3 } from '../types/sexualHealthEngine';
@@ -216,118 +217,153 @@ const SexualHealthDashboardScreenV3: React.FC = () => {
         }
       >
         <View style={styles.header}>
-          <Text style={styles.title}>Sexual Health Focus</Text>
-          <Text style={styles.subtitle}>Hormones, vitality markers, and action plan (V3 with Raw Values)</Text>
+          <Text style={styles.title}>Sexual Health</Text>
+          <Text style={styles.subtitle}>Track your sexual health markers</Text>
         </View>
 
+        {/* Main Score Card */}
         <View style={styles.scoreCard}>
-          <View>
-            <Text style={styles.scoreLabel}>Score</Text>
-            <Text style={styles.scoreValue}>{statusToScore(data.sexualHealthStatus)}</Text>
-            <Text style={styles.lastLab}>Last updated {new Date(data.createdAt).toLocaleDateString()}</Text>
+          <View style={styles.scoreMainSection}>
+            <View style={styles.scoreIconContainer}>
+              <MaterialCommunityIcons name="heart-pulse" size={48} color="#A855F7" />
+            </View>
+            <View style={styles.scoreDetails}>
+              <Text style={styles.scoreLabel}>Sexual Health Score</Text>
+              {data.scoreBreakdown && (
+                <View style={styles.scoreValueContainer}>
+                  <Text style={styles.scoreValue}>{Math.round(data.scoreBreakdown.total)}</Text>
+                  <Text style={styles.scoreMaxValue}>/100</Text>
+                </View>
+              )}
+              <View style={styles.progressBarContainer}>
+                <View style={styles.progressBarBackground}>
+                  <View style={[styles.progressBarFill, { width: `${data.scoreBreakdown?.percentage || statusToScore(data.sexualHealthStatus)}%` }]} />
+                </View>
+              </View>
+              <Text style={styles.lastUpdated}>
+                <MaterialCommunityIcons name="clock-outline" size={12} color="#94A3B8" />
+                {' '}Updated {new Date(data.createdAt).toLocaleDateString()}
+              </Text>
+            </View>
           </View>
-          <View style={styles.statusWrapper}>
-            <Text style={styles.statusLabel}>Status</Text>
-            <View style={statusBadgeStyle(data.sexualHealthStatus)}>
+          <View style={styles.statusBadgeContainer}>
+            <View style={styles.statusBadge}>
+              <MaterialCommunityIcons 
+                name={data.sexualHealthStatus === 'optimal' ? 'check-circle' : 
+                      data.sexualHealthStatus === 'moderate' ? 'information' :
+                      data.sexualHealthStatus === 'reduced' ? 'alert' : 'alert-circle'} 
+                size={16} 
+                color="#0F172A" 
+              />
               <Text style={styles.statusText}>{statusLabel(data.sexualHealthStatus)}</Text>
             </View>
-            <Text style={styles.focusLabel}>Trend Analysis</Text>
-            {trendMetadata?.testosterone ? (
-              <View style={styles.trendRow}>
-                <MaterialCommunityIcons
-                  name={getTrendIcon(trendMetadata.testosterone.direction)}
-                  size={20}
-                  color={getTrendColor(trendMetadata.testosterone.direction)}
-                />
-                <Text style={styles.trendText}>
-                  Testosterone {trendMetadata.testosterone.direction}
-                  {trendMetadata.testosterone.percentChange && ` (${trendMetadata.testosterone.percentChange.toFixed(1)}%)`}
-                </Text>
-              </View>
-            ) : (
-              <Text style={styles.trendText}>Insufficient trend data</Text>
-            )}
-            {trendMetadata?.freeTestosterone && (
-              <View style={styles.trendRow}>
-                <MaterialCommunityIcons
-                  name={getTrendIcon(trendMetadata.freeTestosterone.direction)}
-                  size={20}
-                  color={getTrendColor(trendMetadata.freeTestosterone.direction)}
-                />
-                <Text style={styles.trendText}>
-                  Free Testosterone {trendMetadata.freeTestosterone.direction}
-                  {trendMetadata.freeTestosterone.percentChange && ` (${trendMetadata.freeTestosterone.percentChange.toFixed(1)}%)`}
-                </Text>
-              </View>
-            )}
-            {trendMetadata?.estradiol && (
-              <View style={styles.trendRow}>
-                <MaterialCommunityIcons
-                  name={getTrendIcon(trendMetadata.estradiol.direction)}
-                  size={20}
-                  color={getTrendColor(trendMetadata.estradiol.direction)}
-                />
-                <Text style={styles.trendText}>
-                  Estradiol {trendMetadata.estradiol.direction}
-                  {trendMetadata.estradiol.percentChange && ` (${trendMetadata.estradiol.percentChange.toFixed(1)}%)`}
-                </Text>
-              </View>
-            )}
-            {trendMetadata?.shbg && (
-              <View style={styles.trendRow}>
-                <MaterialCommunityIcons
-                  name={getTrendIcon(trendMetadata.shbg.direction)}
-                  size={20}
-                  color={getTrendColor(trendMetadata.shbg.direction)}
-                />
-                <Text style={styles.trendText}>
-                  SHBG {trendMetadata.shbg.direction}
-                  {trendMetadata.shbg.percentChange && ` (${trendMetadata.shbg.percentChange.toFixed(1)}%)`}
-                </Text>
-              </View>
-            )}
           </View>
         </View>
 
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Current Values</Text>
-          <View style={styles.card}>
-            {currentValuesDisplay.map((item, idx) => (
-              <View key={`current-${idx}`} style={styles.signalRow}>
-                <View style={styles.signalHeader}>
-                  <MaterialCommunityIcons name={item.icon} size={18} color="#A855F7" />
-                  <Text style={styles.signalName}>{item.key}</Text>
+        {/* Score Breakdown */}
+        {data.scoreBreakdown && data.detailedInputs && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Score Breakdown</Text>
+            
+            {/* Testosterone Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="test-tube" size={20} color="#A855F7" />
+                  <Text style={styles.categoryTitle}>Testosterone</Text>
                 </View>
-                <View style={styles.signalMeta}>
-                  {item.hasData && item.signal ? (
-                    <>
-                      <Text style={styles.signalValue}>
-                        {item.signal.rawValue ? `${item.signal.rawValue} ${item.signal.rawUnit || ''}` : String(item.signal.value)}
-                      </Text>
-                      {item.signal.clinicalCategory && (
-                        <View style={[styles.categoryBadge, { backgroundColor: getClinicalCategoryColor(item.signal.clinicalCategory) + '20' }]}>
-                          <Text style={[styles.categoryText, { color: getClinicalCategoryColor(item.signal.clinicalCategory) }]}>
-                            {item.signal.clinicalCategory.toUpperCase()}
-                          </Text>
-                        </View>
-                      )}
-                    </>
-                  ) : (
-                    <Text style={styles.noDataText}>No data</Text>
-                  )}
-                </View>
-                {item.hasData && item.signal && item.signal.referenceRange && (
-                  <Text style={styles.referenceRange}>
-                    Reference: {item.signal.referenceRange.min}-{item.signal.referenceRange.max} {item.signal.rawUnit}
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${data.scoreBreakdown.testosterone.percentage}%`, backgroundColor: data.scoreBreakdown.testosterone.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.testosterone.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {data.scoreBreakdown.testosterone.score}/{data.scoreBreakdown.testosterone.max}
                   </Text>
-                )}
-                <Text style={styles.signalInterpretation}>
-                  {item.hasData && item.signal ? item.signal.interpretation : 'Awaiting bloodwork results'}
-                </Text>
+                  <Text style={[styles.categoryPercentage, { color: data.scoreBreakdown.testosterone.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.testosterone.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {data.scoreBreakdown.testosterone.percentage}%
+                  </Text>
+                </View>
               </View>
-            ))}
+              <InputDetailsPanel 
+                inputs={data.detailedInputs.filter(i => 
+                  ['Total Testosterone', 'Free Testosterone'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Libido Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="heart" size={20} color="#EC4899" />
+                  <Text style={styles.categoryTitle}>Libido</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${data.scoreBreakdown.libido.percentage}%`, backgroundColor: data.scoreBreakdown.libido.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.libido.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {data.scoreBreakdown.libido.score}/{data.scoreBreakdown.libido.max}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: data.scoreBreakdown.libido.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.libido.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {data.scoreBreakdown.libido.percentage}%
+                  </Text>
+                </View>
+              </View>
+              <InputDetailsPanel 
+                inputs={data.detailedInputs.filter(i => 
+                  ['Libido Self-Rating', 'Stress Level', 'Sleep Quality'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Erectile Function Section */}
+            <View style={styles.categoryCard}>
+              <View style={styles.categoryHeader}>
+                <View style={styles.categoryTitleContainer}>
+                  <MaterialCommunityIcons name="human-male" size={20} color="#3B82F6" />
+                  <Text style={styles.categoryTitle}>Erectile Function</Text>
+                </View>
+                <View style={styles.categoryScoreContainer}>
+                  <View style={[styles.categoryProgressBar, { width: 60 }]}>
+                    <View style={[styles.categoryProgressFill, { width: `${data.scoreBreakdown.erectileFunction.percentage}%`, backgroundColor: data.scoreBreakdown.erectileFunction.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.erectileFunction.percentage >= 50 ? '#F59E0B' : '#EF4444' }]} />
+                  </View>
+                  <Text style={styles.categoryScore}>
+                    {data.scoreBreakdown.erectileFunction.score}/{data.scoreBreakdown.erectileFunction.max}
+                  </Text>
+                  <Text style={[styles.categoryPercentage, { color: data.scoreBreakdown.erectileFunction.percentage >= 70 ? '#22C55E' : data.scoreBreakdown.erectileFunction.percentage >= 50 ? '#F59E0B' : '#EF4444' }]}>
+                    {data.scoreBreakdown.erectileFunction.percentage}%
+                  </Text>
+                </View>
+              </View>
+              <InputDetailsPanel 
+                inputs={data.detailedInputs.filter(i => 
+                  ['Erectile Function Rating', 'Morning Erections Frequency'].includes(i.name)
+                )}
+                title=""
+              />
+            </View>
+
+            {/* Total Score Summary */}
+            <View style={styles.totalCard}>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Total Sexual Health Score</Text>
+                <View style={styles.totalScoreContainer}>
+                  <Text style={styles.totalScore}>{data.scoreBreakdown.total}</Text>
+                  <Text style={styles.totalMax}>/{data.scoreBreakdown.maxTotal}</Text>
+                  <Text style={[styles.totalPercentage, { 
+                    color: data.scoreBreakdown.percentage >= 70 ? '#22C55E' : 
+                           data.scoreBreakdown.percentage >= 50 ? '#F59E0B' : '#EF4444' 
+                  }]}>
+                    ({data.scoreBreakdown.percentage}%)
+                  </Text>
+                </View>
+              </View>
+            </View>
           </View>
-        </View>
+        )}
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Trend Analysis</Text>
@@ -410,7 +446,7 @@ const SexualHealthDashboardScreenV3: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: '#F8FAFC',
   },
   centerContainer: {
     flex: 1,
@@ -426,39 +462,97 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
-    padding: 16,
+    paddingBottom: 24,
   },
   header: {
-    marginBottom: 24,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
   },
   title: {
     fontSize: 28,
-    fontWeight: 'bold',
-    color: '#fff',
-    marginBottom: 8,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 4,
   },
   subtitle: {
-    fontSize: 16,
-    color: '#94A3B8',
+    fontSize: 15,
+    color: '#64748B',
+    fontWeight: '500',
   },
   scoreCard: {
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 24,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  scoreMainSection: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  scoreIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 16,
+    backgroundColor: '#FAF5FF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  scoreDetails: {
+    flex: 1,
   },
   scoreLabel: {
-    color: '#94A3B8',
-    fontSize: 14,
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  scoreValueContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
     marginBottom: 8,
   },
   scoreValue: {
-    color: '#fff',
-    fontSize: 48,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    fontSize: 40,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -1,
+  },
+  scoreMaxValue: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#94A3B8',
+    marginLeft: 2,
+  },
+  progressBarContainer: {
+    marginBottom: 6,
+  },
+  progressBarBackground: {
+    height: 8,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: '#A855F7',
+    borderRadius: 999,
+  },
+  lastUpdated: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
+  },
+  statusBadgeContainer: {
+    alignItems: 'flex-end',
   },
   statusLabel: {
     color: '#94A3B8',
@@ -466,11 +560,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-    marginBottom: 8,
+    borderRadius: 12,
+    gap: 6,
   },
   statusOptimal: {
     backgroundColor: 'rgba(34, 197, 94, 0.2)',
@@ -485,9 +581,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(239, 68, 68, 0.2)',
   },
   statusText: {
-    color: '#fff',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '600',
+    color: '#0F172A',
   },
   lastLab: {
     color: '#64748B',
@@ -507,29 +603,89 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   trendText: {
-    color: '#fff',
+    color: '#64748B',
     fontSize: 14,
     marginLeft: 8,
   },
   section: {
+    paddingHorizontal: 16,
     marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#fff',
-    marginBottom: 12,
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 16,
   },
   card: {
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     padding: 16,
+    marginBottom: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  categoryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  categoryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  categoryTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0F172A',
+  },
+  categoryScoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryProgressBar: {
+    height: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  categoryProgressFill: {
+    height: '100%',
+    borderRadius: 999,
+  },
+  categoryScore: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  categoryPercentage: {
+    fontSize: 14,
+    fontWeight: '700',
+    minWidth: 45,
+    textAlign: 'right',
   },
   signalRow: {
     marginBottom: 16,
     paddingBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#334155',
+    borderBottomColor: '#E2E8F0',
   },
   signalHeader: {
     flexDirection: 'row',
@@ -537,7 +693,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   signalName: {
-    color: '#fff',
+    color: '#0F172A',
     fontSize: 16,
     fontWeight: '600',
     marginLeft: 8,
@@ -567,7 +723,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   trendBadgeText: {
-    color: '#fff',
+    color: '#64748B',
     fontSize: 12,
     marginLeft: 4,
   },
@@ -598,7 +754,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: '#E2E8F0',
   },
   historyTitle: {
     color: '#94A3B8',
@@ -611,16 +767,16 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 6,
     paddingHorizontal: 8,
-    backgroundColor: '#1E293B',
+    backgroundColor: '#F8FAFC',
     borderRadius: 4,
     marginBottom: 4,
   },
   historyDate: {
-    color: '#CBD5E1',
+    color: '#64748B',
     fontSize: 12,
   },
   historyValue: {
-    color: '#E2E8F0',
+    color: '#0F172A',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -630,7 +786,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   actionText: {
-    color: '#fff',
+    color: '#475569',
     fontSize: 14,
     marginLeft: 12,
     flex: 1,
@@ -639,20 +795,21 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingTop: 16,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: '#E2E8F0',
   },
   rationaleLabel: {
-    color: '#94A3B8',
+    color: '#64748B',
     fontSize: 12,
+    fontWeight: '600',
     marginBottom: 8,
   },
   rationaleText: {
-    color: '#E2E8F0',
+    color: '#475569',
     fontSize: 14,
     lineHeight: 20,
   },
   summaryText: {
-    color: '#E2E8F0',
+    color: '#475569',
     fontSize: 14,
     lineHeight: 20,
   },
@@ -660,7 +817,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
     fontSize: 14,
     textAlign: 'center',
-    padding: 16,
+    marginTop: 24,
   },
   errorContainer: {
     flex: 1,
@@ -669,30 +826,71 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   errorTitle: {
-    color: '#fff',
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginTop: 16,
+    color: '#EF4444',
+    fontSize: 18,
+    fontWeight: '600',
     marginBottom: 8,
   },
   errorMessage: {
-    color: '#94A3B8',
-    fontSize: 16,
+    color: '#64748B',
+    fontSize: 14,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
   },
   retryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
     backgroundColor: '#A855F7',
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '600',
+    marginLeft: 8,
+  },
+  totalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 8,
+    marginBottom: 12,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 3,
+    borderWidth: 2,
+    borderColor: '#A855F7',
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  totalLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  totalScoreContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  totalScore: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  totalMax: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  totalPercentage: {
+    fontSize: 16,
+    fontWeight: '700',
     marginLeft: 8,
   },
 });

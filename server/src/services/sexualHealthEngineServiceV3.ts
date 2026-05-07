@@ -34,15 +34,427 @@ import type {
   LibidoLevel,
   ErectilePerformance,
   HormonalRiskLevel,
+  ScoreComponent,
+  SexualHealthScoreBreakdown,
 } from '../types/sexualHealthEngineV3';
 import type { BloodworkTrend, GetBloodworkTrendsResponse } from '../types/bloodworkTrends';
+import type { InputMetadata } from '../types/inputMetadata';
 
 const USE_AI_ENRICHMENT = process.env.USE_AI_ENRICHMENT_SEXUAL_HEALTH === 'true';
 const USE_TREND_ANALYSIS = process.env.USE_TREND_ANALYSIS_SEXUAL_HEALTH === 'true';
+const SHOW_DETAIL_SCREEN_INPUTS = process.env.SHOW_DETAIL_SCREEN_INPUTS === 'true';
 
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
+
+/**
+ * Calculate individual input score based on value and optimal ranges
+ * Returns: 90 (optimal), 70 (moderate), 50 (elevated_risk), or 30 (high_risk)
+ */
+function calculateSexualHealthInputScore(name: string, value: any, age?: number): number | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  switch (name) {
+    case 'Total Testosterone':
+      const optimalMin = age && age < 40 ? 600 : age && age < 50 ? 500 : 400;
+      const normalMin = age && age < 40 ? 400 : age && age < 50 ? 350 : 300;
+      const lowMin = age && age < 40 ? 250 : age && age < 50 ? 230 : 200;
+      if (value >= optimalMin) return 90;
+      if (value >= normalMin) return 70;
+      if (value >= lowMin) return 50;
+      return 30;
+
+    case 'Free Testosterone':
+      if (value >= 15) return 90;
+      if (value >= 10) return 70;
+      if (value >= 5) return 50;
+      return 30;
+
+    case 'Libido Self Rating':
+    case 'Erectile Function Rating':
+      if (value >= 4) return 90;
+      if (value >= 3) return 70;
+      if (value >= 2) return 50;
+      return 30;
+
+    case 'Morning Erections Frequency':
+      if (value >= 5) return 90;
+      if (value >= 3) return 70;
+      if (value >= 1) return 50;
+      return 30;
+
+    case 'Stress Level':
+      if (value <= 2) return 90;
+      if (value <= 3) return 70;
+      if (value <= 4) return 50;
+      return 30;
+
+    case 'Sleep Quality':
+      if (value >= 4) return 90;
+      if (value >= 3) return 70;
+      if (value >= 2) return 50;
+      return 30;
+
+    case 'Sleep Hours':
+      if (value >= 7 && value <= 9) return 90;
+      if (value >= 6 && value <= 10) return 70;
+      if (value >= 5 && value <= 11) return 50;
+      return 30;
+
+    case 'Recovery Score':
+    case 'Adherence Score':
+      if (value >= 80) return 90;
+      if (value >= 60) return 70;
+      if (value >= 40) return 50;
+      return 30;
+
+    case 'Stress Score':
+      if (value <= 30) return 90;
+      if (value <= 50) return 70;
+      if (value <= 70) return 50;
+      return 30;
+
+    case 'Fatigue Score':
+      if (value <= 3) return 90;
+      if (value <= 5) return 70;
+      if (value <= 7) return 50;
+      return 30;
+
+    case 'Heart Rate Variability':
+      if (value >= 60) return 90;
+      if (value >= 45) return 70;
+      if (value >= 30) return 50;
+      return 30;
+
+    case 'Resting Heart Rate':
+      if (value < 60) return 90;
+      if (value < 70) return 70;
+      if (value < 80) return 50;
+      return 30;
+
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Build detailed input metadata for Sexual Health V3
+ */
+const buildSexualHealthInputMetadata = (
+  inputs: SexualHealthInputsV3,
+  bloodwork: any
+): InputMetadata[] => {
+  const metadata: InputMetadata[] = [];
+  const now = new Date().toISOString();
+
+  // Total Testosterone
+  metadata.push({
+    name: 'Total Testosterone',
+    value: inputs.totalTestosterone,
+    unit: 'ng/dL',
+    source: inputs.totalTestosterone !== undefined
+      ? (bloodwork?.markers?.totalTestosterone ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.totalTestosterone !== undefined
+      ? { table: 'bloodwork_results', field: 'total_testosterone' }
+      : undefined,
+    lastUpdated: inputs.totalTestosterone !== undefined ? bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+    score: calculateSexualHealthInputScore('Total Testosterone', inputs.totalTestosterone, inputs.age),
+  });
+
+  // Free Testosterone
+  metadata.push({
+    name: 'Free Testosterone',
+    value: inputs.freeTestosterone,
+    unit: 'pg/mL',
+    source: inputs.freeTestosterone !== undefined
+      ? (bloodwork?.markers?.freeTestosterone ? 'ACTUAL' : 'DERIVED')
+      : 'NOT_AVAILABLE',
+    sourceDetails: inputs.freeTestosterone !== undefined
+      ? { table: 'bloodwork_results', field: 'free_testosterone' }
+      : undefined,
+    lastUpdated: inputs.freeTestosterone !== undefined ? bloodwork?.latestTestDate : undefined,
+    category: 'Lab Results',
+    score: calculateSexualHealthInputScore('Free Testosterone', inputs.freeTestosterone),
+  });
+
+  // Libido Self Rating
+  metadata.push({
+    name: 'Libido Self Rating',
+    value: inputs.libidoSelfRating,
+    unit: 'scale (1-5)',
+    source: inputs.libidoSelfRating !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.libidoSelfRating !== undefined
+      ? { table: 'daily_logs', field: 'libido_rating' }
+      : undefined,
+    lastUpdated: inputs.libidoSelfRating !== undefined ? now : undefined,
+    category: 'Self-Reported',
+    score: calculateSexualHealthInputScore('Libido Self Rating', inputs.libidoSelfRating),
+  });
+
+  // Erectile Function Rating
+  metadata.push({
+    name: 'Erectile Function Rating',
+    value: inputs.erectileFunctionRating,
+    unit: 'scale (1-5)',
+    source: inputs.erectileFunctionRating !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.erectileFunctionRating !== undefined
+      ? { table: 'daily_logs', field: 'erectile_function' }
+      : undefined,
+    lastUpdated: inputs.erectileFunctionRating !== undefined ? now : undefined,
+    category: 'Self-Reported',
+    score: calculateSexualHealthInputScore('Erectile Function Rating', inputs.erectileFunctionRating),
+  });
+
+  // Morning Erections Frequency
+  metadata.push({
+    name: 'Morning Erections Frequency',
+    value: inputs.morningErectionsFrequency,
+    unit: 'days/week',
+    source: inputs.morningErectionsFrequency !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.morningErectionsFrequency !== undefined
+      ? { table: 'daily_logs', field: 'morning_erections' }
+      : undefined,
+    lastUpdated: inputs.morningErectionsFrequency !== undefined ? now : undefined,
+    category: 'Self-Reported',
+    score: calculateSexualHealthInputScore('Morning Erections Frequency', inputs.morningErectionsFrequency),
+  });
+
+  // Age
+  metadata.push({
+    name: 'Age',
+    value: inputs.age,
+    unit: 'years',
+    source: inputs.age !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.age !== undefined
+      ? { table: 'baseline_profile', field: 'age' }
+      : undefined,
+    lastUpdated: inputs.age !== undefined ? now : undefined,
+    category: 'Demographics',
+  });
+
+  // Stress Level
+  metadata.push({
+    name: 'Stress Level',
+    value: inputs.stressLevel,
+    unit: 'scale (1-5)',
+    source: inputs.stressLevel !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.stressLevel !== undefined
+      ? { table: 'daily_logs', field: 'stress_level' }
+      : undefined,
+    lastUpdated: inputs.stressLevel !== undefined ? now : undefined,
+    category: 'Wellness',
+    score: calculateSexualHealthInputScore('Stress Level', inputs.stressLevel),
+  });
+
+  // Sleep Quality
+  metadata.push({
+    name: 'Sleep Quality',
+    value: inputs.sleepQuality,
+    unit: 'scale (1-5)',
+    source: inputs.sleepQuality !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.sleepQuality !== undefined
+      ? { table: 'daily_logs', field: 'sleep_quality' }
+      : undefined,
+    lastUpdated: inputs.sleepQuality !== undefined ? now : undefined,
+    category: 'Sleep',
+    score: calculateSexualHealthInputScore('Sleep Quality', inputs.sleepQuality),
+  });
+
+  // Sleep Hours
+  metadata.push({
+    name: 'Sleep Hours',
+    value: inputs.sleepHours,
+    unit: 'hours',
+    source: inputs.sleepHours !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.sleepHours !== undefined
+      ? { derivedFrom: ['device_context', 'daily_logs'] }
+      : undefined,
+    lastUpdated: inputs.sleepHours !== undefined ? now : undefined,
+    category: 'Sleep',
+    score: calculateSexualHealthInputScore('Sleep Hours', inputs.sleepHours),
+  });
+
+  // Recovery Score
+  metadata.push({
+    name: 'Recovery Score',
+    value: inputs.recoveryScore,
+    unit: 'score (0-100)',
+    source: inputs.recoveryScore !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.recoveryScore !== undefined
+      ? { derivedFrom: ['recovery_engine'] }
+      : undefined,
+    lastUpdated: inputs.recoveryScore !== undefined ? now : undefined,
+    category: 'Wellness',
+    score: calculateSexualHealthInputScore('Recovery Score', inputs.recoveryScore),
+  });
+
+  // Stress Score
+  metadata.push({
+    name: 'Stress Score',
+    value: inputs.stressScore,
+    unit: 'score (0-100)',
+    source: inputs.stressScore !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.stressScore !== undefined
+      ? { derivedFrom: ['stress_engine'] }
+      : undefined,
+    lastUpdated: inputs.stressScore !== undefined ? now : undefined,
+    category: 'Wellness',
+    score: calculateSexualHealthInputScore('Stress Score', inputs.stressScore),
+  });
+
+  // Cardiovascular Status
+  metadata.push({
+    name: 'Cardiovascular Status',
+    value: inputs.cardiovascularStatus,
+    unit: null,
+    source: inputs.cardiovascularStatus !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.cardiovascularStatus !== undefined
+      ? { derivedFrom: ['cardiovascular_engine'] }
+      : undefined,
+    lastUpdated: inputs.cardiovascularStatus !== undefined ? now : undefined,
+    category: 'Health Scores',
+  });
+
+  // Metabolic Status
+  metadata.push({
+    name: 'Metabolic Status',
+    value: inputs.metabolicStatus,
+    unit: null,
+    source: inputs.metabolicStatus !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.metabolicStatus !== undefined
+      ? { derivedFrom: ['metabolic_engine'] }
+      : undefined,
+    lastUpdated: inputs.metabolicStatus !== undefined ? now : undefined,
+    category: 'Health Scores',
+  });
+
+  // Fatigue Score
+  metadata.push({
+    name: 'Fatigue Score',
+    value: inputs.fatigueScore,
+    unit: 'scale (0-10)',
+    source: inputs.fatigueScore !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.fatigueScore !== undefined
+      ? { table: 'daily_logs', field: 'fatigue_level' }
+      : undefined,
+    lastUpdated: inputs.fatigueScore !== undefined ? now : undefined,
+    category: 'Wellness',
+    score: calculateSexualHealthInputScore('Fatigue Score', inputs.fatigueScore),
+  });
+
+  // Heart Rate Variability
+  metadata.push({
+    name: 'Heart Rate Variability',
+    value: inputs.hrv,
+    unit: 'ms',
+    source: inputs.hrv !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.hrv !== undefined
+      ? { integration: 'wearable_device' }
+      : undefined,
+    lastUpdated: inputs.hrv !== undefined ? now : undefined,
+    category: 'Vitals',
+    score: calculateSexualHealthInputScore('Heart Rate Variability', inputs.hrv),
+  });
+
+  // Adherence Score
+  metadata.push({
+    name: 'Adherence Score',
+    value: inputs.adherenceScore,
+    unit: 'score (0-100)',
+    source: inputs.adherenceScore !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.adherenceScore !== undefined
+      ? { derivedFrom: ['adherence_engine'] }
+      : undefined,
+    lastUpdated: inputs.adherenceScore !== undefined ? now : undefined,
+    category: 'Adherence',
+    score: calculateSexualHealthInputScore('Adherence Score', inputs.adherenceScore),
+  });
+
+  // Testosterone (legacy/duplicate field)
+  if (inputs.testosterone !== undefined && inputs.testosterone !== inputs.totalTestosterone) {
+    metadata.push({
+      name: 'Testosterone (Legacy)',
+      value: inputs.testosterone,
+      unit: 'ng/dL',
+      source: 'DERIVED',
+      sourceDetails: { derivedFrom: ['legacy_field'] },
+      lastUpdated: now,
+      category: 'Lab Results',
+      score: calculateSexualHealthInputScore('Total Testosterone', inputs.testosterone, inputs.age),
+    });
+  }
+
+  // Resting Heart Rate
+  metadata.push({
+    name: 'Resting Heart Rate',
+    value: inputs.restingHeartRate,
+    unit: 'bpm',
+    source: inputs.restingHeartRate !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.restingHeartRate !== undefined
+      ? { integration: 'wearable_device' }
+      : undefined,
+    lastUpdated: inputs.restingHeartRate !== undefined ? now : undefined,
+    category: 'Vitals',
+    score: calculateSexualHealthInputScore('Resting Heart Rate', inputs.restingHeartRate),
+  });
+
+  // Testosterone Trend
+  metadata.push({
+    name: 'Testosterone Trend',
+    value: inputs.testosteroneTrend?.trend_direction,
+    unit: null,
+    source: inputs.testosteroneTrend !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.testosteroneTrend !== undefined
+      ? { derivedFrom: ['bloodwork_history'], formula: 'trend_analysis' }
+      : undefined,
+    lastUpdated: inputs.testosteroneTrend !== undefined ? now : undefined,
+    category: 'Trends',
+  });
+
+  // Free Testosterone Trend
+  metadata.push({
+    name: 'Free Testosterone Trend',
+    value: inputs.freeTestosteroneTrend?.trend_direction,
+    unit: null,
+    source: inputs.freeTestosteroneTrend !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.freeTestosteroneTrend !== undefined
+      ? { derivedFrom: ['bloodwork_history'], formula: 'trend_analysis' }
+      : undefined,
+    lastUpdated: inputs.freeTestosteroneTrend !== undefined ? now : undefined,
+    category: 'Trends',
+  });
+
+  // Estradiol Trend
+  metadata.push({
+    name: 'Estradiol Trend',
+    value: inputs.estradiolTrend?.trend_direction,
+    unit: null,
+    source: inputs.estradiolTrend !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.estradiolTrend !== undefined
+      ? { derivedFrom: ['bloodwork_history'], formula: 'trend_analysis' }
+      : undefined,
+    lastUpdated: inputs.estradiolTrend !== undefined ? now : undefined,
+    category: 'Trends',
+  });
+
+  // SHBG Trend
+  metadata.push({
+    name: 'SHBG Trend',
+    value: inputs.shbgTrend?.trend_direction,
+    unit: null,
+    source: inputs.shbgTrend !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.shbgTrend !== undefined
+      ? { derivedFrom: ['bloodwork_history'], formula: 'trend_analysis' }
+      : undefined,
+    lastUpdated: inputs.shbgTrend !== undefined ? now : undefined,
+    category: 'Trends',
+  });
+
+  return metadata;
+};
 
 /**
  * Fetch historical bloodwork values for a specific marker
@@ -108,6 +520,14 @@ async function getMarkerHistory(
 
 const sexualHealthRecordStoreV3 = new Map<string, SexualHealthRecordV3[]>();
 
+/**
+ * Clear all sexual health V3 cache
+ */
+export function clearSexualHealthCacheV3(): void {
+  sexualHealthRecordStoreV3.clear();
+  logger.info('🗑️ [SEXUAL HEALTH V3 ENGINE] All cache cleared');
+}
+
 // ============================================================================
 // LEGACY CALCULATION HELPERS (Preserved from V1 for backward compatibility)
 // ============================================================================
@@ -116,26 +536,48 @@ function analyzeTestosteroneMetrics(
   totalTestosterone: number | undefined,
   freeTestosterone: number | undefined,
   age: number
-): TestosteroneMetrics {
-  let testosteroneStatus: 'optimal' | 'normal' | 'low' | 'very_low';
+): { metrics: TestosteroneMetrics; scoreComponent: ScoreComponent } {
+  const max = 40;
+  let score = 0;
+  const hasData = totalTestosterone !== undefined || freeTestosterone !== undefined;
 
   const optimalMin = age < 40 ? 600 : age < 50 ? 500 : 400;
   const normalMin = age < 40 ? 400 : age < 50 ? 350 : 300;
   const lowMin = age < 40 ? 250 : age < 50 ? 230 : 200;
 
+  let testosteroneStatus: 'optimal' | 'normal' | 'low' | 'very_low';
+
   if (totalTestosterone !== undefined) {
-    if (totalTestosterone >= optimalMin) testosteroneStatus = 'optimal';
-    else if (totalTestosterone >= normalMin) testosteroneStatus = 'normal';
-    else if (totalTestosterone >= lowMin) testosteroneStatus = 'low';
-    else testosteroneStatus = 'very_low';
+    if (totalTestosterone >= optimalMin) {
+      testosteroneStatus = 'optimal';
+      score = 40;
+    } else if (totalTestosterone >= normalMin) {
+      testosteroneStatus = 'normal';
+      score = 30;
+    } else if (totalTestosterone >= lowMin) {
+      testosteroneStatus = 'low';
+      score = 20;
+    } else {
+      testosteroneStatus = 'very_low';
+      score = 10;
+    }
   } else {
     testosteroneStatus = 'normal';
+    score = 28; // 70% of 40
   }
 
   return {
-    totalTestosterone,
-    freeTestosterone,
-    testosteroneStatus,
+    metrics: {
+      totalTestosterone,
+      freeTestosterone,
+      testosteroneStatus,
+    },
+    scoreComponent: {
+      score: hasData ? score : 28,
+      max,
+      percentage: Math.round((score / max) * 100),
+      hasData,
+    },
   };
 }
 
@@ -143,30 +585,46 @@ function analyzeLibidoMetrics(
   libidoSelfRating: number | undefined,
   stressLevel: number | undefined,
   sleepQuality: number | undefined
-): LibidoMetrics {
-  let libidoScore = 70;
-  let libidoLevel: LibidoLevel;
+): { metrics: LibidoMetrics; scoreComponent: ScoreComponent } {
+  const max = 30;
+  let score = 0;
+  const hasData = libidoSelfRating !== undefined;
 
   if (libidoSelfRating !== undefined) {
-    libidoScore = libidoSelfRating * 10;
+    score = libidoSelfRating * 6; // Scale 1-5 to 6-30 range
+  } else {
+    score = 21; // 70% of 30
   }
 
   if (stressLevel !== undefined && stressLevel >= 4) {
-    libidoScore -= 15;
+    score -= 4.5; // 15% penalty
   }
 
   if (sleepQuality !== undefined && sleepQuality <= 2) {
-    libidoScore -= 10;
+    score -= 3; // 10% penalty
   }
 
-  if (libidoScore >= 80) libidoLevel = 'high';
-  else if (libidoScore >= 60) libidoLevel = 'normal';
-  else if (libidoScore >= 40) libidoLevel = 'reduced';
+  score = Math.max(0, Math.min(max, score));
+
+  let libidoLevel: LibidoLevel;
+  if (score >= 24) libidoLevel = 'high';
+  else if (score >= 18) libidoLevel = 'normal';
+  else if (score >= 12) libidoLevel = 'reduced';
   else libidoLevel = 'low';
 
+  const libidoScore = Math.round((score / max) * 100);
+
   return {
-    libidoScore,
-    libidoLevel,
+    metrics: {
+      libidoScore,
+      libidoLevel,
+    },
+    scoreComponent: {
+      score: Math.round(score * 10) / 10,
+      max,
+      percentage: Math.round((score / max) * 100),
+      hasData,
+    },
   };
 }
 
@@ -174,30 +632,55 @@ function analyzeErectileMetrics(
   erectileFunctionRating: number | undefined,
   morningErectionsFrequency: number | undefined,
   age: number
-): ErectileMetrics {
-  let erectileScore = 70;
-  let erectilePerformance: ErectilePerformance;
+): { metrics: ErectileMetrics; scoreComponent: ScoreComponent } {
+  const max = 30;
+  let score = 0;
+  const hasData = erectileFunctionRating !== undefined;
 
   if (erectileFunctionRating !== undefined) {
-    erectileScore = erectileFunctionRating * 10;
+    score = erectileFunctionRating * 6; // Scale 1-5 to 6-30 range
+  } else {
+    score = 21; // 70% of 30
   }
 
   if (morningErectionsFrequency !== undefined && morningErectionsFrequency <= 2) {
-    erectileScore -= 15;
+    score -= 4.5; // 15% penalty
   }
 
   if (age > 50) {
-    erectileScore -= 5;
+    score -= 1.5; // 5% penalty
   }
 
-  if (erectileScore >= 80) erectilePerformance = 'excellent';
-  else if (erectileScore >= 60) erectilePerformance = 'good';
-  else if (erectileScore >= 40) erectilePerformance = 'fair';
+  score = Math.max(0, Math.min(max, score));
+
+  let erectilePerformance: ErectilePerformance;
+  if (score >= 24) erectilePerformance = 'excellent';
+  else if (score >= 18) erectilePerformance = 'good';
+  else if (score >= 12) erectilePerformance = 'fair';
   else erectilePerformance = 'poor';
 
+  let morningErections: 'frequent' | 'occasional' | 'rare' | 'none' | undefined;
+  if (morningErectionsFrequency !== undefined) {
+    if (morningErectionsFrequency >= 5) morningErections = 'frequent';
+    else if (morningErectionsFrequency >= 3) morningErections = 'occasional';
+    else if (morningErectionsFrequency >= 1) morningErections = 'rare';
+    else morningErections = 'none';
+  }
+
+  const erectileScore = Math.round((score / max) * 100);
+
   return {
-    erectileScore,
-    erectilePerformance,
+    metrics: {
+      erectileScore,
+      erectilePerformance,
+      morningErections,
+    },
+    scoreComponent: {
+      score: Math.round(score * 10) / 10,
+      max,
+      percentage: Math.round((score / max) * 100),
+      hasData,
+    },
   };
 }
 
@@ -222,6 +705,65 @@ function calculateSexualHealthScore(
     erectileMetrics.erectileScore * erectileWeight;
 
   return Math.round(weightedScore);
+}
+
+/**
+ * Calculate Weighted Sexual Health Score (100 points max)
+ * Aggregates all category scores into overall sexual health score
+ * Only includes categories that have data
+ */
+function calculateWeightedSexualHealthScore(
+  testosteroneResult: { metrics: TestosteroneMetrics; scoreComponent: ScoreComponent },
+  libidoResult: { metrics: LibidoMetrics; scoreComponent: ScoreComponent },
+  erectileResult: { metrics: ErectileMetrics; scoreComponent: ScoreComponent }
+): { score: number; breakdown: SexualHealthScoreBreakdown } {
+  let total = 0;
+  let maxTotal = 0;
+
+  // Always include all categories in total score calculation
+  // Categories provide calculated/default scores even without raw user input
+  total += testosteroneResult.scoreComponent.score;
+  maxTotal += testosteroneResult.scoreComponent.max;
+
+  total += libidoResult.scoreComponent.score;
+  maxTotal += libidoResult.scoreComponent.max;
+
+  total += erectileResult.scoreComponent.score;
+  maxTotal += erectileResult.scoreComponent.max;
+
+  if (maxTotal === 0) {
+    total = 70;
+    maxTotal = 100;
+  }
+
+  const percentage = Math.round((total / maxTotal) * 100);
+
+  return {
+    score: Math.round(total),
+    breakdown: {
+      testosterone: {
+        score: Math.round(testosteroneResult.scoreComponent.score * 10) / 10,
+        max: testosteroneResult.scoreComponent.max,
+        percentage: Math.round((testosteroneResult.scoreComponent.score / testosteroneResult.scoreComponent.max) * 100),
+        hasData: testosteroneResult.scoreComponent.hasData,
+      },
+      libido: {
+        score: Math.round(libidoResult.scoreComponent.score * 10) / 10,
+        max: libidoResult.scoreComponent.max,
+        percentage: Math.round((libidoResult.scoreComponent.score / libidoResult.scoreComponent.max) * 100),
+        hasData: libidoResult.scoreComponent.hasData,
+      },
+      erectileFunction: {
+        score: Math.round(erectileResult.scoreComponent.score * 10) / 10,
+        max: erectileResult.scoreComponent.max,
+        percentage: Math.round((erectileResult.scoreComponent.score / erectileResult.scoreComponent.max) * 100),
+        hasData: erectileResult.scoreComponent.hasData,
+      },
+      total: Math.round(total),
+      maxTotal,
+      percentage,
+    },
+  };
 }
 
 function determineHormonalRisk(
@@ -740,28 +1282,28 @@ export async function getSexualHealthRecommendationV3(
   }
 
   const age = baseline.age ?? 35;
-  const testosteroneMetrics = analyzeTestosteroneMetrics(
+  const testosteroneResult = analyzeTestosteroneMetrics(
     inputs.totalTestosterone,
     inputs.freeTestosterone,
     age
   );
-  const libidoMetrics = analyzeLibidoMetrics(
+  const libidoResult = analyzeLibidoMetrics(
     inputs.libidoSelfRating,
     inputs.stressLevel,
     inputs.sleepQuality
   );
-  const erectileMetrics = analyzeErectileMetrics(
+  const erectileResult = analyzeErectileMetrics(
     inputs.erectileFunctionRating,
     inputs.morningErectionsFrequency,
     age
   );
-  const sexualHealthScore = calculateSexualHealthScore(
-    testosteroneMetrics,
-    libidoMetrics,
-    erectileMetrics
+  const { score: sexualHealthScore, breakdown: scoreBreakdown } = calculateWeightedSexualHealthScore(
+    testosteroneResult,
+    libidoResult,
+    erectileResult
   );
 
-  const sexualHealthStatus = determineSexualHealthStatusV3(inputs, testosteroneMetrics);
+  const sexualHealthStatus = determineSexualHealthStatusV3(inputs, testosteroneResult.metrics);
   logger.info('📊 [SEXUAL HEALTH V3] Status determined', { sexualHealthStatus });
 
   const evidence = await buildSexualHealthEvidenceV3(inputs, sexualHealthStatus, userId, bloodwork);
@@ -791,7 +1333,21 @@ export async function getSexualHealthRecommendationV3(
   const isValid = validateSexualHealthRecommendation(recommendation);
   if (!isValid) {
     logger.warn('⚠️ [SEXUAL HEALTH V3] Validation failed, using fallback');
-    recommendation = normalizeSexualHealthRecommendation(fallbackRecommendation);
+    recommendation = fallbackRecommendation;
+  }
+  logger.info('✅ [SEXUAL HEALTH V3] Validation passed');
+
+  // Build detailed input metadata (if feature flag enabled)
+  let detailedInputs: InputMetadata[] | undefined;
+  if (SHOW_DETAIL_SCREEN_INPUTS) {
+    detailedInputs = buildSexualHealthInputMetadata(inputs, bloodwork);
+    logger.info('✅ [SEXUAL HEALTH V3] Built detailed input metadata', {
+      userId,
+      inputCount: detailedInputs.length,
+      actualCount: detailedInputs.filter(i => i.source === 'ACTUAL').length,
+      derivedCount: detailedInputs.filter(i => i.source === 'DERIVED').length,
+      notAvailableCount: detailedInputs.filter(i => i.source === 'NOT_AVAILABLE').length,
+    });
   }
 
   const record: SexualHealthRecordV3 = {
@@ -799,16 +1355,18 @@ export async function getSexualHealthRecommendationV3(
     userId,
     date: new Date().toISOString().slice(0, 10),
     sexualHealthScore,
-    testosteroneMetrics,
-    libidoMetrics,
-    erectileMetrics,
-    hormonalRisk: determineHormonalRisk(testosteroneMetrics, age),
+    testosteroneMetrics: testosteroneResult.metrics,
+    libidoMetrics: libidoResult.metrics,
+    erectileMetrics: erectileResult.metrics,
+    hormonalRisk: determineHormonalRisk(testosteroneResult.metrics, age),
     inputs,
     sexualHealthStatus,
     evidence,
     recommendation,
     trendMetadata: evidence.trendMetadata,
     createdAt: new Date().toISOString(),
+    scoreBreakdown,
+    ...(detailedInputs && { detailedInputs }),
   };
 
   const userRecords = sexualHealthRecordStoreV3.get(userId) ?? [];

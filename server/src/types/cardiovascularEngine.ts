@@ -2,6 +2,8 @@
 // AI-enriched cardiovascular intelligence with deterministic fallback
 // Preserves backward compatibility with existing fields
 
+import { InputMetadata } from './inputMetadata';
+
 // Legacy types (preserved for backward compatibility)
 export type CardiovascularRiskLevel = 'low' | 'moderate' | 'elevated' | 'high';
 export type BPRiskLevel = 'optimal' | 'normal' | 'elevated' | 'stage1' | 'stage2';
@@ -72,6 +74,26 @@ export interface CardiovascularRecommendation {
   source?: 'deterministic' | 'ai_enriched' | 'fallback';
 }
 
+export interface ScoreComponent {
+  score: number;
+  max: number;
+  percentage: number;
+  hasData: boolean;
+}
+
+export interface CardiovascularScoreBreakdown {
+  bloodPressure: ScoreComponent;
+  lipidProfile: ScoreComponent;
+  cardiacFunction: ScoreComponent;
+  fitnessMetabolism: ScoreComponent;
+  advancedMarkers: ScoreComponent;
+  lifestyle: ScoreComponent;
+  baselineAdjustment: ScoreComponent;
+  total: number;
+  maxTotal: number;
+  percentage: number;
+}
+
 export interface CardiovascularRecord {
   id: string;
   userId: string;
@@ -89,4 +111,9 @@ export interface CardiovascularRecord {
   evidence?: CardiovascularEvidence;
   recommendation: CardiovascularRecommendation;
   createdAt: string;
+  // Weighted scoring system
+  cardiovascularScore?: number;
+  scoreBreakdown?: CardiovascularScoreBreakdown;
+  // Input transparency (feature flag controlled)
+  detailedInputs?: InputMetadata[];
 }

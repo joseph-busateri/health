@@ -1,6 +1,4 @@
-// Sexual Health Engine Types V2
-// Extends V1 with trend analysis support
-
+import type { InputMetadata } from './inputMetadata';
 import type { BloodworkTrend } from './bloodworkTrends';
 import type {
   LibidoLevel,
@@ -106,4 +104,5 @@ export interface SexualHealthRecordV2 {
   // NEW: Trend metadata
   trendMetadata?: SexualHealthEvidenceV2['trendMetadata'];
   createdAt: string;
+  detailedInputs?: InputMetadata[];
 }

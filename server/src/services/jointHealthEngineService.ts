@@ -9,6 +9,7 @@ import { enrichJointRecommendationWithAI } from './jointAIEnrichment';
 import { normalizeJointRecommendation } from './jointRecommendationNormalizer';
 import { validateJointRecommendation } from './jointRecommendationValidator';
 import { createRecommendation } from './recommendationEngineService';
+import type { InputMetadata } from '../types/inputMetadata';
 import type {
   JointArea,
   JointEvidence,
@@ -25,9 +26,166 @@ import type {
 
 const jointStore = new Map<string, JointHealthRecord[]>();
 
+/**
+ * Clear all joint health cache
+ */
+export function clearJointHealthCache(): void {
+  jointStore.clear();
+  logger.info('🗑️ [JOINT HEALTH ENGINE] All cache cleared');
+}
+
+const SHOW_DETAIL_SCREEN_INPUTS = process.env.SHOW_DETAIL_SCREEN_INPUTS === 'true';
+
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
 
 const toArea = (value?: JointArea): JointArea => value ?? 'other';
+
+/**
+ * Calculate individual input score based on value and optimal ranges
+ * Returns: 90 (optimal), 70 (moderate), 50 (elevated_risk), or 30 (high_risk)
+ */
+function calculateJointHealthInputScore(name: string, value: any): number | undefined {
+  if (value === undefined || value === null) return undefined;
+
+  switch (name) {
+    case 'Pain Level':
+      // Lower is better (0-10 scale)
+      if (value === 0) return 90;  // optimal (no pain)
+      if (value <= 3) return 70;   // moderate (mild pain)
+      if (value <= 6) return 50;   // elevated_risk (moderate pain)
+      return 30;                    // high_risk (severe pain)
+
+    case 'Tightness Level':
+      // Lower is better (0-10 scale)
+      if (value === 0) return 90;  // optimal (no tightness)
+      if (value <= 3) return 70;   // moderate (mild tightness)
+      if (value <= 6) return 50;   // elevated_risk (moderate tightness)
+      return 30;                    // high_risk (severe tightness)
+
+    case 'Soreness Level':
+      // Lower is better (0-10 scale)
+      if (value === 0) return 90;  // optimal (no soreness)
+      if (value <= 3) return 70;   // moderate (mild soreness)
+      if (value <= 6) return 50;   // elevated_risk (moderate soreness)
+      return 30;                    // high_risk (severe soreness)
+
+    case 'Affected Area':
+      // Categorical, not scored
+      return undefined;
+
+    case 'Workout Load':
+      // Moderate load is optimal (1-10 scale)
+      if (value >= 4 && value <= 7) return 90;  // optimal (moderate load)
+      if (value >= 2 && value <= 8) return 70;  // moderate
+      if (value >= 1 && value <= 9) return 50;  // elevated_risk
+      return 30;                                 // high_risk (extreme load)
+
+    case 'Recovery Score':
+      // Higher is better (0-100 scale)
+      if (value >= 75) return 90;  // optimal
+      if (value >= 50) return 70;  // moderate
+      if (value >= 30) return 50;  // elevated_risk
+      return 30;                    // high_risk
+
+    case 'Verbal Notes':
+      // Text field, not scored
+      return undefined;
+
+    default:
+      return undefined;
+  }
+}
+
+const buildJointInputMetadata = (inputs: JointHealthInputs): InputMetadata[] => {
+  const metadata: InputMetadata[] = [];
+  const now = new Date().toISOString();
+
+  // Pain Level
+  metadata.push({
+    name: 'Pain Level',
+    value: inputs.painLevel,
+    unit: 'scale (0-10)',
+    source: inputs.painLevel !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.painLevel !== undefined ? { integration: 'user_reported' } : undefined,
+    lastUpdated: inputs.painLevel !== undefined ? now : undefined,
+    category: 'Symptoms',
+    score: calculateJointHealthInputScore('Pain Level', inputs.painLevel),
+  });
+
+  // Tightness Level
+  metadata.push({
+    name: 'Tightness Level',
+    value: inputs.tightnessLevel,
+    unit: 'scale (0-10)',
+    source: inputs.tightnessLevel !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.tightnessLevel !== undefined ? { integration: 'user_reported' } : undefined,
+    lastUpdated: inputs.tightnessLevel !== undefined ? now : undefined,
+    category: 'Symptoms',
+    score: calculateJointHealthInputScore('Tightness Level', inputs.tightnessLevel),
+  });
+
+  // Soreness Level
+  metadata.push({
+    name: 'Soreness Level',
+    value: inputs.sorenessLevel,
+    unit: 'scale (0-10)',
+    source: inputs.sorenessLevel !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.sorenessLevel !== undefined ? { integration: 'user_reported' } : undefined,
+    lastUpdated: inputs.sorenessLevel !== undefined ? now : undefined,
+    category: 'Symptoms',
+    score: calculateJointHealthInputScore('Soreness Level', inputs.sorenessLevel),
+  });
+
+  // Affected Area
+  metadata.push({
+    name: 'Affected Area',
+    value: inputs.affectedArea,
+    unit: null,
+    source: inputs.affectedArea !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.affectedArea !== undefined ? { integration: 'user_reported' } : undefined,
+    lastUpdated: inputs.affectedArea !== undefined ? now : undefined,
+    category: 'Symptoms',
+    score: calculateJointHealthInputScore('Affected Area', inputs.affectedArea),
+  });
+
+  // Workout Load
+  metadata.push({
+    name: 'Workout Load',
+    value: inputs.workoutLoad,
+    unit: 'scale (1-10)',
+    source: inputs.workoutLoad !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.workoutLoad !== undefined ? { derivedFrom: ['planned_sessions'], formula: 'planned_sessions * 2' } : undefined,
+    lastUpdated: inputs.workoutLoad !== undefined ? now : undefined,
+    category: 'Training',
+    score: calculateJointHealthInputScore('Workout Load', inputs.workoutLoad),
+  });
+
+  // Recovery Score
+  metadata.push({
+    name: 'Recovery Score',
+    value: inputs.recoveryScore,
+    unit: 'score (0-100)',
+    source: inputs.recoveryScore !== undefined ? 'DERIVED' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.recoveryScore !== undefined ? { derivedFrom: ['recovery_engine'], formula: 'computed by recovery engine' } : undefined,
+    lastUpdated: inputs.recoveryScore !== undefined ? now : undefined,
+    category: 'Recovery',
+    score: calculateJointHealthInputScore('Recovery Score', inputs.recoveryScore),
+  });
+
+  // Verbal Notes
+  metadata.push({
+    name: 'Verbal Notes',
+    value: inputs.verbalNotes,
+    unit: null,
+    source: inputs.verbalNotes !== undefined ? 'ACTUAL' : 'NOT_AVAILABLE',
+    sourceDetails: inputs.verbalNotes !== undefined ? { integration: 'user_reported' } : undefined,
+    lastUpdated: inputs.verbalNotes !== undefined ? now : undefined,
+    category: 'Symptoms',
+    score: calculateJointHealthInputScore('Verbal Notes', inputs.verbalNotes),
+  });
+
+  return metadata;
+};
 
 const inferAreaFromNotes = (notes?: string): JointArea => {
   if (!notes) {
@@ -493,7 +651,20 @@ export const getJointHealthToday = async (
     });
   }
 
-  // Step 8: Create enriched record
+  // Step 8: Build detailed inputs if feature flag is enabled
+  let detailedInputs: InputMetadata[] | undefined;
+  if (SHOW_DETAIL_SCREEN_INPUTS) {
+    detailedInputs = buildJointInputMetadata(inputs);
+    logger.info('✅ [JOINT HEALTH ENGINE] Built detailed input metadata', {
+      userId,
+      inputCount: detailedInputs.length,
+      actualCount: detailedInputs.filter(i => i.source === 'ACTUAL').length,
+      derivedCount: detailedInputs.filter(i => i.source === 'DERIVED').length,
+      notAvailableCount: detailedInputs.filter(i => i.source === 'NOT_AVAILABLE').length,
+    });
+  }
+
+  // Step 9: Create enriched record
   const record: JointRecordEnriched = {
     id: randomUUID(),
     userId,
@@ -505,6 +676,7 @@ export const getJointHealthToday = async (
     evidence,
     recommendation: finalRecommendation,
     createdAt: new Date().toISOString(),
+    ...(detailedInputs && { detailedInputs }),
   };
 
   const history = jointStore.get(userId) ?? [];

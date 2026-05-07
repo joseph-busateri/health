@@ -1,3 +1,5 @@
+import type { InputMetadata } from './inputMetadata';
+
 export type JointHealthStatus = 'stable' | 'caution' | 'aggravated';
 export type JointRiskLevel = 'low' | 'moderate' | 'high';
 
@@ -71,4 +73,5 @@ export interface JointRecordEnriched {
   evidence?: JointEvidence;
   recommendation: JointRecommendation;
   createdAt: string;
+  detailedInputs?: InputMetadata[];
 }
