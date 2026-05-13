@@ -1,0 +1,86 @@
+{
+  "expo": {
+    "name": "Personal Health Agent",
+    "slug": "personal-health-agent",
+    "version": "1.0.0",
+    "scheme": "healthapp",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.health.optimization",
+      "infoPlist": {
+        "NSHealthShareUsageDescription": "This app needs access to your health data to sync blood pressure, heart rate, HRV, steps, workouts, sleep, and other metrics from Apple Health to provide personalized health insights and recommendations.",
+        "NSHealthUpdateUsageDescription": "This app needs permission to write health data to Apple Health to keep your health records synchronized.",
+        "NSMicrophoneUsageDescription": "This app needs access to your microphone for voice interviews.",
+        "NSSpeechRecognitionUsageDescription": "This app uses speech recognition for voice interviews.",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "healthapp"
+            ]
+          }
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#FFFFFF"
+      },
+      "package": "com.health.optimization",
+      "permissions": [
+        "RECORD_AUDIO",
+        "NOTIFICATIONS"
+      ],
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "healthapp",
+              "host": "oura-callback"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
+        }
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app needs access to your photos to upload health-related images.",
+          "cameraPermission": "The app needs access to your camera to take photos for health tracking."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#007AFF"
+        }
+      ]
+    ],
+    "notification": {
+      "icon": "./assets/icon.png",
+      "color": "#007AFF"
+    }
+  }
+}

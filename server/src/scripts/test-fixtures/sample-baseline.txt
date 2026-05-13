@@ -1,0 +1,39 @@
+Demographics:
+{
+  "age": 34,
+  "gender": "male",
+  "height": "180 cm",
+  "weight": "82 kg"
+}
+
+Training Context:
+{
+  "experience": "Intermediate",
+  "weekly_sessions": 4
+}
+
+Lifestyle Context:
+{
+  "sleep": "7 hours",
+  "stress": "moderate"
+}
+
+Overall Health Goals:
+{
+  "primary": "Improve strength",
+  "secondary": "Reduce body fat"
+}
+
+Workout Goals:
+{
+  "bench_press": "120 kg",
+  "squat": "180 kg",
+  "deadlift": "210 kg"
+}
+
+Priority Order:
+{
+  "1": "Strength",
+  "2": "Body composition",
+  "3": "Recovery"
+}

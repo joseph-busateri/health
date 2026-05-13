@@ -1,0 +1,77 @@
+LABORATORY REPORT
+
+Lab Name: Quest Diagnostics
+Accession Number: LAB-2026-03-28-12345
+Physician: Dr. Sarah Johnson
+Patient Sex: Male
+Patient DOB: 1985-06-15
+Specimen Collection: 2026-03-28 08:30:00
+Final Report: 2026-03-28 14:45:00
+Report Status: Final
+Account: Health Plus Insurance
+
+================================================================================
+HORMONE PANEL
+================================================================================
+
+Estradiol: 28.5 pg/mL (10.0-40.0 pg/mL)
+Testosterone, Total: 850 ng/dL (250-1100 ng/dL) HIGH
+SHBG: 35 nmol/L (10-57 nmol/L)
+
+================================================================================
+COMPLETE BLOOD COUNT WITH DIFFERENTIAL
+================================================================================
+
+WBC: 7.2 x10^3/µL (4.0-11.0 x10^3/µL)
+RBC: 5.85 x10^6/µL (4.50-5.90 x10^6/µL) HIGH
+HGB: 17.2 g/dL (13.5-17.5 g/dL)
+HCT: 51.5 % (38.0-50.0 %) HIGH
+MCV: 88.0 fL (80.0-100.0 fL)
+MCH: 29.4 pg (27.0-33.0 pg)
+MCHC: 33.4 g/dL (32.0-36.0 g/dL)
+RDW: 13.2 % (11.5-14.5 %)
+PLT: 245 x10^3/µL (150-400 x10^3/µL)
+MPV: 10.5 fL (7.5-11.5 fL)
+NRBCs: 0.0 % (0.0-0.0 %)
+Absolute NRBCs: 0.00 x10^3/µL (0.00-0.00 x10^3/µL)
+
+Differential Percent:
+Neutrophils: 58 % (40-70 %)
+Lymphocytes: 32 % (20-40 %)
+Monocytes: 7 % (2-10 %)
+Eosinophils: 2 % (0-6 %)
+Basophils: 1 % (0-2 %)
+Immature Granulocytes: 0 % (0-1 %)
+
+Differential Absolute:
+Absolute Neutrophils: 4.18 x10^3/µL (2.00-7.00 x10^3/µL)
+Absolute Lymphocytes: 2.30 x10^3/µL (1.00-3.00 x10^3/µL)
+Absolute Monocytes: 0.50 x10^3/µL (0.20-1.00 x10^3/µL)
+Absolute Eosinophils: 0.14 x10^3/µL (0.00-0.50 x10^3/µL)
+Absolute Basophils: 0.07 x10^3/µL (0.00-0.20 x10^3/µL)
+Absolute Immature Granulocytes: 0.00 x10^3/µL (0.00-0.10 x10^3/µL)
+
+================================================================================
+COMPREHENSIVE METABOLIC PANEL
+================================================================================
+
+Sodium: 140 mmol/L (136-145 mmol/L)
+Potassium: 4.2 mmol/L (3.5-5.1 mmol/L)
+Chloride: 102 mmol/L (98-107 mmol/L)
+Carbon Dioxide: 25 mmol/L (22-30 mmol/L)
+Anion Gap: 13 mmol/L (8-16 mmol/L)
+Blood Urea Nitrogen: 18 mg/dL (7-25 mg/dL)
+Creatinine: 1.35 mg/dL (0.70-1.30 mg/dL) HIGH
+eGFRcr: 68 mL/min/1.73m2 (>60 mL/min/1.73m2)
+Calcium: 9.8 mg/dL (8.6-10.3 mg/dL)
+Glucose: 115 mg/dL (70-99 mg/dL) HIGH
+Protein, Total: 7.2 g/dL (6.0-8.3 g/dL)
+Albumin: 4.5 g/dL (3.5-5.5 g/dL)
+ALT: 28 U/L (7-56 U/L)
+Alkaline Phosphatase: 145 IU/L (40-130 IU/L) HIGH
+AST: 32 U/L (10-40 U/L)
+Bilirubin, Total: 0.8 mg/dL (0.2-1.2 mg/dL)
+
+================================================================================
+END OF REPORT
+================================================================================
