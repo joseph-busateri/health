@@ -15,7 +15,6 @@
     "noImplicitThis": false,
     "alwaysStrict": false,
     "moduleResolution": "node",
-    "ignoreDeprecations": "6.0",
     "noEmitOnError": false,
     "skipDefaultLibCheck": true
   },

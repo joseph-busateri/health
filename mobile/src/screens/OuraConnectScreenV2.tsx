@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useUser } from '../context/UserContext';
+import api, { appApi } from '../services/api';
 
 /**
  * Oura Connect Screen V2
@@ -49,6 +50,77 @@ interface SyncStats {
   lastSyncDate?: string;
 }
 
+interface OuraSessionSummary {
+  oura_session_id?: string;
+  session_date?: string;
+  start_time?: string;
+  end_time?: string;
+  session_type?: string;
+  mood?: string;
+  activity_state?: string;
+  heart_rate_average?: number;
+  temperature_deviation?: number;
+}
+
+interface OuraTagSummary {
+  oura_tag_id?: string;
+  tag_date?: string;
+  tag?: string;
+  timestamp?: string;
+  type?: string;
+  other_tag?: string;
+  acquisition_method?: string;
+}
+
+interface OuraSummaryPayload {
+  readiness?: {
+    readiness_score?: number;
+    sleep_balance?: number;
+    activity_balance?: number;
+    hrv_balance?: number;
+    resting_heart_rate?: number;
+    temperature_deviation?: number;
+    hrv_average?: number;
+  };
+  sleep?: {
+    sleep_date?: string;
+    total_sleep_duration?: number;
+    sleep_score?: number;
+    deep_sleep_duration?: number;
+    rem_sleep_duration?: number;
+    efficiency?: number;
+    breath_average?: number;
+    temperature_delta?: number;
+    hr_lowest?: number;
+    rmssd?: number;
+    hrv_average?: number;
+  };
+  activity?: {
+    activity_date?: string;
+    steps?: number;
+    total_calories?: number;
+    active_calories?: number;
+    score?: number;
+    metabolic_equivalent?: number;
+  };
+  spo2?: {
+    spo2_date?: string;
+    spo2_average?: number;
+    spo2_min?: number;
+    spo2_max?: number;
+  };
+  connection?: {
+    connection_status?: string;
+    auto_sync_enabled?: boolean;
+    last_sync_at?: string;
+    last_successful_sync_at?: string;
+    consecutive_failures?: number;
+    last_error_message?: string;
+  };
+  sessions?: OuraSessionSummary[];
+  tags?: OuraTagSummary[];
+}
+
 const OURA_CLIENT_ID = process.env.EXPO_PUBLIC_OURA_CLIENT_ID || '';
 const REDIRECT_URI = 'healthapp://oura-callback';
 const API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
@@ -62,6 +134,9 @@ export default function OuraConnectScreenV2() {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null);
   const [readinessData, setReadinessData] = useState<ReadinessData | null>(null);
   const [syncStats, setSyncStats] = useState<SyncStats | null>(null);
+  const [ouraSummary, setOuraSummary] = useState<OuraSummaryPayload | null>(null);
+  const [recentSessions, setRecentSessions] = useState<OuraSessionSummary[]>([]);
+  const [recentTags, setRecentTags] = useState<OuraTagSummary[]>([]);
   const [pollingInterval, setPollingIntervalState] = useState<NodeJS.Timeout | null>(null);
 
   // Validate userId before API calls
@@ -76,27 +151,52 @@ export default function OuraConnectScreenV2() {
     return true;
   };
 
-  // Load connection status from API
-  const loadConnectionStatus = useCallback(async () => {
+  // Load comprehensive summary (readiness, sleep, activity, SpO2)
+  const loadSummary = useCallback(async () => {
     if (!userId) return;
-    
-    setLoading(true);
+
     try {
-      const response = await fetch(`${API_URL}/devices/oura/${userId}/sync/stats?days=30`);
-      const data = await response.json();
-      
-      if (data.success && data.data) {
-        // Map sync stats to connection status
-        setConnectionStatus({
-          connected: data.data.total_syncs > 0,
-          autoSyncEnabled: true,
-          lastSyncDate: data.data.last_sync_date,
-          lastSuccessfulSyncDate: data.data.last_successful_sync_date,
-          consecutiveFailures: data.data.consecutive_failures || 0,
-          lastError: data.data.last_error_message,
-        });
+      const { data: payload } = await appApi.services.devices.oura.getSummary(userId);
+
+      if (payload?.success) {
+        const summaryData: OuraSummaryPayload = payload.data || {};
+        setOuraSummary(summaryData);
+        setRecentSessions(summaryData.sessions ?? []);
+        setRecentTags(summaryData.tags ?? []);
+
+        if (summaryData.connection) {
+          setConnectionStatus({
+            connected: summaryData.connection.connection_status === 'active',
+            autoSyncEnabled: summaryData.connection.auto_sync_enabled ?? true,
+            lastSyncDate: summaryData.connection.last_sync_at ?? undefined,
+            lastSuccessfulSyncDate: summaryData.connection.last_successful_sync_at ?? undefined,
+            consecutiveFailures: summaryData.connection.consecutive_failures ?? 0,
+            lastError: summaryData.connection.last_error_message ?? undefined,
+          });
+        } else {
+          setConnectionStatus({
+            connected: false,
+            autoSyncEnabled: true,
+            consecutiveFailures: 0,
+          });
+        }
+
+        if (summaryData.readiness) {
+          setReadinessData({
+            readinessScore: summaryData.readiness.readiness_score ?? 0,
+            sleepBalance: summaryData.readiness.sleep_balance ?? 0,
+            activityBalance: summaryData.readiness.activity_balance ?? 0,
+            hrvBalance: summaryData.readiness.hrv_balance ?? 0,
+            restingHeartRate: summaryData.readiness.resting_heart_rate ?? 0,
+          });
+        } else {
+          setReadinessData(null);
+        }
       } else {
-        // Not connected
+        setOuraSummary(null);
+        setReadinessData(null);
+        setRecentSessions([]);
+        setRecentTags([]);
         setConnectionStatus({
           connected: false,
           autoSyncEnabled: true,
@@ -104,36 +204,16 @@ export default function OuraConnectScreenV2() {
         });
       }
     } catch (error) {
-      console.error('Error loading connection status:', error);
+      console.error('Error loading Oura summary:', error);
+      setOuraSummary(null);
+      setReadinessData(null);
+      setRecentSessions([]);
+      setRecentTags([]);
       setConnectionStatus({
         connected: false,
         autoSyncEnabled: true,
         consecutiveFailures: 0,
       });
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
-
-  // Load readiness data from API
-  const loadReadinessData = useCallback(async () => {
-    if (!userId) return;
-    
-    try {
-      const response = await fetch(`${API_URL}/devices/oura/${userId}/readiness/latest`);
-      const data = await response.json();
-      
-      if (data.success && data.data) {
-        setReadinessData({
-          readinessScore: data.data.readiness_score || 0,
-          sleepBalance: data.data.sleep_balance || 0,
-          activityBalance: data.data.activity_balance || 0,
-          hrvBalance: data.data.hrv_balance || 0,
-          restingHeartRate: data.data.resting_heart_rate || 0,
-        });
-      }
-    } catch (error) {
-      console.error('Error loading readiness data:', error);
     }
   }, [userId]);
 
@@ -142,8 +222,7 @@ export default function OuraConnectScreenV2() {
     if (!userId) return;
     
     try {
-      const response = await fetch(`${API_URL}/devices/oura/${userId}/sync/stats?days=30`);
-      const data = await response.json();
+      const { data } = await appApi.services.devices.oura.getStats(userId, 30);
       
       if (data.success && data.data) {
         setSyncStats({
@@ -160,12 +239,18 @@ export default function OuraConnectScreenV2() {
 
   // Load all data
   const loadAllData = useCallback(async () => {
-    await Promise.all([
-      loadConnectionStatus(),
-      loadReadinessData(),
-      loadSyncStats(),
-    ]);
-  }, [loadConnectionStatus, loadReadinessData, loadSyncStats]);
+    if (!userId) {
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await Promise.all([loadSummary(), loadSyncStats()]);
+    } finally {
+      setLoading(false);
+    }
+  }, [userId, loadSummary, loadSyncStats]);
 
   // Setup OAuth callback listener
   useEffect(() => {
@@ -258,6 +343,12 @@ export default function OuraConnectScreenV2() {
         clearInterval(pollingInterval);
         setPollingIntervalState(null);
       }
+
+      if (!connectionStatus?.connected) {
+        setOuraSummary(null);
+        setRecentSessions([]);
+        setRecentTags([]);
+      }
     }
   }, [connectionStatus?.connected, userId, loadAllData, pollingInterval]);
 
@@ -307,12 +398,7 @@ export default function OuraConnectScreenV2() {
     
     setSyncing(true);
     try {
-      const response = await fetch(`${API_URL}/devices/oura/${userId}/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      
-      const data = await response.json();
+      const { data } = await appApi.services.devices.oura.sync(String(userId));
       
       if (data.success) {
         Alert.alert('Success', 'Data synced successfully!');
@@ -342,16 +428,14 @@ export default function OuraConnectScreenV2() {
           style: 'destructive',
           onPress: async () => {
             try {
-              const response = await fetch(`${API_URL}/devices/oura/${userId}/disconnect`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-              });
-              
-              const data = await response.json();
+              const { data } = await appApi.services.devices.oura.disconnect(String(userId));
               
               if (data.success) {
                 Alert.alert('Disconnected', 'Oura Ring has been disconnected.');
                 await loadAllData();
+                setOuraSummary(null);
+                setRecentSessions([]);
+                setRecentTags([]);
               } else {
                 throw new Error(data.error || 'Disconnect failed');
               }
@@ -559,6 +643,107 @@ export default function OuraConnectScreenV2() {
                       <Text style={styles.contributorLabel}>RHR (bpm)</Text>
                     </View>
                   </View>
+                </View>
+              </View>
+            )}
+
+            {/* Daily Summary */}
+            {ouraSummary && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Daily Summary</Text>
+                <View style={styles.summaryCard}>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Sleep Score</Text>
+                    <Text style={styles.summaryValue}>
+                      {ouraSummary.sleep?.sleep_score ?? readinessData?.readinessScore ?? '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Sleep Duration</Text>
+                    <Text style={styles.summaryValue}>
+                      {ouraSummary.sleep?.total_sleep_duration
+                        ? `${Math.round((ouraSummary.sleep.total_sleep_duration ?? 0) / 60)} hrs`
+                        : '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>SpO₂</Text>
+                    <Text style={styles.summaryValue}>
+                      {ouraSummary.spo2?.spo2_average ? `${ouraSummary.spo2.spo2_average}%` : '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Respiratory Rate</Text>
+                    <Text style={styles.summaryValue}>
+                      {ouraSummary.sleep?.breath_average
+                        ? `${ouraSummary.sleep.breath_average.toFixed(1)} brpm`
+                        : '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Temperature Δ</Text>
+                    <Text style={styles.summaryValue}>
+                      {ouraSummary.readiness?.temperature_deviation !== undefined
+                        ? `${ouraSummary.readiness.temperature_deviation?.toFixed(2)}°C`
+                        : '—'}
+                    </Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Activity Score</Text>
+                    <Text style={styles.summaryValue}>
+                      {ouraSummary.activity?.score ?? '—'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Recent Sessions */}
+            {recentSessions.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Recent Sessions</Text>
+                <View style={styles.inlineScroll}>
+                  {recentSessions.map((session) => (
+                    <View key={session.oura_session_id ?? session.start_time} style={styles.sessionCard}>
+                      <Text style={styles.sessionType}>{session.session_type ?? 'Session'}</Text>
+                      <Text style={styles.sessionDate}>
+                        {session.session_date
+                          ? new Date(session.session_date).toLocaleDateString()
+                          : '—'}
+                      </Text>
+                      {session.heart_rate_average ? (
+                        <Text style={styles.sessionMeta}>Avg HR: {session.heart_rate_average} bpm</Text>
+                      ) : null}
+                      {session.temperature_deviation ? (
+                        <Text style={styles.sessionMeta}>
+                          Temp Δ: {session.temperature_deviation?.toFixed(2)}°C
+                        </Text>
+                      ) : null}
+                      {session.mood ? (
+                        <Text style={styles.sessionMeta}>Mood: {session.mood}</Text>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
+
+            {/* Recent Tags */}
+            {recentTags.length > 0 && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Recent Tags</Text>
+                <View style={styles.inlineScroll}>
+                  {recentTags.map((tag) => (
+                    <View key={tag.oura_tag_id ?? tag.timestamp} style={styles.tagChip}>
+                      <Ionicons name="pricetag" size={16} color="#6366f1" />
+                      <Text style={styles.tagText}>{tag.tag ?? 'Tag'}</Text>
+                      {tag.timestamp && (
+                        <Text style={styles.tagDate}>
+                          {new Date(tag.timestamp).toLocaleDateString()}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
                 </View>
               </View>
             )}
@@ -918,6 +1103,80 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#111827',
+  },
+  summaryCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+    gap: 12,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: '#6b7280',
+  },
+  summaryValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  inlineScroll: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  sessionCard: {
+    flexBasis: '48%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  sessionType: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  sessionDate: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  sessionMeta: {
+    fontSize: 12,
+    color: '#374151',
+    marginTop: 4,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#eef2ff',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  tagText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#4338ca',
+  },
+  tagDate: {
+    fontSize: 11,
+    color: '#6b7280',
   },
   settingCard: {
     flexDirection: 'row',

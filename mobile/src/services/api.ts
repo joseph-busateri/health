@@ -138,6 +138,11 @@ export const healthApi = {
       getReadiness: (userId: string) => api.get(`/api/devices/oura/${userId}/readiness/latest`),
       getSleepTrend: (userId: string, days = 7) => 
         api.get(`/api/devices/oura/${userId}/sleep/trend?days=${days}`),
+      getSummary: (userId: string) => api.get(`/api/devices/oura/${userId}/summary/latest`),
+      getRecentSessions: (userId: string, limit = 10) => 
+        api.get(`/api/devices/oura/${userId}/sessions/recent?limit=${limit}`),
+      getRecentTags: (userId: string, limit = 10) => 
+        api.get(`/api/devices/oura/${userId}/tags/recent?limit=${limit}`),
     },
     appleWatch: {
       connect: (userId: string, data: any) => 
@@ -241,3 +246,35 @@ export const healthApi = {
 };
 
 export default api;
+export const appApi = {
+  ...api,
+  services: {
+    recovery: {
+      getScore: (userId: string, date?: string) => 
+        api.get(`/api/recovery/${userId}/score${date ? `?date=${date}` : ''}`),
+      getReadiness: (userId: string) => api.get(`/api/recovery/${userId}/readiness`),
+      getDeload: (userId: string) => api.get(`/api/recovery/${userId}/deload`),
+      getStrategies: (userId: string) => api.get(`/api/recovery/${userId}/strategies`),
+      logHRV: (userId: string, data: any) => api.post(`/api/recovery/${userId}/hrv`, data),
+      getHRVTrend: (userId: string, days = 30) => 
+        api.get(`/api/recovery/${userId}/hrv/trend?days=${days}`),
+    },
+    devices: {
+      oura: {
+        connect: (userId: string, data: any) => api.post(`/api/devices/oura/${userId}/connect`, data),
+        disconnect: (userId: string) => api.post(`/api/devices/oura/${userId}/disconnect`),
+        sync: (userId: string) => api.post(`/api/devices/oura/${userId}/sync`),
+        getStats: (userId: string, days = 30) => 
+          api.get(`/api/devices/oura/${userId}/sync/stats?days=${days}`),
+        getReadiness: (userId: string) => api.get(`/api/devices/oura/${userId}/readiness/latest`),
+        getSleepTrend: (userId: string, days = 7) => 
+          api.get(`/api/devices/oura/${userId}/sleep/trend?days=${days}`),
+        getSummary: (userId: string) => api.get(`/api/devices/oura/${userId}/summary/latest`),
+        getRecentSessions: (userId: string, limit = 10) => 
+          api.get(`/api/devices/oura/${userId}/sessions/recent?limit=${limit}`),
+        getRecentTags: (userId: string, limit = 10) => 
+          api.get(`/api/devices/oura/${userId}/tags/recent?limit=${limit}`),
+      },
+    },
+  },
+};

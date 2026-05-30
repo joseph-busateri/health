@@ -1,53 +1,17 @@
 // Oura Ring Automatic Sync Service
 // Handles automatic daily sync with AES-256 token encryption
 
-import crypto from 'crypto';
 import { supabase } from '../config/supabase';
 import { logger } from '../utils/logger';
-import { ouraApiClient, OuraTokens } from './ouraApiClient';
-
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'your-32-character-secret-key!!'; // Must be 32 characters for AES-256
-const ENCRYPTION_ALGORITHM = 'aes-256-cbc';
+import {
+  ouraApiClient,
+  OuraSpo2Data,
+  OuraTag,
+  OuraSession,
+} from './ouraApiClient';
+import { ouraAuthService } from './ouraAuthService';
 
 export class OuraSyncService {
-  
-  /**
-   * Encrypt text using AES-256-CBC
-   */
-  private encrypt(text: string): { encrypted: string; iv: string } {
-    const iv = crypto.randomBytes(16);
-    const cipher = crypto.createCipheriv(
-      ENCRYPTION_ALGORITHM,
-      Buffer.from(ENCRYPTION_KEY),
-      iv
-    );
-
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-
-    return {
-      encrypted,
-      iv: iv.toString('hex'),
-    };
-  }
-
-  /**
-   * Decrypt text using AES-256-CBC
-   */
-  private decrypt(encrypted: string, ivHex: string): string {
-    const iv = Buffer.from(ivHex, 'hex');
-    const decipher = crypto.createDecipheriv(
-      ENCRYPTION_ALGORITHM,
-      Buffer.from(ENCRYPTION_KEY),
-      iv
-    );
-
-    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
-    decrypted += decipher.final('utf8');
-
-    return decrypted;
-  }
-
   /**
    * Connect Oura account using OAuth code
    */
@@ -61,30 +25,13 @@ export class OuraSyncService {
       // Get personal info
       const personalInfo = await ouraApiClient.getPersonalInfo();
 
-      // Encrypt tokens
-      const accessTokenEncrypted = this.encrypt(tokens.accessToken);
-      const refreshTokenEncrypted = tokens.refreshToken 
-        ? this.encrypt(tokens.refreshToken)
-        : null;
-
-      // Save connection
-      const { error } = await supabase
-        .from('oura_connections')
-        .upsert({
-          user_id: userId,
-          access_token_encrypted: accessTokenEncrypted.encrypted,
-          refresh_token_encrypted: refreshTokenEncrypted?.encrypted,
-          token_expires_at: tokens.expiresAt.toISOString(),
-          encryption_iv: accessTokenEncrypted.iv,
-          connection_status: 'active',
-          oura_user_id: personalInfo.id,
-          email: personalInfo.email,
-          auto_sync_enabled: true,
-        }, {
-          onConflict: 'user_id',
-        });
-
-      if (error) throw error;
+      await ouraAuthService.upsertConnection(userId, tokens, {
+        ouraUserId: personalInfo.id,
+        email: personalInfo.email,
+        ringModel: personalInfo?.body?._imported?.ring_model,
+        ringSize: personalInfo?.body?._imported?.ring_size,
+        ringColor: personalInfo?.body?._imported?.ring_color,
+      });
 
       logger.info('Oura account connected successfully', { userId });
 
@@ -101,15 +48,7 @@ export class OuraSyncService {
    */
   async disconnectAccount(userId: string): Promise<void> {
     try {
-      const { error } = await supabase
-        .from('oura_connections')
-        .update({
-          connection_status: 'disconnected',
-          auto_sync_enabled: false,
-        })
-        .eq('user_id', userId);
-
-      if (error) throw error;
+      await ouraAuthService.markDisconnected(userId);
 
       logger.info('Oura account disconnected', { userId });
     } catch (error) {
@@ -165,13 +104,10 @@ export class OuraSyncService {
       await supabase.rpc('start_oura_sync_job', { p_job_id: jobId });
 
       // Get connection
-      const { data: connection, error: connError } = await supabase
-        .from('oura_connections')
-        .select('*')
-        .eq('id', connectionId)
-        .single();
-
-      if (connError) throw connError;
+      const connection = await ouraAuthService.getConnectionById(connectionId);
+      if (!connection) {
+        throw new Error(`Oura connection ${connectionId} not found`);
+      }
 
       // Sync data
       const recordsSynced = await this.syncData(connection, userId);
@@ -201,31 +137,22 @@ export class OuraSyncService {
   /**
    * Sync data from Oura API
    */
-  async syncData(connection: any, userId: string): Promise<number> {
+  async syncData(connection: { id: string; accessToken: string; refreshToken?: string | null; tokenExpiresAt?: Date | null }, userId: string): Promise<number> {
     const syncStartTime = new Date();
     let totalRecordsSynced = 0;
 
     try {
-      // Decrypt tokens
-      const accessToken = this.decrypt(
-        connection.access_token_encrypted,
-        connection.encryption_iv
-      );
-      const refreshToken = connection.refresh_token_encrypted
-        ? this.decrypt(connection.refresh_token_encrypted, connection.encryption_iv)
-        : null;
-
       // Set tokens in API client
       ouraApiClient.setTokens({
-        accessToken,
-        refreshToken: refreshToken || undefined,
-        expiresAt: new Date(connection.token_expires_at),
+        accessToken: connection.accessToken,
+        refreshToken: connection.refreshToken || undefined,
+        expiresAt: connection.tokenExpiresAt || new Date(),
       });
 
       // Determine date range
       const endDate = new Date().toISOString().split('T')[0];
-      const startDate = connection.last_sync_date
-        ? new Date(new Date(connection.last_sync_date).getTime() - 7 * 24 * 60 * 60 * 1000)
+      const startDate = connection.tokenExpiresAt
+        ? new Date(new Date(connection.tokenExpiresAt).getTime() - 7 * 24 * 60 * 60 * 1000)
             .toISOString()
             .split('T')[0]
         : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
@@ -252,6 +179,21 @@ export class OuraSyncService {
       const workoutsSynced = await this.saveWorkouts(userId, workouts);
       totalRecordsSynced += workoutsSynced;
 
+      // Sync SpO2
+      const spo2Data = await ouraApiClient.getSpo2Data(startDate, endDate);
+      const spo2Synced = await this.saveSpo2Data(userId, spo2Data);
+      totalRecordsSynced += spo2Synced;
+
+      // Sync tags
+      const tags = await ouraApiClient.getTags(startDate, endDate);
+      const tagsSynced = await this.saveTags(userId, tags);
+      totalRecordsSynced += tagsSynced;
+
+      // Sync sessions
+      const sessions = await ouraApiClient.getSessions(startDate, endDate);
+      const sessionsSynced = await this.saveSessions(userId, sessions);
+      totalRecordsSynced += sessionsSynced;
+
       // Record sync history
       const syncDuration = Math.floor((Date.now() - syncStartTime.getTime()) / 1000);
       await this.recordSyncHistory({
@@ -267,9 +209,17 @@ export class OuraSyncService {
         readinessRecordsSynced: readinessSynced,
         activityRecordsSynced: activitySynced,
         workoutsSynced: workoutsSynced,
+        spo2RecordsSynced: spo2Synced,
+        tagsSynced,
+        sessionsSynced,
         totalRecordsSynced,
         triggeredBy: 'cron',
       });
+
+      const refreshedTokens = ouraApiClient.getActiveTokens();
+      if (refreshedTokens) {
+        await ouraAuthService.persistTokens(connection.id, refreshedTokens);
+      }
 
       logger.info('Oura data synced successfully', { userId, totalRecordsSynced });
 
@@ -300,14 +250,10 @@ export class OuraSyncService {
    */
   async syncUser(userId: string, triggeredBy: string = 'manual'): Promise<void> {
     try {
-      const { data: connection, error } = await supabase
-        .from('oura_connections')
-        .select('*')
-        .eq('user_id', userId)
-        .eq('connection_status', 'active')
-        .single();
-
-      if (error) throw error;
+      const connection = await ouraAuthService.getActiveConnectionByUserId(userId);
+      if (!connection) {
+        throw new Error('No active Oura connection found for user');
+      }
 
       await this.syncData(connection, userId);
     } catch (error) {
@@ -354,6 +300,7 @@ export class OuraSyncService {
         temperature_delta: session.temperature_delta,
         temperature_trend_deviation: session.temperature_trend_deviation,
         sleep_type: session.type,
+        rmssd: session.rmssd ?? session.average_hrv,
       }));
 
       const { error } = await supabase
@@ -393,6 +340,7 @@ export class OuraSyncService {
         recovery_index: data.contributors?.recovery_index,
         resting_heart_rate: data.contributors?.resting_heart_rate,
         hrv_balance: data.contributors?.hrv_balance,
+        hrv_average: data.score_details?.hrv_balance ?? data.contributors?.hrv_balance,
       }));
 
       const { error } = await supabase
@@ -437,6 +385,7 @@ export class OuraSyncService {
         met_daily_targets: data.met_daily_targets,
         inactivity_alerts: data.inactivity_alerts,
         equivalent_walking_distance: data.equivalent_walking_distance,
+        metabolic_equivalent: data.met_minutes,
       }));
 
       const { error } = await supabase
@@ -492,6 +441,98 @@ export class OuraSyncService {
     }
   }
 
+  private async saveSpo2Data(userId: string, spo2Data: OuraSpo2Data[]): Promise<number> {
+    if (spo2Data.length === 0) return 0;
+
+    try {
+      const records = spo2Data.map((spo2) => ({
+        user_id: userId,
+        oura_spo2_id: spo2.id,
+        spo2_date: spo2.day,
+        spo2_average: spo2.spo2_average,
+        spo2_min: spo2.spo2_min,
+        spo2_max: spo2.spo2_max,
+      }));
+
+      const { error } = await supabase
+        .from('oura_spo2_data')
+        .upsert(records, { onConflict: 'oura_spo2_id' });
+
+      if (error) throw error;
+
+      logger.info('SpO2 records saved', { count: records.length, userId });
+
+      return records.length;
+    } catch (error) {
+      logger.error('Error saving SpO2 data', { error, userId });
+      throw error;
+    }
+  }
+
+  private async saveTags(userId: string, tags: OuraTag[]): Promise<number> {
+    if (tags.length === 0) return 0;
+
+    try {
+      const records = tags.map((tag) => ({
+        user_id: userId,
+        oura_tag_id: tag.id,
+        tag_date: tag.day,
+        tag: tag.tag,
+        timestamp: tag.timestamp,
+        type: tag.type,
+        other_tag: tag.other_tag,
+        acquisition_method: tag.acquisition_method,
+      }));
+
+      const { error } = await supabase
+        .from('oura_tags')
+        .upsert(records, { onConflict: 'oura_tag_id' });
+
+      if (error) throw error;
+
+      logger.info('Oura tags saved', { count: records.length, userId });
+
+      return records.length;
+    } catch (error) {
+      logger.error('Error saving Oura tags', { error, userId });
+      throw error;
+    }
+  }
+
+  private async saveSessions(userId: string, sessions: OuraSession[]): Promise<number> {
+    if (sessions.length === 0) return 0;
+
+    try {
+      const records = sessions.map((session) => ({
+        user_id: userId,
+        oura_session_id: session.id,
+        session_date: session.day,
+        start_time: session.start_datetime,
+        end_time: session.end_datetime,
+        session_type: session.type,
+        mood: session.mood,
+        activity_state: session.activity_state,
+        heart_rate_average: session.heart_rate_average,
+        heart_rate_peak: session.heart_rate_peak,
+        heart_rate_min: session.heart_rate_min,
+        temperature_deviation: session.temperature_deviation,
+      }));
+
+      const { error } = await supabase
+        .from('oura_sessions')
+        .upsert(records, { onConflict: 'oura_session_id' });
+
+      if (error) throw error;
+
+      logger.info('Oura sessions saved', { count: records.length, userId });
+
+      return records.length;
+    } catch (error) {
+      logger.error('Error saving Oura sessions', { error, userId });
+      throw error;
+    }
+  }
+
   /**
    * Record sync history
    */
@@ -510,6 +551,9 @@ export class OuraSyncService {
         readiness_records_synced: data.readinessRecordsSynced || 0,
         activity_records_synced: data.activityRecordsSynced || 0,
         workouts_synced: data.workoutsSynced || 0,
+        spo2_records_synced: data.spo2RecordsSynced || 0,
+        tags_synced: data.tagsSynced || 0,
+        sessions_synced: data.sessionsSynced || 0,
         total_records_synced: data.totalRecordsSynced || 0,
         error_message: data.errorMessage,
         triggered_by: data.triggeredBy,
@@ -573,6 +617,114 @@ export class OuraSyncService {
       return data || [];
     } catch (error) {
       logger.error('Error getting sleep trend', { error, userId });
+      throw error;
+    }
+  }
+
+  /**
+   * Build latest Oura summary containing readiness, sleep, activity, SpO2, connection status
+   */
+  async getLatestSummary(userId: string): Promise<any> {
+    try {
+      const [readiness, sleep, activity, spo2, connection, sessions, tags] = await Promise.all([
+        supabase
+          .from('oura_readiness_data')
+          .select('*')
+          .eq('user_id', userId)
+          .order('readiness_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('oura_sleep_sessions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('sleep_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('oura_activity_data')
+          .select('*')
+          .eq('user_id', userId)
+          .order('activity_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('oura_spo2_data')
+          .select('*')
+          .eq('user_id', userId)
+          .order('spo2_date', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        supabase
+          .from('oura_connections')
+          .select(
+            'connection_status, auto_sync_enabled, last_sync_at, last_successful_sync_at, consecutive_failures, last_error_message'
+          )
+          .eq('user_id', userId)
+          .maybeSingle(),
+        supabase
+          .from('oura_sessions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('session_date', { ascending: false })
+          .order('start_time', { ascending: false })
+          .limit(5),
+        supabase
+          .from('oura_tags')
+          .select('*')
+          .eq('user_id', userId)
+          .order('timestamp', { ascending: false })
+          .limit(5),
+      ]);
+
+      return {
+        readiness: readiness.data ?? null,
+        sleep: sleep.data ?? null,
+        activity: activity.data ?? null,
+        spo2: spo2.data ?? null,
+        connection: connection?.data ?? null,
+        sessions: sessions.data ?? [],
+        tags: tags.data ?? [],
+      };
+    } catch (error) {
+      logger.error('Error building latest Oura summary', { error, userId });
+      throw error;
+    }
+  }
+
+  async getRecentSessions(userId: string, limit: number = 10): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('oura_sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('session_date', { ascending: false })
+        .order('start_time', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+
+      return data || [];
+    } catch (error) {
+      logger.error('Error getting recent Oura sessions', { error, userId, limit });
+      throw error;
+    }
+  }
+
+  async getRecentTags(userId: string, limit: number = 10): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from('oura_tags')
+        .select('*')
+        .eq('user_id', userId)
+        .order('timestamp', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+
+      return data || [];
+    } catch (error) {
+      logger.error('Error getting recent Oura tags', { error, userId, limit });
       throw error;
     }
   }

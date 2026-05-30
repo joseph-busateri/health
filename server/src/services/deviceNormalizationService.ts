@@ -165,7 +165,7 @@ export class DeviceNormalizationService {
   /**
    * Normalize Oura Ring data
    */
-  normalizeOuraData(sleepData: any, readinessData: any, activityData: any, userId: string, date: string): {
+  normalizeOuraData(sleepData: any, readinessData: any, activityData: any, spo2Data: any, userId: string, date: string): {
     sleep?: SleepSignals;
     recovery?: RecoverySignals;
     activity?: ActivitySignals;
@@ -201,6 +201,7 @@ export class DeviceNormalizationService {
         overnightRespiratoryRate: sleepData.breath_average,
         readinessScore: readinessData?.score,
         temperatureTrend: sleepData.temperature_delta,
+        temperatureDeviation: sleepData.temperature_delta,
         source: 'oura_ring',
         sourceMetadata: metadata,
       };
@@ -213,6 +214,7 @@ export class DeviceNormalizationService {
         temperatureTrend: readinessData.temperature_deviation,
         recoveryIndex: readinessData.score,
         activityBalance: readinessData.activity_balance,
+        temperatureDeviation: readinessData.temperature_deviation,
         source: 'oura_ring',
         sourceMetadata: metadata,
       };
@@ -235,10 +237,15 @@ export class DeviceNormalizationService {
     }
 
     // Cardiovascular signals from Oura
-    if (readinessData || sleepData) {
+    if (readinessData || sleepData || spo2Data) {
       result.cardiovascular = {
         restingHeartRate: readinessData?.resting_heart_rate || sleepData?.hr_lowest,
         hrv: readinessData?.hrv_average || sleepData?.rmssd,
+        respiratoryRate: sleepData?.breath_average,
+        bloodOxygenPercent: spo2Data?.spo2_average,
+        bloodOxygenMin: spo2Data?.spo2_min,
+        bloodOxygenMax: spo2Data?.spo2_max,
+        temperatureDeviation: readinessData?.temperature_deviation ?? sleepData?.temperature_delta,
         source: 'oura_ring',
         sourceMetadata: metadata,
       };
@@ -409,7 +416,14 @@ export class DeviceNormalizationService {
             break;
 
           case 'oura_ring':
-            const ouraData = this.normalizeOuraData(record.sleep, record.readiness, record.activity, userId, date);
+            const ouraData = this.normalizeOuraData(
+              record.sleep,
+              record.readiness,
+              record.activity,
+              record.spo2,
+              userId,
+              date
+            );
             normalized = {
               userId,
               metricDate: date,

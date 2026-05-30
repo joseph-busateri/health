@@ -90,11 +90,44 @@ export interface OuraWorkout {
   source: string;
 }
 
+export interface OuraSpo2Data {
+  id: string;
+  day: string;
+  spo2_average: number;
+  spo2_min: number;
+  spo2_max: number;
+}
+
+export interface OuraTag {
+  id: string;
+  day: string;
+  tag: string;
+  timestamp: string;
+  type?: string;
+  other_tag?: string;
+  acquisition_method?: string;
+}
+
+export interface OuraSession {
+  id: string;
+  day: string;
+  start_datetime: string;
+  end_datetime: string;
+  type: string;
+  mood?: string;
+  activity_state?: string;
+  heart_rate_average?: number;
+  heart_rate_peak?: number;
+  heart_rate_min?: number;
+  temperature_deviation?: number;
+}
+
 export class OuraApiClient {
   private axiosInstance: AxiosInstance;
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
   private tokenExpiresAt: Date | null = null;
+  private currentTokens: OuraTokens | null = null;
 
   constructor() {
     this.axiosInstance = axios.create({
@@ -154,6 +187,21 @@ export class OuraApiClient {
     this.accessToken = tokens.accessToken;
     this.refreshToken = tokens.refreshToken || null;
     this.tokenExpiresAt = tokens.expiresAt;
+    this.currentTokens = {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      expiresAt: tokens.expiresAt,
+    };
+  }
+
+  getActiveTokens(): OuraTokens | null {
+    return this.currentTokens
+      ? {
+          accessToken: this.currentTokens.accessToken,
+          refreshToken: this.currentTokens.refreshToken,
+          expiresAt: this.currentTokens.expiresAt,
+        }
+      : null;
   }
 
   /**
@@ -328,6 +376,72 @@ export class OuraApiClient {
       return response.data.data || [];
     } catch (error) {
       logger.error('Error getting workouts', { error, startDate, endDate });
+      throw error;
+    }
+  }
+
+  async getSpo2Data(startDate: string, endDate: string): Promise<OuraSpo2Data[]> {
+    try {
+      const response = await this.axiosInstance.get('/usercollection/daily_spo2', {
+        params: {
+          start_date: startDate,
+          end_date: endDate,
+        },
+      });
+
+      logger.info('Oura SpO2 data retrieved', {
+        count: response.data.data?.length || 0,
+        startDate,
+        endDate,
+      });
+
+      return response.data.data || [];
+    } catch (error) {
+      logger.error('Error getting Oura SpO2 data', { error, startDate, endDate });
+      throw error;
+    }
+  }
+
+  async getTags(startDate: string, endDate: string): Promise<OuraTag[]> {
+    try {
+      const response = await this.axiosInstance.get('/usercollection/tag', {
+        params: {
+          start_date: startDate,
+          end_date: endDate,
+        },
+      });
+
+      logger.info('Oura tags retrieved', {
+        count: response.data.data?.length || 0,
+        startDate,
+        endDate,
+      });
+
+      return response.data.data || [];
+    } catch (error) {
+      logger.error('Error getting Oura tags', { error, startDate, endDate });
+      throw error;
+    }
+  }
+
+  async getSessions(startDate: string, endDate: string): Promise<OuraSession[]> {
+    try {
+      const response = await this.axiosInstance.get('/usercollection/session', {
+        params: {
+          start_date: startDate,
+          end_date: endDate,
+        },
+      });
+
+      logger.info('Oura sessions retrieved', {
+        count: response.data.data?.length || 0,
+        startDate,
+        endDate,
+      });
+
+      return response.data.data || [];
+    } catch (error) {
+      logger.error('Error getting Oura sessions', { error, startDate, endDate });
       throw error;
     }
   }

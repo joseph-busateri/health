@@ -330,6 +330,11 @@ export interface DeviceDailySummary {
   averageHeartRate?: number;
   hrv?: number;
   vo2Max?: number;
+  spo2Average?: number;
+  spo2Min?: number;
+  spo2Max?: number;
+  respiratoryRate?: number;
+  temperatureDeviation?: number;
   
   // Recovery Summary
   readinessScore?: number;

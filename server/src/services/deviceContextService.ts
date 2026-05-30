@@ -169,18 +169,49 @@ export class DeviceContextService {
     const ouraData = await this.getOuraData(userId, date);
     if (ouraData) {
       // Oura sleep takes priority if Sleep Number not available
-      if (!summary.sleepDurationMinutes && ouraData.sleep) {
-        summary.sleepDurationMinutes = ouraData.sleep.total_sleep_duration;
-        summary.sleepScore = ouraData.sleep.score;
-        summary.deepSleepMinutes = ouraData.sleep.deep_sleep_duration;
-        summary.dataCompleteness.hasSleep = true;
-        summary.primarySleepSource = 'oura_ring';
+      if (ouraData.sleep) {
+        if (!summary.sleepDurationMinutes) {
+          summary.sleepDurationMinutes = ouraData.sleep.total_sleep_duration;
+          summary.sleepScore = ouraData.sleep.score;
+          summary.deepSleepMinutes = ouraData.sleep.deep_sleep_duration;
+          summary.remSleepMinutes = ouraData.sleep.rem_sleep_duration ?? summary.remSleepMinutes;
+          summary.dataCompleteness.hasSleep = true;
+          summary.primarySleepSource = 'oura_ring';
+        }
+
+        if (ouraData.sleep.breath_average && !summary.respiratoryRate) {
+          summary.respiratoryRate = Number(ouraData.sleep.breath_average);
+        }
+
+        if (ouraData.sleep.temperature_delta !== null && ouraData.sleep.temperature_delta !== undefined && summary.temperatureDeviation === undefined) {
+          summary.temperatureDeviation = Number(ouraData.sleep.temperature_delta);
+        }
+
+        if (!summary.restingHeartRate && ouraData.sleep.hr_lowest) {
+          summary.restingHeartRate = Number(ouraData.sleep.hr_lowest);
+        }
+
+        if (!summary.hrv && (ouraData.sleep.rmssd || ouraData.sleep.hrv_average)) {
+          summary.hrv = Number(ouraData.sleep.rmssd ?? ouraData.sleep.hrv_average);
+        }
       }
       
       // Oura readiness
       if (ouraData.readiness) {
         summary.readinessScore = ouraData.readiness.score;
         summary.dataCompleteness.hasRecovery = true;
+
+        if (ouraData.readiness.resting_heart_rate && (!summary.restingHeartRate || summary.primaryCardioSource !== 'oura_ring')) {
+          summary.restingHeartRate = Number(ouraData.readiness.resting_heart_rate);
+        }
+
+        if (!summary.hrv && ouraData.readiness.hrv_average) {
+          summary.hrv = Number(ouraData.readiness.hrv_average);
+        }
+
+        if (ouraData.readiness.temperature_deviation !== null && ouraData.readiness.temperature_deviation !== undefined) {
+          summary.temperatureDeviation = Number(ouraData.readiness.temperature_deviation);
+        }
       }
       
       // Oura activity (supplement Apple Watch if not available)
@@ -192,15 +223,36 @@ export class DeviceContextService {
         summary.primaryActivitySource = 'oura_ring';
       }
       
-      // Oura HRV takes priority
-      if (ouraData.readiness?.hrv_average) {
-        summary.hrv = ouraData.readiness.hrv_average;
-        summary.restingHeartRate = ouraData.readiness.resting_heart_rate;
+      // Ensure cardiovascular completeness when Oura provides detailed metrics
+      if (
+        ouraData.readiness?.hrv_average ||
+        ouraData.sleep?.rmssd ||
+        ouraData.sleep?.hrv_average ||
+        ouraData.readiness?.resting_heart_rate ||
+        ouraData.sleep?.hr_lowest
+      ) {
+        if (!summary.hrv) {
+          const hrvCandidate = ouraData.readiness?.hrv_average ?? ouraData.sleep?.rmssd ?? ouraData.sleep?.hrv_average;
+          if (hrvCandidate) {
+            summary.hrv = Number(hrvCandidate);
+          }
+        }
+
+        if (ouraData.readiness?.resting_heart_rate && (!summary.restingHeartRate || summary.primaryCardioSource !== 'oura_ring')) {
+          summary.restingHeartRate = Number(ouraData.readiness.resting_heart_rate);
+        }
+
         summary.dataCompleteness.hasCardiovascular = true;
         summary.primaryCardioSource = 'oura_ring';
       }
-      
-      if (!summary.activeSources.includes('oura_ring')) {
+
+      if (ouraData.spo2 && (ouraData.spo2.spo2_average || ouraData.spo2.spo2_min || ouraData.spo2.spo2_max)) {
+        summary.spo2Average = ouraData.spo2.spo2_average ?? summary.spo2Average;
+        summary.spo2Min = ouraData.spo2.spo2_min ?? summary.spo2Min;
+        summary.spo2Max = ouraData.spo2.spo2_max ?? summary.spo2Max;
+      }
+
+      if (!summary.activeSources.includes('oura_ring') && (ouraData.sleep || ouraData.readiness || ouraData.activity || ouraData.spo2)) {
         summary.activeSources.push('oura_ring');
       }
     }
@@ -278,16 +330,38 @@ export class DeviceContextService {
    */
   private async getOuraData(userId: string, date: string): Promise<any> {
     try {
-      const [sleepData, readinessData, activityData] = await Promise.all([
-        supabase.from('oura_sleep_data').select('*').eq('user_id', userId).eq('summary_date', date).single(),
-        supabase.from('oura_readiness_data').select('*').eq('user_id', userId).eq('summary_date', date).single(),
-        supabase.from('oura_activity_data').select('*').eq('user_id', userId).eq('summary_date', date).single(),
+      const [sleepData, readinessData, activityData, spo2Data] = await Promise.all([
+        supabase
+          .from('oura_sleep_sessions')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('sleep_date', date)
+          .maybeSingle(),
+        supabase
+          .from('oura_readiness_data')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('readiness_date', date)
+          .maybeSingle(),
+        supabase
+          .from('oura_activity_data')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('activity_date', date)
+          .maybeSingle(),
+        supabase
+          .from('oura_spo2_data')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('spo2_date', date)
+          .maybeSingle(),
       ]);
-      
+
       return {
-        sleep: sleepData.data,
-        readiness: readinessData.data,
-        activity: activityData.data,
+        sleep: sleepData.data ?? null,
+        readiness: readinessData.data ?? null,
+        activity: activityData.data ?? null,
+        spo2: spo2Data.data ?? null,
       };
     } catch {
       return null;
