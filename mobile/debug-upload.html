@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Upload</title>
+</head>
+<body>
+    <h1>Debug Upload Test</h1>
+    <button onclick="testUpload()">Run Debug Upload</button>
+    <div id="output"></div>
+    
+    <script>
+        const testUpload = async () => {
+            console.log('🧪 Starting debug upload...');
+            const output = document.getElementById('output');
+            output.innerHTML = '<div>Starting debug...</div>';
+            
+            try {
+                // Create a test file
+                const blob = new Blob(['test content'], { type: 'text/plain' });
+                const file = new File([blob], 'test.txt', { type: 'text/plain' });
+                
+                console.log('📁 Test file created:', file);
+                output.innerHTML += '<div>✅ File created</div>';
+                
+                // Create FormData
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('user_id', 'debug-user');
+                formData.append('file_name', 'test.txt');
+                formData.append('document_type', 'lab_panel');
+                formData.append('source', 'manual_upload');
+                formData.append('notes', 'debug test');
+                
+                console.log('📋 FormData contents:');
+                for (let [key, value] of formData.entries()) {
+                    console.log(`  ${key}:`, value);
+                }
+                output.innerHTML += '<div>✅ FormData prepared</div>';
+                
+                console.log('🚀 Sending request...');
+                output.innerHTML += '<div>🚀 Sending request...</div>';
+                
+                // Add timeout to prevent hanging
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+                
+                const response = await fetch('http://localhost:3000/bloodwork/upload', {
+                    method: 'POST',
+                    body: formData,
+                    signal: controller.signal,
+                });
+                
+                clearTimeout(timeoutId);
+                
+                console.log('📥 Response status:', response.status);
+                console.log('📄 Response headers:', Object.fromEntries(response.headers.entries()));
+                
+                const data = await response.json();
+                console.log('📋 Response data:', data);
+                
+                output.innerHTML += `<div>📥 Response: ${response.status}</div>`;
+                output.innerHTML += `<div>📋 Data: ${JSON.stringify(data, null, 2)}</div>`;
+                
+                if (response.ok) {
+                    console.log('✅ Upload successful!');
+                    output.innerHTML += '<div style="color: green; font-size: 18px; font-weight: bold;">🎉 Upload Successful!</div>';
+                    output.innerHTML += '<div style="color: green;">Your bloodwork document has been uploaded and is ready for AI analysis!</div>';
+                    output.innerHTML += '<div style="color: blue;">📋 Document ID: ' + data.data.document.id + '</div>';
+                    output.innerHTML += '<div style="color: blue;">📁 File: ' + data.data.document.file_name + '</div>';
+                } else {
+                    console.log('❌ Upload failed:', data.error);
+                    output.innerHTML += `<div style="color: red;">❌ Upload failed: ${data.error}</div>`;
+                }
+                
+            } catch (error) {
+                console.error('💥 Upload error:', error);
+                output.innerHTML += `<div style="color: red;">💥 Error: ${error.message}</div>`;
+                
+                // Add more detailed error info
+                if (error.name === 'AbortError') {
+                    output.innerHTML += '<div style="color: orange;">⏰ Request timed out (10 seconds)</div>';
+                } else if (error.message === 'Failed to fetch') {
+                    output.innerHTML += '<div style="color: orange;">🌐 Network/CORS error - check server connection</div>';
+                    output.innerHTML += '<div>💡 Try: 1) Server is running on port 3000, 2) No firewall blocking, 3) Browser allows localhost</div>';
+                } else {
+                    output.innerHTML += `<div style="color: red;">🔍 Full error: ${error.toString()}</div>`;
+                }
+            }
+        };
+    </script>
+</body>
+</html>

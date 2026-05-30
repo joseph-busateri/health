@@ -93,7 +93,7 @@ export const getDailyLogs = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ error: 'user_id is required' });
     }
 
-    const logs = await getDailyLogsForUser(userId, 1);
+    const logs = await getDailyLogsForUser(Array.isArray(userId) ? userId[0] : userId, 1);
     const latestLog = logs[0] ?? null;
     res.json({ log: latestLog });
   } catch (error) {
@@ -109,7 +109,7 @@ export const getDashboard = async (req: Request, res: Response, next: NextFuncti
       return res.status(400).json({ error: 'user_id is required' });
     }
 
-    const summary = await getDashboardSummary(userId);
+    const summary = await getDashboardSummary(Array.isArray(userId) ? userId[0] : userId);
     res.json(summary);
   } catch (error) {
     next(error);

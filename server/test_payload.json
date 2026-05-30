@@ -1,0 +1,65 @@
+{
+  "userId": "validation-test-user",
+  "documentType": "manual_entry",
+  "notes": "Validation test baseline document",
+  "manualProfileData": {
+    "demographics": {
+      "birthDate": "1990-01-15",
+      "height": 180,
+      "weightStartingReference": 85,
+      "gender": "male",
+      "activityLevel": "moderately_active"
+    },
+    "trainingContext": {
+      "workoutFrequency": "4-5 times per week",
+      "trainingStyle": ["strength training", "cardio", "yoga"],
+      "athleticBackground": "Former collegiate athlete",
+      "injuryHistory": "Minor knee sprain in 2021"
+    },
+    "lifestyleContext": {
+      "sleepHabits": "7-8 hours nightly, consistent schedule",
+      "travelFrequency": "Monthly for work",
+      "stressContext": "Moderate work stress, good stress management"
+    },
+    "overallHealthGoals": {
+      "bodyFatGoal": "12-15%",
+      "weightGoal": "82kg",
+      "a1cGoal": "5.4%",
+      "restingHeartRateGoal": 60,
+      "bloodPressureSystolicGoal": 120,
+      "bloodPressureDiastolicGoal": 80,
+      "sleepHoursGoal": 8
+    },
+    "sexualPerformanceGoals": {
+      "erectileFunctionGoal": "Optimal performance",
+      "libidoGoal": "High healthy libido"
+    },
+    "workoutGoals": {
+      "chestGoal": "42 inches",
+      "bicepLeftGoal": "16 inches",
+      "bicepRightGoal": "16 inches",
+      "forearmLeftGoal": "13 inches",
+      "forearmRightGoal": "13 inches",
+      "neckGoal": "16 inches",
+      "shouldersGoal": "50 inches",
+      "benchPressGoal": "315 lbs",
+      "squatGoal": "405 lbs",
+      "pushupsGoal": "50 consecutive",
+      "gripStrengthLeftGoal": "120 lbs",
+      "gripStrengthRightGoal": "120 lbs"
+    },
+    "secondaryGoals": {
+      "dailyWaterGoal": 4000,
+      "dailyProteinGoal": 180,
+      "dailyCaloriesGoal": 2800,
+      "longevityGoalNotes": "Focus on mobility and cardiovascular health"
+    },
+    "priorityOrder": {
+      "priority1": "Strength and muscle development",
+      "priority2": "Cardiovascular health",
+      "priority3": "Body composition",
+      "priority4": "Recovery and sleep",
+      "priority5": "Longevity and injury prevention"
+    }
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "userId": "550e8400-e29b-41d4-a716-446655440000",
+  "documentType": "manual_entry",
+  "notes": "Test supplement stack upload for validation",
+  "manualSupplementData": {
+    "stackName": "Daily Health & Performance Stack",
+    "stackNotes": "Comprehensive supplement regimen for overall health, cognitive performance, and fitness goals. Focus on high-quality, evidence-based supplements with proper timing and dosing.",
+    "timingNotes": "Take vitamins with breakfast for optimal absorption. Separate fat-soluble vitamins from minerals. Take pre-workout 30 minutes before exercise. Take evening supplements with dinner or before bed.",
+    "frequencyNotes": "Daily regimen with 6 days on, 1 day off cycling for certain compounds. Adjust based on training schedule and recovery needs.",
+    "supplements": [
+      {
+        "supplementName": "Vitamin D3",
+        "dosage": 5000,
+        "dosageUnit": "IU",
+        "frequency": "Once daily",
+        "timing": "Morning with breakfast",
+        "status": "active",
+        "notes": "Supports immune function and bone health. Take with healthy fats for better absorption."
+      },
+      {
+        "supplementName": "Omega-3 Fish Oil",
+        "dosage": 2000,
+        "dosageUnit": "mg",
+        "frequency": "Once daily",
+        "timing": "Morning with breakfast",
+        "status": "active",
+        "notes": "EPA/DHA ratio 3:2. Supports brain health and reduces inflammation."
+      },
+      {
+        "supplementName": "Magnesium Glycinate",
+        "dosage": 400,
+        "dosageUnit": "mg",
+        "frequency": "Once daily",
+        "timing": "Evening 1 hour before bed",
+        "status": "active",
+        "notes": "Supports sleep quality and muscle recovery. Glycinate form for better absorption."
+      },
+      {
+        "supplementName": "Creatine Monohydrate",
+        "dosage": 5,
+        "dosageUnit": "g",
+        "frequency": "Once daily",
+        "timing": "Post-workout",
+        "status": "active",
+        "notes": "Supports strength and power output. Take with carbohydrates and protein."
+      },
+      {
+        "supplementName": "Vitamin C",
+        "dosage": 1000,
+        "dosageUnit": "mg",
+        "frequency": "Twice daily",
+        "timing": "Morning and evening",
+        "status": "active",
+        "notes": "Antioxidant support. Split dosing for better absorption."
+      },
+      {
+        "supplementName": "Zinc Picolinate",
+        "dosage": 30,
+        "dosageUnit": "mg",
+        "frequency": "Once daily",
+        "timing": "Evening with dinner",
+        "status": "active",
+        "notes": "Immune support and hormone optimization. Take away from copper supplements."
+      },
+      {
+        "supplementName": "B-Complex",
+        "dosage": 50,
+        "dosageUnit": "mg",
+        "frequency": "Once daily",
+        "timing": "Morning with breakfast",
+        "status": "active",
+        "notes": "Energy metabolism and nervous system support. B-50 complex formulation."
+      },
+      {
+        "supplementName": "CoQ10",
+        "dosage": 200,
+        "dosageUnit": "mg",
+        "frequency": "Once daily",
+        "timing": "Morning with breakfast",
+        "status": "active",
+        "notes": "Mitochondrial support and cardiovascular health. Take with healthy fats."
+      },
+      {
+        "supplementName": "Probiotics",
+        "dosage": 25,
+        "dosageUnit": "billion CFU",
+        "frequency": "Once daily",
+        "timing": "Morning on empty stomach",
+        "status": "active",
+        "notes": "Gut health and immune support. Multi-strain formulation with Lactobacillus and Bifidobacterium."
+      },
+      {
+        "supplementName": "Ashwagandha",
+        "dosage": 600,
+        "dosageUnit": "mg",
+        "frequency": "Once daily",
+        "timing": "Evening with dinner",
+        "status": "active",
+        "notes": "Adaptogen for stress management and cortisol regulation. KSM-66 extract."
+      },
+      {
+        "supplementName": "Beta-Alanine",
+        "dosage": 3.2,
+        "dosageUnit": "g",
+        "frequency": "Once daily",
+        "timing": "Pre-workout",
+        "status": "active",
+        "notes": "Muscular endurance support. May cause harmless tingling sensation."
+      },
+      {
+        "supplementName": "Vitamin K2",
+        "dosage": 200,
+        "dosageUnit": "mcg",
+        "frequency": "Once daily",
+        "timing": "Morning with breakfast",
+        "status": "active",
+        "notes": "Bone and cardiovascular health. Works synergistically with Vitamin D."
+      }
+    ]
+  }
+}

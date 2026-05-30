@@ -39,7 +39,7 @@ export const getMealLogs = async (req: Request, res: Response, next: NextFunctio
       return res.status(400).json({ error: 'user_id is required' });
     }
 
-    const mealLogs = await getMealLogsForUser(userId);
+    const mealLogs = await getMealLogsForUser(Array.isArray(userId) ? userId[0] : userId);
     res.json({ mealLogs });
   } catch (error) {
     next(error);

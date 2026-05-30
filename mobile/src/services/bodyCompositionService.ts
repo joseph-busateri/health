@@ -1,0 +1,115 @@
+import api from './api';
+
+interface UploadBodyCompositionDocumentInput {
+  userId: string;
+  uri: string;
+  fileName?: string;
+  mimeType?: string;
+}
+
+interface SubmitBodyCompositionScanInput {
+  userId: string;
+  scanDate: string;
+  scanSource: string;
+  weightLb: number;
+  bodyFatPercentage?: number;
+  skeletalMuscleMassLb?: number;
+  visceralFatLevel?: number;
+  notes?: string;
+}
+
+interface UploadBodyCompositionCSVInput {
+  userId: string;
+  uri: string;
+  fileName: string;
+  detectedSource?: 'inbody_s2' | 'inbody_570' | 'inbody_770' | 'dexa' | 'other_scale';
+}
+
+interface UploadBodyCompositionCSVResponse {
+  success: boolean;
+  scanIds: string[];
+  message: string;
+  errors?: Array<{ row: number; field: string; message: string }>;
+}
+
+export const uploadBodyCompositionDocument = async (
+  input: UploadBodyCompositionDocumentInput,
+): Promise<void> => {
+  const formData = new FormData();
+
+  formData.append('user_id', input.userId);
+  formData.append('file', {
+    uri: input.uri,
+    name: input.fileName ?? `body-composition-${Date.now()}.jpg`,
+    type: input.mimeType ?? 'image/jpeg',
+  } as any);
+
+  await api.post('/body-composition/upload', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  });
+};
+
+export const submitBodyCompositionScan = async (
+  input: SubmitBodyCompositionScanInput,
+): Promise<void> => {
+  await api.post('/body-composition/scan', {
+    userId: input.userId,
+    scanDate: input.scanDate,
+    scanSource: input.scanSource,
+    weightLb: input.weightLb,
+    bodyFatPercentage: input.bodyFatPercentage,
+    skeletalMuscleMassLb: input.skeletalMuscleMassLb,
+    visceralFatLevel: input.visceralFatLevel,
+    notes: input.notes,
+  });
+};
+
+export const uploadBodyCompositionCSV = async (
+  input: UploadBodyCompositionCSVInput,
+): Promise<UploadBodyCompositionCSVResponse> => {
+  console.log('[CSV Upload Service] Starting upload with input:', { uri: input.uri, fileName: input.fileName });
+  
+  const formData = new FormData();
+
+  // For web, we need to fetch the file as a Blob
+  // For native, we use the URI directly
+  if (input.uri.startsWith('blob:') || input.uri.startsWith('http')) {
+    console.log('[CSV Upload Service] Web mode - fetching blob from URI');
+    // Web: fetch the blob
+    const response = await fetch(input.uri);
+    const blob = await response.blob();
+    console.log('[CSV Upload Service] Blob fetched:', { size: blob.size, type: blob.type });
+    formData.append('file', blob, input.fileName);
+    console.log('[CSV Upload Service] Blob appended to FormData');
+  } else {
+    console.log('[CSV Upload Service] Native mode - using URI directly');
+    // Native: use URI
+    formData.append('file', {
+      uri: input.uri,
+      name: input.fileName,
+      type: 'text/csv',
+    } as any);
+  }
+
+  if (input.detectedSource) {
+    formData.append('detected_source', input.detectedSource);
+  }
+
+  console.log('[CSV Upload Service] FormData prepared, sending request');
+
+  const response = await api.post<UploadBodyCompositionCSVResponse>(
+    `/api/body-composition/${input.userId}/upload-csv`,
+    formData,
+    {
+      headers: {
+        // Explicitly set to undefined to override default application/json header
+        // This allows the browser to set multipart/form-data with boundary parameter
+        'Content-Type': undefined,
+      },
+    }
+  );
+
+  return response.data;
+};

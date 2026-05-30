@@ -1,0 +1,689 @@
+import { randomUUID } from 'crypto';
+import { supabase } from '../config/supabase';
+import { extractTextFromBuffer } from './ocrService';
+import { parseInBodyScan } from '../utils/inbodyParser';
+import { tryPatternMatching, shouldSkipAIParsing } from './bodyCompositionPatternMatching';
+import { parseWithAI } from './bodyCompositionAIParser';
+import { logger } from '../utils/logger';
+import { parseBodyCompositionCSV, convertCSVParsedToScanInputs, type CSVParseResult } from '../utils/csvBodyCompositionParser';
+
+import type {
+  BodyCompositionScan,
+  BodyCompositionDocument,
+  BodyCompositionGoal,
+  BodyCompositionTrend,
+  BodyCompositionAnomaly,
+  CreateBodyCompositionScanInput,
+  CreateBodyCompositionGoalInput,
+  UploadBodyCompositionDocumentRequest,
+  ParsedScanData,
+} from '../types/bodyComposition';
+
+// ============================================================================
+// DOCUMENT UPLOAD & PROCESSING
+// ============================================================================
+
+export const uploadBodyCompositionDocument = async (
+  request: UploadBodyCompositionDocumentRequest
+): Promise<{ documentId: string; scanId?: string }> => {
+  const documentId = randomUUID();
+  const filePath = `body-composition/${request.userId}/${documentId}_${request.fileName}`;
+
+  try {
+    // Store document metadata
+    const { error: docError } = await supabase
+      .from('body_composition_documents')
+      .insert({
+        id: documentId,
+        user_id: request.userId,
+        file_name: request.fileName,
+        file_path: filePath,
+        file_size: request.file.length,
+        mime_type: request.mimeType,
+        processing_status: 'pending',
+        uploaded_at: new Date().toISOString(),
+      });
+
+    if (docError) throw docError;
+
+    // Process document asynchronously
+    processBodyCompositionDocument(documentId, request.file, request.mimeType, request.userId);
+
+    return { documentId };
+  } catch (error) {
+    logger.error('Failed to upload body composition document', { error, userId: request.userId });
+    throw error;
+  }
+};
+
+const processBodyCompositionDocument = async (
+  documentId: string,
+  fileBuffer: Buffer,
+  mimeType: string,
+  userId: string
+): Promise<void> => {
+  let extractionMethod = 'unknown';
+  let processingCost = 0;
+  
+  try {
+    // Update status to processing
+    await supabase
+      .from('body_composition_documents')
+      .update({ processing_status: 'processing' })
+      .eq('id', documentId);
+
+    // Step 1: Extract text via OCR
+    logger.info('Extracting text from body composition document', { documentId });
+    const { text: extractedText, confidence: ocrConfidence } = await extractTextFromBuffer(fileBuffer, mimeType);
+    
+    if (!extractedText || extractedText.length < 10) {
+      throw new Error('OCR extraction failed or produced insufficient text');
+    }
+    
+    logger.info('OCR extraction complete', { 
+      documentId, 
+      textLength: extractedText.length,
+      ocrConfidence 
+    });
+
+    // Step 2: Try pattern matching first (fast path)
+    logger.info('Attempting pattern matching', { documentId });
+    const patternResult = await tryPatternMatching(extractedText);
+    
+    logger.info('Pattern matching complete', {
+      documentId,
+      format: patternResult.format,
+      fieldsMatched: patternResult.matchedFields.length,
+      confidence: patternResult.confidence,
+      hasWeight: !!patternResult.data?.weight
+    });
+
+    let parsedData = patternResult.data;
+    let overallConfidence = patternResult.confidence;
+    let detectedSource = patternResult.format;
+
+    // Step 3: Decide if we need AI fallback
+    if (shouldSkipAIParsing(patternResult)) {
+      // High confidence from pattern matching - use it!
+      extractionMethod = `pattern_${patternResult.format}`;
+      logger.info('Pattern matching successful, skipping AI parsing', {
+        documentId,
+        method: extractionMethod,
+        confidence: overallConfidence
+      });
+    } else {
+      // Low confidence or no results - try AI parsing
+      logger.info('Pattern matching confidence low, trying AI parsing', {
+        documentId,
+        patternConfidence: patternResult.confidence,
+        patternFields: patternResult.matchedFields.length
+      });
+      
+      try {
+        const aiResult = await parseWithAI(extractedText);
+        processingCost = aiResult.cost;
+        
+        // Use whichever method found more fields
+        const patternFieldCount = patternResult.matchedFields.length;
+        const aiFieldCount = aiResult.data ? Object.keys(aiResult.data).filter(k => aiResult.data![k as keyof typeof aiResult.data] !== undefined).length : 0;
+        
+        if (aiFieldCount > patternFieldCount) {
+          parsedData = aiResult.data;
+          extractionMethod = 'ai_gpt4';
+          overallConfidence = aiResult.confidence;
+          detectedSource = aiResult.data?.rawFields?.scanSource || patternResult.format;
+          
+          logger.info('AI parsing found more fields', {
+            documentId,
+            aiFields: aiFieldCount,
+            patternFields: patternFieldCount,
+            tokensUsed: aiResult.tokensUsed,
+            cost: aiResult.cost.toFixed(4)
+          });
+        } else {
+          extractionMethod = `pattern_${patternResult.format}_low_confidence`;
+          logger.info('Using pattern matching results despite low confidence', {
+            documentId,
+            patternFields: patternFieldCount,
+            aiFields: aiFieldCount
+          });
+        }
+      } catch (aiError) {
+        logger.error('AI parsing failed, falling back to pattern results', {
+          documentId,
+          error: aiError instanceof Error ? aiError.message : 'Unknown error'
+        });
+        extractionMethod = `pattern_${patternResult.format}_ai_failed`;
+      }
+    }
+
+    // Step 4: Final fallback if nothing worked
+    if (!parsedData || !parsedData.weight) {
+      logger.warn('No valid data extracted by any method', { documentId });
+      throw new Error('Failed to extract body composition data from document');
+    }
+
+    // Update document with extracted data
+    await supabase
+      .from('body_composition_documents')
+      .update({
+        processing_status: 'completed',
+        extracted_text: extractedText,
+        parsed_scan_data: parsedData,
+        detected_source: detectedSource,
+        extraction_method: extractionMethod,
+        extraction_confidence: overallConfidence,
+        processing_cost: processingCost,
+        processed_at: new Date().toISOString(),
+      })
+      .eq('id', documentId);
+
+    // Create body composition scan from parsed data
+    const scanInput = convertParsedDataToScanInput(userId, parsedData, detectedSource, documentId);
+    await createBodyCompositionScan(scanInput);
+
+    logger.info('Body composition document processed successfully', { 
+      documentId, 
+      userId,
+      method: extractionMethod,
+      confidence: overallConfidence.toFixed(2),
+      cost: processingCost.toFixed(4)
+    });
+  } catch (error) {
+    logger.error('Failed to process body composition document', { error, documentId });
+    
+    await supabase
+      .from('body_composition_documents')
+      .update({
+        processing_status: 'failed',
+        processing_error: error instanceof Error ? error.message : 'Unknown error',
+        extraction_method: extractionMethod,
+      })
+      .eq('id', documentId);
+  }
+};
+
+const detectScanSource = (extractedText: string, parsedData: ParsedScanData | null): string => {
+  const text = extractedText.toLowerCase();
+  
+  if (text.includes('inbody s2') || text.includes('inbodys2')) return 'inbody_s2';
+  if (text.includes('inbody 570') || text.includes('inbody570')) return 'inbody_570';
+  if (text.includes('inbody 770') || text.includes('inbody770')) return 'inbody_770';
+  if (text.includes('dexa') || text.includes('dxa')) return 'dexa';
+  
+  return 'other_scale';
+};
+
+const convertParsedDataToScanInput = (
+  userId: string,
+  parsedData: ParsedScanData,
+  scanSource: string,
+  documentId: string
+): CreateBodyCompositionScanInput => {
+  // Convert height string to inches if needed
+  let heightInches: number | undefined;
+  if (parsedData.height) {
+    const heightMatch = parsedData.height.match(/(\d+)ft\s*(\d+(?:\.\d+)?)/);
+    if (heightMatch) {
+      heightInches = parseInt(heightMatch[1]) * 12 + parseFloat(heightMatch[2]);
+    }
+  }
+
+  // Convert weight to pounds if in kg
+  let weightLb = parsedData.weight || 0;
+  if (parsedData.weightUnit === 'kg') {
+    weightLb = weightLb * 2.20462;
+  }
+
+  return {
+    userId,
+    scanDate: parsedData.testDate || new Date().toISOString().split('T')[0],
+    scanSource: scanSource as any,
+    scanId: parsedData.scanId,
+    heightInches,
+    age: parsedData.age,
+    gender: parsedData.gender,
+    weightLb,
+    totalBodyWaterLb: parsedData.totalBodyWater,
+    dryLeanMassLb: parsedData.dryLeanMass,
+    bodyFatMassLb: parsedData.bodyFatMass,
+    bodyFatPercentage: parsedData.bodyFatPercentage,
+    skeletalMuscleMassLb: parsedData.skeletalMuscleMass,
+    visceralFatLevel: parsedData.visceralFatLevel,
+    bmi: parsedData.bmi,
+    basalMetabolicRateKcal: parsedData.bmr,
+    documentId,
+  };
+};
+
+// ============================================================================
+// BODY COMPOSITION SCAN CRUD
+// ============================================================================
+
+export const createBodyCompositionScan = async (
+  input: CreateBodyCompositionScanInput
+): Promise<BodyCompositionScan> => {
+  const scanId = randomUUID();
+
+  const { data, error } = await supabase
+    .from('body_composition_scans')
+    .insert({
+      id: scanId,
+      user_id: input.userId,
+      scan_date: input.scanDate,
+      scan_time: input.scanTime,
+      scan_source: input.scanSource,
+      scan_id: input.scanId,
+      height_inches: input.heightInches,
+      age: input.age,
+      gender: input.gender,
+      weight_lb: input.weightLb,
+      total_body_water_lb: input.totalBodyWaterLb,
+      dry_lean_mass_lb: input.dryLeanMassLb,
+      body_fat_mass_lb: input.bodyFatMassLb,
+      body_fat_percentage: input.bodyFatPercentage,
+      lean_body_mass_percentage: input.leanBodyMassPercentage,
+      body_water_percentage: input.bodyWaterPercentage,
+      skeletal_muscle_mass_lb: input.skeletalMuscleMassLb,
+      skeletal_muscle_mass_percentage: input.skeletalMuscleMassPercentage,
+      visceral_fat_level: input.visceralFatLevel,
+      visceral_fat_area_cm2: input.visceralFatAreaCm2,
+      subcutaneous_fat_percentage: input.subcutaneousFatPercentage,
+      bone_mineral_content_lb: input.boneMineralContentLb,
+      protein_mass_lb: input.proteinMassLb,
+      protein_percentage: input.proteinPercentage,
+      basal_metabolic_rate_kcal: input.basalMetabolicRateKcal,
+      total_energy_expenditure_kcal: input.totalEnergyExpenditureKcal,
+      bmi: input.bmi,
+      body_mass_index_category: input.bodyMassIndexCategory,
+      metabolic_age: input.metabolicAge,
+      body_type: input.bodyType,
+      // Segmental analysis
+      right_arm_muscle_lb: input.rightArmMuscleLb,
+      left_arm_muscle_lb: input.leftArmMuscleLb,
+      trunk_muscle_lb: input.trunkMuscleLb,
+      right_leg_muscle_lb: input.rightLegMuscleLb,
+      left_leg_muscle_lb: input.leftLegMuscleLb,
+      right_arm_fat_lb: input.rightArmFatLb,
+      left_arm_fat_lb: input.leftArmFatLb,
+      trunk_fat_lb: input.trunkFatLb,
+      right_leg_fat_lb: input.rightLegFatLb,
+      left_leg_fat_lb: input.leftLegFatLb,
+      right_arm_lean_percentage: input.rightArmLeanPercentage,
+      left_arm_lean_percentage: input.leftArmLeanPercentage,
+      trunk_lean_percentage: input.trunkLeanPercentage,
+      right_leg_lean_percentage: input.rightLegLeanPercentage,
+      left_leg_lean_percentage: input.leftLegLeanPercentage,
+      // Balance scores
+      muscle_balance_score: input.muscleBalanceScore,
+      upper_lower_balance_score: input.upperLowerBalanceScore,
+      // Health scores
+      overall_health_score: input.overallHealthScore,
+      muscle_fat_analysis_rating: input.muscleFatAnalysisRating,
+      obesity_degree: input.obesityDegree,
+      // Advanced metrics
+      intracellular_water_lb: input.intracellularWaterLb,
+      extracellular_water_lb: input.extracellularWaterLb,
+      ecw_icw_ratio: input.ecwIcwRatio,
+      phase_angle_degrees: input.phaseAngleDegrees,
+      // Document
+      document_id: input.documentId,
+      scan_quality: input.scanQuality,
+      notes: input.notes,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapDatabaseToScan(data);
+};
+
+export const getLatestBodyComposition = async (userId: string): Promise<BodyCompositionScan | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('body_composition_scans')
+      .select('*')
+      .eq('user_id', userId)
+      .order('scan_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (error) {
+      if (error.code === 'PGRST116') return null; // No rows found
+      throw error;
+    }
+
+    return mapDatabaseToScan(data);
+  } catch (error: any) {
+    const message: string | undefined = error?.message || error?.details;
+    if (message?.includes("body_composition_scans")) {
+      logger.warn('Body composition scans table unavailable, skipping latest scan lookup', { userId, error: message });
+      return null;
+    }
+    throw error;
+  }
+};
+
+export const getBodyCompositionScans = async (
+  userId: string,
+  limit: number = 30
+): Promise<BodyCompositionScan[]> => {
+  const { data, error } = await supabase
+    .from('body_composition_scans')
+    .select('*')
+    .eq('user_id', userId)
+    .order('scan_date', { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+  return data.map(mapDatabaseToScan);
+};
+
+export const getBodyCompositionTrends = async (
+  userId: string,
+  days: number = 30
+): Promise<BodyCompositionTrend[]> => {
+  const startDate = new Date();
+  startDate.setDate(startDate.getDate() - days);
+
+  const { data, error } = await supabase
+    .from('body_composition_trends')
+    .select('*')
+    .eq('user_id', userId)
+    .gte('scan_date', startDate.toISOString().split('T')[0])
+    .order('scan_date', { ascending: false });
+
+  if (error) throw error;
+  return data.map(mapDatabaseToTrend);
+};
+
+// ============================================================================
+// GOAL MANAGEMENT
+// ============================================================================
+
+export const createBodyCompositionGoal = async (
+  input: CreateBodyCompositionGoalInput
+): Promise<BodyCompositionGoal> => {
+  const goalId = randomUUID();
+
+  const { data, error } = await supabase
+    .from('body_composition_goals')
+    .insert({
+      id: goalId,
+      user_id: input.userId,
+      goal_name: input.goalName,
+      goal_type: input.goalType,
+      created_by: input.createdBy,
+      target_weight_lb: input.targetWeightLb,
+      target_body_fat_percentage: input.targetBodyFatPercentage,
+      target_lean_mass_lb: input.targetLeanMassLb,
+      target_skeletal_muscle_lb: input.targetSkeletalMuscleLb,
+      target_visceral_fat_level: input.targetVisceralFatLevel,
+      target_date: input.targetDate,
+      weekly_rate_of_change: input.weeklyRateOfChange,
+      status: 'active',
+      starting_scan_id: input.startingScanId,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapDatabaseToGoal(data);
+};
+
+export const getActiveGoals = async (userId: string): Promise<BodyCompositionGoal[]> => {
+  const { data, error } = await supabase
+    .from('body_composition_goals')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+  return data.map(mapDatabaseToGoal);
+};
+
+export const calculateGoalProgress = async (goalId: string): Promise<number> => {
+  const { data, error } = await supabase.rpc('calculate_body_comp_progress', {
+    p_goal_id: goalId,
+  });
+
+  if (error) throw error;
+  return data || 0;
+};
+
+// ============================================================================
+// ANOMALY DETECTION
+// ============================================================================
+
+export const detectAnomalies = async (
+  userId: string,
+  scanId: string
+): Promise<BodyCompositionAnomaly[]> => {
+  const { data, error } = await supabase.rpc('detect_body_comp_anomalies', {
+    p_user_id: userId,
+    p_scan_id: scanId,
+  });
+
+  if (error) throw error;
+  return data || [];
+};
+
+// ============================================================================
+// HELPER FUNCTIONS
+// ============================================================================
+
+const mapDatabaseToScan = (data: any): BodyCompositionScan => ({
+  id: data.id,
+  userId: data.user_id,
+  scanDate: data.scan_date,
+  scanTime: data.scan_time,
+  scanSource: data.scan_source,
+  scanId: data.scan_id,
+  heightInches: data.height_inches,
+  age: data.age,
+  gender: data.gender,
+  weightLb: data.weight_lb,
+  totalBodyWaterLb: data.total_body_water_lb,
+  dryLeanMassLb: data.dry_lean_mass_lb,
+  bodyFatMassLb: data.body_fat_mass_lb,
+  bodyFatPercentage: data.body_fat_percentage,
+  leanBodyMassPercentage: data.lean_body_mass_percentage,
+  bodyWaterPercentage: data.body_water_percentage,
+  skeletalMuscleMassLb: data.skeletal_muscle_mass_lb,
+  skeletalMuscleMassPercentage: data.skeletal_muscle_mass_percentage,
+  visceralFatLevel: data.visceral_fat_level,
+  visceralFatAreaCm2: data.visceral_fat_area_cm2,
+  subcutaneousFatPercentage: data.subcutaneous_fat_percentage,
+  boneMineralContentLb: data.bone_mineral_content_lb,
+  proteinMassLb: data.protein_mass_lb,
+  proteinPercentage: data.protein_percentage,
+  basalMetabolicRateKcal: data.basal_metabolic_rate_kcal,
+  totalEnergyExpenditureKcal: data.total_energy_expenditure_kcal,
+  bmi: data.bmi,
+  bodyMassIndexCategory: data.body_mass_index_category,
+  metabolicAge: data.metabolic_age,
+  bodyType: data.body_type,
+  documentId: data.document_id,
+  scanQuality: data.scan_quality,
+  notes: data.notes,
+  createdAt: data.created_at,
+  updatedAt: data.updated_at,
+});
+
+const mapDatabaseToGoal = (data: any): BodyCompositionGoal => ({
+  id: data.id,
+  userId: data.user_id,
+  goalName: data.goal_name,
+  goalType: data.goal_type,
+  createdBy: data.created_by,
+  targetWeightLb: data.target_weight_lb,
+  targetBodyFatPercentage: data.target_body_fat_percentage,
+  targetLeanMassLb: data.target_lean_mass_lb,
+  targetSkeletalMuscleLb: data.target_skeletal_muscle_lb,
+  targetVisceralFatLevel: data.target_visceral_fat_level,
+  targetDate: data.target_date,
+  weeklyRateOfChange: data.weekly_rate_of_change,
+  status: data.status,
+  startingScanId: data.starting_scan_id,
+  currentProgressPercentage: data.current_progress_percentage,
+  createdAt: data.created_at,
+  updatedAt: data.updated_at,
+});
+
+const mapDatabaseToTrend = (data: any): BodyCompositionTrend => ({
+  userId: data.user_id,
+  scanDate: data.scan_date,
+  weightLb: data.weight_lb,
+  bodyFatPercentage: data.body_fat_percentage,
+  bodyFatMassLb: data.body_fat_mass_lb,
+  leanBodyMassPercentage: data.lean_body_mass_percentage,
+  dryLeanMassLb: data.dry_lean_mass_lb,
+  skeletalMuscleMassLb: data.skeletal_muscle_mass_lb,
+  visceralFatLevel: data.visceral_fat_level,
+  bmi: data.bmi,
+  basalMetabolicRateKcal: data.basal_metabolic_rate_kcal,
+  previousWeightLb: data.previous_weight_lb,
+  weightChangeLb: data.weight_change_lb,
+  previousBodyFatPercentage: data.previous_body_fat_percentage,
+  bodyFatChangePercentage: data.body_fat_change_percentage,
+  previousMuscleMassLb: data.previous_muscle_mass_lb,
+  muscleChangeLb: data.muscle_change_lb,
+  daysSinceLastScan: data.days_since_last_scan,
+});
+
+// ============================================================================
+// CSV UPLOAD
+// ============================================================================
+
+export interface UploadBodyCompositionCSVRequest {
+  userId: string;
+  file: Buffer;
+  fileName: string;
+  detectedSource?: 'inbody_s2' | 'inbody_570' | 'inbody_770' | 'dexa' | 'other_scale';
+}
+
+export interface UploadBodyCompositionCSVResponse {
+  success: boolean;
+  scanIds: string[];
+  message: string;
+  errors?: Array<{ row: number; field: string; message: string }>;
+}
+
+export const uploadBodyCompositionCSV = async (
+  request: UploadBodyCompositionCSVRequest
+): Promise<UploadBodyCompositionCSVResponse> => {
+  const { userId, file, fileName, detectedSource } = request;
+
+  try {
+    logger.info('Processing body composition CSV upload', { userId, fileName });
+
+    // Validate file extension
+    if (!fileName.toLowerCase().endsWith('.csv')) {
+      return {
+        success: false,
+        scanIds: [],
+        message: 'Invalid file type. Please upload a CSV file.',
+        errors: [{ row: 0, field: 'file', message: 'File must have .csv extension' }],
+      };
+    }
+
+    // Validate file size (max 1MB)
+    if (file.length > 1024 * 1024) {
+      return {
+        success: false,
+        scanIds: [],
+        message: 'File too large. Maximum size is 1MB.',
+        errors: [{ row: 0, field: 'file', message: 'File size exceeds 1MB limit' }],
+      };
+    }
+
+    // Convert buffer to string
+    const csvContent = file.toString('utf-8');
+
+    // Parse CSV
+    const parseResult = parseBodyCompositionCSV(csvContent, userId, detectedSource);
+
+    if (!parseResult.success) {
+      return {
+        success: false,
+        scanIds: [],
+        message: 'Failed to parse CSV file.',
+        errors: parseResult.errors,
+      };
+    }
+
+    // Limit to 100 rows
+    const MAX_ROWS = 100;
+    if (parseResult.scans.length > MAX_ROWS) {
+      logger.warn(`CSV has ${parseResult.scans.length} rows, limiting to ${MAX_ROWS}`, { userId });
+      parseResult.scans = parseResult.scans.slice(0, MAX_ROWS);
+    }
+
+    // Convert to scan inputs
+    const scanInputs = convertCSVParsedToScanInputs(parseResult.scans, userId);
+
+    // Batch insert scans
+    const scanIds: string[] = [];
+    const errors: Array<{ row: number; field: string; message: string }> = [];
+
+    for (let i = 0; i < scanInputs.length; i++) {
+      try {
+        const scan = await createBodyCompositionScan(scanInputs[i]);
+        scanIds.push(scan.id);
+      } catch (error) {
+        const rowNumber = i + 2; // Header is row 1
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        errors.push({ row: rowNumber, field: 'database', message });
+        logger.error('Failed to create scan from CSV row', { 
+          userId, 
+          row: rowNumber, 
+          error: message 
+        });
+      }
+    }
+
+    // If all scans failed, return error
+    if (scanIds.length === 0) {
+      return {
+        success: false,
+        scanIds: [],
+        message: 'Failed to create any scans from CSV data.',
+        errors: parseResult.errors.concat(errors),
+      };
+    }
+
+    logger.info('CSV upload completed successfully', { 
+      userId, 
+      totalRows: scanInputs.length,
+      successfulScans: scanIds.length,
+      failedScans: errors.length 
+    });
+
+    return {
+      success: true,
+      scanIds,
+      message: errors.length > 0 
+        ? `Successfully imported ${scanIds.length} of ${scanInputs.length} scans. ${errors.length} rows had errors.`
+        : `Successfully imported ${scanIds.length} scans.`,
+      errors: errors.length > 0 ? errors : undefined,
+    };
+  } catch (error) {
+    logger.error('CSV upload failed', { error, userId, fileName });
+    return {
+      success: false,
+      scanIds: [],
+      message: 'An unexpected error occurred while processing the CSV file.',
+      errors: [{ row: 0, field: 'file', message: error instanceof Error ? error.message : 'Unknown error' }],
+    };
+  }
+};
+
+// Backward compatibility
+export const createBodyCompositionUpload = createBodyCompositionScan;
+export const getBodyCompositionForUser = getBodyCompositionScans;

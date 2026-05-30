@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Bloodwork Upload Test</title>
+</head>
+<body>
+    <h1>Bloodwork Upload Test</h1>
+    
+    <form id="uploadForm">
+        <input type="file" id="fileInput" accept=".pdf,image/*" />
+        <input type="text" id="userId" value="test-user-123" placeholder="User ID" />
+        <input type="text" id="fileName" placeholder="File Name" />
+        <input type="text" id="documentType" value="lab_panel" placeholder="Document Type" />
+        <input type="text" id="source" value="manual_upload" placeholder="Source" />
+        <textarea id="notes" placeholder="Notes (optional)"></textarea>
+        <button type="submit">Upload</button>
+    </form>
+    
+    <div id="result"></div>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const fileInput = document.getElementById('fileInput');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Please select a file');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('user_id', document.getElementById('userId').value);
+            formData.append('file_name', document.getElementById('fileName').value || file.name);
+            formData.append('document_type', document.getElementById('documentType').value);
+            formData.append('source', document.getElementById('source').value);
+            formData.append('notes', document.getElementById('notes').value);
+            
+            console.log('📤 FormData contents:');
+            for (let [key, value] of formData.entries()) {
+                console.log(`  ${key}:`, value);
+            }
+            
+            try {
+                console.log('🚀 Starting upload...');
+                
+                const response = await fetch('http://localhost:3000/bloodwork/upload', {
+                    method: 'POST',
+                    body: formData,
+                    // Don't set Content-Type header for FormData
+                });
+                
+                console.log('📥 Response status:', response.status);
+                
+                const data = await response.json();
+                console.log('📄 Response data:', data);
+                
+                const resultDiv = document.getElementById('result');
+                if (response.ok) {
+                    resultDiv.innerHTML = `<div style="color: green;">✅ Upload successful! ${data.message}</div>`;
+                } else {
+                    resultDiv.innerHTML = `<div style="color: red;">❌ Upload failed: ${data.error}</div>`;
+                }
+                
+            } catch (error) {
+                console.error('💥 Upload error:', error);
+                document.getElementById('result').innerHTML = `<div style="color: red;">💥 Error: ${error.message}</div>`;
+            }
+        });
+        
+        // Auto-fill file name when file is selected
+        document.getElementById('fileInput').addEventListener('change', (e) => {
+            const fileName = e.target.files[0]?.name;
+            if (fileName) {
+                document.getElementById('fileName').value = fileName;
+            }
+        });
+    </script>
+</body>
+</html>
